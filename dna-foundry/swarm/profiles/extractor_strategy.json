@@ -1,0 +1,24 @@
+{
+  "budget": {
+    "llm_tokens": 4000,
+    "pages": 6
+  },
+  "invariants": [
+    "SWOT strengths and opportunities must be evidence-backed (quoted page text or counted signals).",
+    "Weaknesses and threats appear ONLY when the site states them explicitly.",
+    "Personas carry pain_points mined from FAQ questions wherever possible.",
+    "Never invent a competitor name; competitor candidates come from the competitor agent's evidence."
+  ],
+  "owns": [
+    "offerings",
+    "pricing",
+    "about"
+  ],
+  "role": "Brand strategist. Owns offerings/pricing/about pages. Mines positioning, key messaging, evidence-backed SWOT, and personas with FAQ-mined pain points. Upgrades to the per-agent strategist LLM prompt when the gateway is configured.",
+  "skills": [
+    "strategy_mining"
+  ],
+  "version": "1.0.0",
+  "agent": "extractor:strategy",
+  "memory_namespace": "extractor_strategy"
+}

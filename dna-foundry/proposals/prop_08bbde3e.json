@@ -1,0 +1,24 @@
+{
+  "id": "prop_08bbde3e",
+  "card_id": "dna_51aeb3da",
+  "card_version": 3,
+  "field": "voice.tone",
+  "old": [
+    "warm",
+    "cozy",
+    "friendly",
+    "welcoming"
+  ],
+  "new": [
+    "corporate",
+    "formal"
+  ],
+  "evidence": "demo: rebrand attempt",
+  "confidence": 0.7,
+  "verdict": "approval",
+  "gate_reason": "voice changes need human approval",
+  "decision_trail": [],
+  "verification": {},
+  "status": "awaiting_approval",
+  "proposed_at": "2026-10-01T09:15:27.387591+00:00"
+}

@@ -1,0 +1,349 @@
+{
+  "id": "dna_51aeb3da",
+  "organization_id": "org_demo0001",
+  "version": 1,
+  "previous_version": null,
+  "status": "draft",
+  "created_at": "2026-10-01T09:15:06.183808+00:00",
+  "identity": {
+    "name": "Harbor & Bean Coffee House",
+    "tagline": "A cozy neighborhood coffee house in Seaside. Small-batch roasts, fresh pastries, friendly faces.",
+    "location": "42 Harbor Lane",
+    "values": [
+      "community first",
+      "quality without pretense",
+      "and sustainability in every cup"
+    ],
+    "elevator_pitch": "A cozy neighborhood coffee house in Seaside. Small-batch roasts, fresh pastries, friendly faces."
+  },
+  "field_provenance": {
+    "identity.name": {
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "confidence": 0.85,
+      "extracted_at": "2026-10-01T09:15:24.317168+00:00",
+      "extractor_agent": "extractor:website"
+    },
+    "identity.tagline": {
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "confidence": 0.8,
+      "extracted_at": "2026-10-01T09:15:24.317185+00:00",
+      "extractor_agent": "extractor:website"
+    },
+    "offerings": {
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "confidence": 0.55,
+      "extracted_at": "2026-10-01T09:15:24.317450+00:00",
+      "extractor_agent": "extractor:website"
+    },
+    "operations.channels": {
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "confidence": 0.9,
+      "extracted_at": "2026-10-01T09:15:24.317236+00:00",
+      "extractor_agent": "extractor:website"
+    },
+    "identity.location": {
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "confidence": 0.7,
+      "extracted_at": "2026-10-01T09:15:24.317241+00:00",
+      "extractor_agent": "extractor:website"
+    },
+    "operations.hours": {
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "confidence": 0.75,
+      "extracted_at": "2026-10-01T09:15:24.317246+00:00",
+      "extractor_agent": "extractor:website"
+    },
+    "voice.tone": {
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "confidence": 0.8,
+      "extracted_at": "2026-10-01T09:15:24.317456+00:00",
+      "extractor_agent": "extractor:website"
+    },
+    "voice.sample_phrases": {
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "confidence": 0.7,
+      "extracted_at": "2026-10-01T09:15:24.317257+00:00",
+      "extractor_agent": "extractor:website"
+    },
+    "voice.personality": {
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "confidence": 0.75,
+      "extracted_at": "2026-10-01T09:15:24.317461+00:00",
+      "extractor_agent": "extractor:website"
+    },
+    "voice.description": {
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "confidence": 0.75,
+      "extracted_at": "2026-10-01T09:15:24.317466+00:00",
+      "extractor_agent": "extractor:website"
+    },
+    "voice.donts": {
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "confidence": 0.75,
+      "extracted_at": "2026-10-01T09:15:24.317470+00:00",
+      "extractor_agent": "extractor:website"
+    },
+    "policies": {
+      "sources": [
+        "file:///tmp/demo-site/policies.html"
+      ],
+      "confidence": 0.65,
+      "extracted_at": "2026-10-01T09:15:24.317524+00:00",
+      "extractor_agent": "extractor:documents"
+    },
+    "knowledge": {
+      "sources": [
+        "file:///tmp/demo-site/faq.html",
+        "file:///tmp/demo-site/index.html",
+        "file:///tmp/demo-site/policies.html"
+      ],
+      "confidence": 0.8,
+      "extracted_at": "2026-10-01T09:15:24.317600+00:00",
+      "extractor_agent": "extractor:documents"
+    },
+    "identity.values": {
+      "sources": [
+        "file:///tmp/demo-site/about.html"
+      ],
+      "confidence": 0.55,
+      "extracted_at": "2026-10-01T09:15:24.317560+00:00",
+      "extractor_agent": "extractor:documents"
+    },
+    "insights": {
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "confidence": 0.55,
+      "extracted_at": "2026-10-01T09:15:24.317577+00:00",
+      "extractor_agent": "extractor:reviews"
+    },
+    "strategy.key_messaging": {
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "confidence": 0.75,
+      "extracted_at": "2026-10-01T09:15:24.317641+00:00",
+      "extractor_agent": "extractor:strategy"
+    },
+    "identity.elevator_pitch": {
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "confidence": 0.65,
+      "extracted_at": "2026-10-01T09:15:24.317619+00:00",
+      "extractor_agent": "extractor:strategy"
+    },
+    "strategy.positioning": {
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "confidence": 0.75,
+      "extracted_at": "2026-10-01T09:15:24.317622+00:00",
+      "extractor_agent": "extractor:strategy"
+    },
+    "customers.personas": {
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "confidence": 0.7,
+      "extracted_at": "2026-10-01T09:15:24.317659+00:00",
+      "extractor_agent": "extractor:strategy"
+    },
+    "strategy.swot": {
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "confidence": 0.7,
+      "extracted_at": "2026-10-01T09:15:24.317687+00:00",
+      "extractor_agent": "extractor:strategy"
+    },
+    "competitors": {
+      "sources": [
+        "category:inference"
+      ],
+      "confidence": 0.4,
+      "extracted_at": "2026-10-01T09:15:24.319890+00:00",
+      "extractor_agent": "skill:competitor_inference"
+    }
+  },
+  "offerings": [
+    {
+      "name": "Small-batch roasts, brewed with love"
+    },
+    {
+      "name": "Harbor Latte \u2014 $4.50"
+    },
+    {
+      "name": "Sea Salt Caramel Espresso \u2014 $5.00"
+    },
+    {
+      "name": "Blueberry Morning Pastry \u2014 $3.25"
+    },
+    {
+      "name": "offering",
+      "price_hint": "$4.50"
+    },
+    {
+      "name": "offering",
+      "price_hint": "$5.00"
+    },
+    {
+      "name": "offering",
+      "price_hint": "$3.25"
+    }
+  ],
+  "operations": {
+    "channels": [
+      "phone",
+      "email"
+    ],
+    "hours": "Mon\u2013Fri 7am\u20133pm; Sat\u2013Sun 8am\u20132pm"
+  },
+  "voice": {
+    "tone": [
+      "warm",
+      "cozy",
+      "friendly",
+      "welcoming"
+    ],
+    "sample_phrases": [
+      "Your cozy corner on the harbor",
+      "Small-batch roasts, brewed with love",
+      "Our favorites",
+      "What our neighbors say"
+    ],
+    "personality": "Family-run, neighborly, warm harbor coffee house greeting everyone like a local.",
+    "description": "Sounds like a friendly neighbor inviting you in for a morning roast.",
+    "donts": [
+      "Use cold, corporate or impersonal language.",
+      "Brag with aggressive sales hype or pressure.",
+      "Be snobby or exclusive about coffee expertise."
+    ]
+  },
+  "policies": [
+    {
+      "topic": "returns",
+      "rule": "Policies | Harbor & Bean Coffee House Our policies Returns & refunds If you're not happy with your drink, we'll remake it on the spot \u2014 no questions asked."
+    },
+    {
+      "topic": "cancellations",
+      "rule": "For catering orders, cancellations made 48 hours in advance receive a full refund."
+    },
+    {
+      "topic": "privacy",
+      "rule": "Privacy We never sell your personal information."
+    }
+  ],
+  "knowledge": [
+    {
+      "ref": "file:///tmp/demo-site/faq.html",
+      "kind": "faq",
+      "title": "Faq.Html",
+      "chunks": 1
+    },
+    {
+      "ref": "file:///tmp/demo-site/policies.html",
+      "kind": "policy_doc",
+      "title": "Policies.Html",
+      "chunks": 1
+    },
+    {
+      "ref": "file:///tmp/demo-site/index.html",
+      "kind": "review_corpus",
+      "title": "On-site testimonials",
+      "chunks": 1
+    }
+  ],
+  "insights": [
+    {
+      "title": "Recurring review themes",
+      "detail": "On-site testimonials emphasize: quality, service, atmosphere.",
+      "evidence": [
+        "The friendliest staff and the best latte in town. Cozy atmosphere, I'm here every morning! \u2014 Maya R.",
+        "Fresh pastries, great coffee, wonderful service. A true neighborhood gem. \u2014 Daniel K."
+      ]
+    }
+  ],
+  "strategy": {
+    "key_messaging": [
+      "Your cozy corner on the harbor",
+      "Small-batch roasts, brewed with love",
+      "Our favorites",
+      "Family-run coffee house",
+      "Warmest welcome in Seaside"
+    ],
+    "positioning": "Family-run Seaside coffee house pouring small-batch roasts with cozy harbor warmth.",
+    "swot": {
+      "strengths": [
+        "Family-run coffee house",
+        "Small-batch roasts brewed with love"
+      ],
+      "weaknesses": [
+        "Weekday hours end at 3pm",
+        "Weekend hours end at 2pm"
+      ],
+      "opportunities": [],
+      "threats": []
+    }
+  },
+  "customers": {
+    "personas": [
+      {
+        "name": "Maya R.",
+        "role": "Morning regular",
+        "pain_points": [
+          "Needs cozy atmosphere",
+          "Wants friendliest staff",
+          "Wants best latte in town"
+        ]
+      },
+      {
+        "name": "Daniel K.",
+        "role": "Neighborhood local",
+        "pain_points": [
+          "Needs fresh pastries",
+          "Needs great coffee",
+          "Needs wonderful service"
+        ]
+      }
+    ]
+  },
+  "competitors": [
+    {
+      "name": "Starbucks",
+      "positioning": "national coffee chain (inferred from category \u2014 confirm with owner)"
+    },
+    {
+      "name": "Dunkin'",
+      "positioning": "national coffee-and-donut chain (inferred from category \u2014 confirm with owner)"
+    },
+    {
+      "name": "Local independents",
+      "positioning": "other nearby shops in this category \u2014 ask the owner to name them (inferred from category \u2014 confirm with owner)"
+    }
+  ],
+  "acting_hash": "4d20baf7f072fd9b28d645b4c2204e477634af120ecfdbd03dadeca4e0ef9520",
+  "hash": "389f9bdd4f5aecad39795fd088802e76a7fd254120cf4872ce7102dea550f07d"
+}

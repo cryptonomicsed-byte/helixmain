@@ -1,0 +1,6509 @@
+[
+  [
+    {
+      "field": "identity.name",
+      "value": "Harbor & Bean Coffee House",
+      "confidence": 0.85,
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.tagline",
+      "value": "A cozy neighborhood coffee house in Seaside. Small-batch roasts, fresh pastries, friendly faces.",
+      "confidence": 0.8,
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Small-batch roasts, brewed with love"
+      },
+      "confidence": 0.55,
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Our favorites"
+      },
+      "confidence": 0.55,
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Visit us"
+      },
+      "confidence": 0.55,
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "What our neighbors say"
+      },
+      "confidence": 0.55,
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.channels",
+      "value": [
+        "phone",
+        "email"
+      ],
+      "confidence": 0.9,
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.location",
+      "value": "42 Harbor Lane",
+      "confidence": 0.7,
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.hours",
+      "value": "Mon\u2013Fri 7am\u20133pm; Sat\u2013Sun 8am\u20132pm",
+      "confidence": 0.75,
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "voice.tone",
+      "value": [
+        "warm"
+      ],
+      "confidence": 0.6,
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.sample_phrases",
+      "value": [
+        "Your cozy corner on the harbor",
+        "Small-batch roasts, brewed with love",
+        "Our favorites",
+        "What our neighbors say"
+      ],
+      "confidence": 0.7,
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Menu"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Harbor Latte \u2014 $4.50"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Sea Salt Caramel Espresso \u2014 $5.00"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Blueberry Morning Pastry \u2014 $3.25"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "identity.name",
+      "value": "Harbor & Bean Coffee House",
+      "confidence": 0.85,
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.tagline",
+      "value": "A cozy neighborhood coffee house in Seaside. Small-batch roasts, fresh pastries, friendly faces.",
+      "confidence": 0.8,
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Small-batch roasts, brewed with love"
+      },
+      "confidence": 0.55,
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Our favorites"
+      },
+      "confidence": 0.55,
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Visit us"
+      },
+      "confidence": 0.55,
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "What our neighbors say"
+      },
+      "confidence": 0.55,
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.channels",
+      "value": [
+        "phone",
+        "email"
+      ],
+      "confidence": 0.9,
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.location",
+      "value": "42 Harbor Lane",
+      "confidence": 0.7,
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.hours",
+      "value": "Mon\u2013Fri 7am\u20133pm; Sat\u2013Sun 8am\u20132pm",
+      "confidence": 0.75,
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "voice.tone",
+      "value": [
+        "warm"
+      ],
+      "confidence": 0.6,
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.sample_phrases",
+      "value": [
+        "Your cozy corner on the harbor",
+        "Small-batch roasts, brewed with love",
+        "Our favorites",
+        "What our neighbors say"
+      ],
+      "confidence": 0.7,
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Menu"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Harbor Latte \u2014 $4.50"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Sea Salt Caramel Espresso \u2014 $5.00"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Blueberry Morning Pastry \u2014 $3.25"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "identity.name",
+      "value": "Harbor & Bean Coffee House",
+      "confidence": 0.85,
+      "sources": [
+        "file:///tmp/dna-fixture-v2/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.tagline",
+      "value": "A cozy neighborhood coffee house in Seaside. Small-batch roasts, fresh pastries, friendly faces.",
+      "confidence": 0.8,
+      "sources": [
+        "file:///tmp/dna-fixture-v2/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Small-batch roasts, brewed with love"
+      },
+      "confidence": 0.55,
+      "sources": [
+        "file:///tmp/dna-fixture-v2/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Our favorites"
+      },
+      "confidence": 0.55,
+      "sources": [
+        "file:///tmp/dna-fixture-v2/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Visit us"
+      },
+      "confidence": 0.55,
+      "sources": [
+        "file:///tmp/dna-fixture-v2/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "What our neighbors say"
+      },
+      "confidence": 0.55,
+      "sources": [
+        "file:///tmp/dna-fixture-v2/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.channels",
+      "value": [
+        "phone",
+        "email"
+      ],
+      "confidence": 0.9,
+      "sources": [
+        "file:///tmp/dna-fixture-v2/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.location",
+      "value": "42 Harbor Lane",
+      "confidence": 0.7,
+      "sources": [
+        "file:///tmp/dna-fixture-v2/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.hours",
+      "value": "Mon\u2013Fri 7am\u20135pm; Sat\u2013Sun 8am\u20132pm",
+      "confidence": 0.75,
+      "sources": [
+        "file:///tmp/dna-fixture-v2/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "voice.tone",
+      "value": [
+        "warm"
+      ],
+      "confidence": 0.6,
+      "sources": [
+        "file:///tmp/dna-fixture-v2/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.sample_phrases",
+      "value": [
+        "Your cozy corner on the harbor",
+        "Small-batch roasts, brewed with love",
+        "Our favorites",
+        "What our neighbors say"
+      ],
+      "confidence": 0.7,
+      "sources": [
+        "file:///tmp/dna-fixture-v2/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Menu"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/dna-fixture-v2/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Harbor Latte \u2014 $4.50"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/dna-fixture-v2/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Sea Salt Caramel Espresso \u2014 $5.00"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/dna-fixture-v2/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Blueberry Morning Pastry \u2014 $3.25"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/dna-fixture-v2/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "identity.name",
+      "value": "Harbor & Bean Coffee House",
+      "confidence": 0.85,
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.tagline",
+      "value": "A cozy neighborhood coffee house in Seaside. Small-batch roasts, fresh pastries, friendly faces.",
+      "confidence": 0.8,
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Small-batch roasts, brewed with love"
+      },
+      "confidence": 0.55,
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.channels",
+      "value": [
+        "phone",
+        "email"
+      ],
+      "confidence": 0.9,
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.location",
+      "value": "42 Harbor Lane",
+      "confidence": 0.7,
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.hours",
+      "value": "Mon\u2013Fri 7am\u20133pm; Sat\u2013Sun 8am\u20132pm",
+      "confidence": 0.75,
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "voice.tone",
+      "value": [
+        "warm"
+      ],
+      "confidence": 0.6,
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.sample_phrases",
+      "value": [
+        "Your cozy corner on the harbor",
+        "Small-batch roasts, brewed with love",
+        "Our favorites",
+        "What our neighbors say"
+      ],
+      "confidence": 0.7,
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Menu"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Harbor Latte \u2014 $4.50"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Sea Salt Caramel Espresso \u2014 $5.00"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Blueberry Morning Pastry \u2014 $3.25"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "identity.name",
+      "value": "Harbor & Bean Coffee House",
+      "confidence": 0.85,
+      "sources": [
+        "file:///tmp/dna-fixture-v2/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.tagline",
+      "value": "A cozy neighborhood coffee house in Seaside. Small-batch roasts, fresh pastries, friendly faces.",
+      "confidence": 0.8,
+      "sources": [
+        "file:///tmp/dna-fixture-v2/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Small-batch roasts, brewed with love"
+      },
+      "confidence": 0.55,
+      "sources": [
+        "file:///tmp/dna-fixture-v2/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.channels",
+      "value": [
+        "phone",
+        "email"
+      ],
+      "confidence": 0.9,
+      "sources": [
+        "file:///tmp/dna-fixture-v2/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.location",
+      "value": "42 Harbor Lane",
+      "confidence": 0.7,
+      "sources": [
+        "file:///tmp/dna-fixture-v2/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.hours",
+      "value": "Mon\u2013Fri 7am\u20135pm; Sat\u2013Sun 8am\u20132pm",
+      "confidence": 0.75,
+      "sources": [
+        "file:///tmp/dna-fixture-v2/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "voice.tone",
+      "value": [
+        "warm"
+      ],
+      "confidence": 0.6,
+      "sources": [
+        "file:///tmp/dna-fixture-v2/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.sample_phrases",
+      "value": [
+        "Your cozy corner on the harbor",
+        "Small-batch roasts, brewed with love",
+        "Our favorites",
+        "What our neighbors say"
+      ],
+      "confidence": 0.7,
+      "sources": [
+        "file:///tmp/dna-fixture-v2/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Menu"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/dna-fixture-v2/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Harbor Latte \u2014 $4.50"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/dna-fixture-v2/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Sea Salt Caramel Espresso \u2014 $5.00"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/dna-fixture-v2/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Blueberry Morning Pastry \u2014 $3.25"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/dna-fixture-v2/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "identity.name",
+      "value": "Harbor & Bean Coffee House",
+      "confidence": 0.85,
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.tagline",
+      "value": "A cozy neighborhood coffee house in Seaside. Small-batch roasts, fresh pastries, friendly faces.",
+      "confidence": 0.8,
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Small-batch roasts, brewed with love"
+      },
+      "confidence": 0.55,
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.channels",
+      "value": [
+        "phone",
+        "email"
+      ],
+      "confidence": 0.9,
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.location",
+      "value": "42 Harbor Lane",
+      "confidence": 0.7,
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.hours",
+      "value": "Mon\u2013Fri 7am\u20133pm; Sat\u2013Sun 8am\u20132pm",
+      "confidence": 0.75,
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "voice.tone",
+      "value": [
+        "warm"
+      ],
+      "confidence": 0.6,
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.sample_phrases",
+      "value": [
+        "Your cozy corner on the harbor",
+        "Small-batch roasts, brewed with love",
+        "Our favorites",
+        "What our neighbors say"
+      ],
+      "confidence": 0.7,
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Harbor Latte \u2014 $4.50"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Sea Salt Caramel Espresso \u2014 $5.00"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Blueberry Morning Pastry \u2014 $3.25"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "identity.name",
+      "value": "Harbor & Bean Coffee House",
+      "confidence": 0.85,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.tagline",
+      "value": "A cozy neighborhood coffee house in Seaside. Small-batch roasts, fresh pastries, friendly faces.",
+      "confidence": 0.8,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Small-batch roasts, brewed with love"
+      },
+      "confidence": 0.55,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.channels",
+      "value": [
+        "phone",
+        "email"
+      ],
+      "confidence": 0.9,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.location",
+      "value": "42 Harbor Lane",
+      "confidence": 0.7,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.hours",
+      "value": "Mon\u2013Fri 7am\u20133pm; Sat\u2013Sun 8am\u20132pm",
+      "confidence": 0.75,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "voice.tone",
+      "value": [
+        "warm"
+      ],
+      "confidence": 0.6,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.sample_phrases",
+      "value": [
+        "Your cozy corner on the harbor",
+        "Small-batch roasts, brewed with love",
+        "Our favorites",
+        "What our neighbors say"
+      ],
+      "confidence": 0.7,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Harbor Latte \u2014 $4.50"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Sea Salt Caramel Espresso \u2014 $5.00"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Blueberry Morning Pastry \u2014 $3.25"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "identity.name",
+      "value": "Harbor & Bean Coffee House",
+      "confidence": 0.85,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.tagline",
+      "value": "A cozy neighborhood coffee house in Seaside. Small-batch roasts, fresh pastries, friendly faces.",
+      "confidence": 0.8,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Small-batch roasts, brewed with love"
+      },
+      "confidence": 0.55,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.channels",
+      "value": [
+        "phone",
+        "email"
+      ],
+      "confidence": 0.9,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.location",
+      "value": "42 Harbor Lane",
+      "confidence": 0.7,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.hours",
+      "value": "Mon\u2013Fri 7am\u20133pm; Sat\u2013Sun 8am\u20132pm",
+      "confidence": 0.75,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "voice.tone",
+      "value": [
+        "warm"
+      ],
+      "confidence": 0.6,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.sample_phrases",
+      "value": [
+        "Your cozy corner on the harbor",
+        "Small-batch roasts, brewed with love",
+        "Our favorites",
+        "What our neighbors say"
+      ],
+      "confidence": 0.7,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Harbor Latte \u2014 $4.50"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Sea Salt Caramel Espresso \u2014 $5.00"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Blueberry Morning Pastry \u2014 $3.25"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "identity.name",
+      "value": "Harbor & Bean Coffee House",
+      "confidence": 0.85,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.tagline",
+      "value": "A cozy neighborhood coffee house in Seaside. Small-batch roasts, fresh pastries, friendly faces.",
+      "confidence": 0.8,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Small-batch roasts, brewed with love"
+      },
+      "confidence": 0.55,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.channels",
+      "value": [
+        "phone",
+        "email"
+      ],
+      "confidence": 0.9,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.location",
+      "value": "42 Harbor Lane",
+      "confidence": 0.7,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.hours",
+      "value": "Mon\u2013Fri 7am\u20133pm; Sat\u2013Sun 8am\u20132pm",
+      "confidence": 0.75,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "voice.tone",
+      "value": [
+        "warm"
+      ],
+      "confidence": 0.6,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.sample_phrases",
+      "value": [
+        "Your cozy corner on the harbor",
+        "Small-batch roasts, brewed with love",
+        "Our favorites",
+        "What our neighbors say"
+      ],
+      "confidence": 0.7,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Harbor Latte \u2014 $4.50"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Sea Salt Caramel Espresso \u2014 $5.00"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Blueberry Morning Pastry \u2014 $3.25"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "identity.name",
+      "value": "Harbor & Bean Coffee House",
+      "confidence": 0.85,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.tagline",
+      "value": "A cozy neighborhood coffee house in Seaside. Small-batch roasts, fresh pastries, friendly faces.",
+      "confidence": 0.8,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Small-batch roasts, brewed with love"
+      },
+      "confidence": 0.55,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.channels",
+      "value": [
+        "phone",
+        "email"
+      ],
+      "confidence": 0.9,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.location",
+      "value": "42 Harbor Lane",
+      "confidence": 0.7,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.hours",
+      "value": "Mon\u2013Fri 7am\u20133pm; Sat\u2013Sun 8am\u20132pm",
+      "confidence": 0.75,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [],
+  [
+    {
+      "field": "voice.tone",
+      "value": [
+        "warm"
+      ],
+      "confidence": 0.6,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.sample_phrases",
+      "value": [
+        "Your cozy corner on the harbor",
+        "Small-batch roasts, brewed with love",
+        "Our favorites",
+        "What our neighbors say"
+      ],
+      "confidence": 0.7,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "voice.personality",
+      "value": "the welcoming host",
+      "confidence": 0.55,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.description",
+      "value": "Speaks warm \u2014 the copy favors short, concrete sentences over hype.",
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Harbor Latte \u2014 $4.50"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Sea Salt Caramel Espresso \u2014 $5.00"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Blueberry Morning Pastry \u2014 $3.25"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$4.50"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$5.00"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$3.25"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "identity.name",
+      "value": "Harbor & Bean Coffee House",
+      "confidence": 0.85,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.tagline",
+      "value": "A cozy neighborhood coffee house in Seaside. Small-batch roasts, fresh pastries, friendly faces.",
+      "confidence": 0.8,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Small-batch roasts, brewed with love"
+      },
+      "confidence": 0.55,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.channels",
+      "value": [
+        "phone",
+        "email"
+      ],
+      "confidence": 0.9,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.location",
+      "value": "42 Harbor Lane",
+      "confidence": 0.7,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.hours",
+      "value": "Mon\u2013Fri 7am\u20133pm; Sat\u2013Sun 8am\u20132pm",
+      "confidence": 0.75,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [],
+  [
+    {
+      "field": "voice.tone",
+      "value": [
+        "warm"
+      ],
+      "confidence": 0.6,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.sample_phrases",
+      "value": [
+        "Your cozy corner on the harbor",
+        "Small-batch roasts, brewed with love",
+        "Our favorites",
+        "What our neighbors say"
+      ],
+      "confidence": 0.7,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "voice.personality",
+      "value": "the welcoming host",
+      "confidence": 0.55,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.description",
+      "value": "Speaks warm \u2014 the copy favors short, concrete sentences over hype.",
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Harbor Latte \u2014 $4.50"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Sea Salt Caramel Espresso \u2014 $5.00"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Blueberry Morning Pastry \u2014 $3.25"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$4.50"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$5.00"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$3.25"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "identity.name",
+      "value": "Harbor & Bean Coffee House",
+      "confidence": 0.85,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.tagline",
+      "value": "A cozy neighborhood coffee house in Seaside. Small-batch roasts, fresh pastries, friendly faces.",
+      "confidence": 0.8,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Small-batch roasts, brewed with love"
+      },
+      "confidence": 0.55,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.channels",
+      "value": [
+        "phone",
+        "email"
+      ],
+      "confidence": 0.9,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.location",
+      "value": "42 Harbor Lane",
+      "confidence": 0.7,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.hours",
+      "value": "Mon\u2013Fri 7am\u20133pm; Sat\u2013Sun 8am\u20132pm",
+      "confidence": 0.75,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [],
+  [
+    {
+      "field": "voice.tone",
+      "value": [
+        "warm"
+      ],
+      "confidence": 0.6,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.sample_phrases",
+      "value": [
+        "Your cozy corner on the harbor",
+        "Small-batch roasts, brewed with love",
+        "Our favorites",
+        "What our neighbors say"
+      ],
+      "confidence": 0.7,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "voice.personality",
+      "value": "the welcoming host",
+      "confidence": 0.55,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.description",
+      "value": "Speaks warm \u2014 the copy favors short, concrete sentences over hype.",
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Harbor Latte \u2014 $4.50"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Sea Salt Caramel Espresso \u2014 $5.00"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Blueberry Morning Pastry \u2014 $3.25"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$4.50"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$5.00"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$3.25"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "identity.name",
+      "value": "Harbor & Bean Coffee House",
+      "confidence": 0.85,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.tagline",
+      "value": "A cozy neighborhood coffee house in Seaside. Small-batch roasts, fresh pastries, friendly faces.",
+      "confidence": 0.8,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Small-batch roasts, brewed with love"
+      },
+      "confidence": 0.55,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.channels",
+      "value": [
+        "phone",
+        "email"
+      ],
+      "confidence": 0.9,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.location",
+      "value": "42 Harbor Lane",
+      "confidence": 0.7,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.hours",
+      "value": "Mon\u2013Fri 7am\u20133pm; Sat\u2013Sun 8am\u20132pm",
+      "confidence": 0.75,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [],
+  [
+    {
+      "field": "voice.tone",
+      "value": [
+        "warm"
+      ],
+      "confidence": 0.6,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.sample_phrases",
+      "value": [
+        "Your cozy corner on the harbor",
+        "Small-batch roasts, brewed with love",
+        "Our favorites",
+        "What our neighbors say"
+      ],
+      "confidence": 0.7,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "voice.personality",
+      "value": "the welcoming host",
+      "confidence": 0.55,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.description",
+      "value": "Speaks warm \u2014 the copy favors short, concrete sentences over hype.",
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Harbor Latte \u2014 $4.50"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Sea Salt Caramel Espresso \u2014 $5.00"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Blueberry Morning Pastry \u2014 $3.25"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$4.50"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$5.00"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$3.25"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "identity.name",
+      "value": "Harbor & Bean Coffee House",
+      "confidence": 0.85,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.tagline",
+      "value": "A cozy neighborhood coffee house in Seaside. Small-batch roasts, fresh pastries, friendly faces.",
+      "confidence": 0.8,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Small-batch roasts, brewed with love"
+      },
+      "confidence": 0.55,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.channels",
+      "value": [
+        "phone",
+        "email"
+      ],
+      "confidence": 0.9,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.location",
+      "value": "42 Harbor Lane",
+      "confidence": 0.7,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.hours",
+      "value": "Mon\u2013Fri 7am\u20133pm; Sat\u2013Sun 8am\u20132pm",
+      "confidence": 0.75,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [],
+  [
+    {
+      "field": "voice.tone",
+      "value": [
+        "warm"
+      ],
+      "confidence": 0.6,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.sample_phrases",
+      "value": [
+        "Your cozy corner on the harbor",
+        "Small-batch roasts, brewed with love",
+        "Our favorites",
+        "What our neighbors say"
+      ],
+      "confidence": 0.7,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "voice.personality",
+      "value": "the welcoming host",
+      "confidence": 0.55,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.description",
+      "value": "Speaks warm \u2014 the copy favors short, concrete sentences over hype.",
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Harbor Latte \u2014 $4.50"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Sea Salt Caramel Espresso \u2014 $5.00"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Blueberry Morning Pastry \u2014 $3.25"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$4.50"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$5.00"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$3.25"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "identity.name",
+      "value": "Harbor & Bean Coffee House",
+      "confidence": 0.85,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.tagline",
+      "value": "A cozy neighborhood coffee house in Seaside. Small-batch roasts, fresh pastries, friendly faces.",
+      "confidence": 0.8,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Small-batch roasts, brewed with love"
+      },
+      "confidence": 0.55,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.channels",
+      "value": [
+        "phone",
+        "email"
+      ],
+      "confidence": 0.9,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.location",
+      "value": "42 Harbor Lane",
+      "confidence": 0.7,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.hours",
+      "value": "Mon\u2013Fri 7am\u20133pm; Sat\u2013Sun 8am\u20132pm",
+      "confidence": 0.75,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [],
+  [
+    {
+      "field": "voice.tone",
+      "value": [
+        "warm"
+      ],
+      "confidence": 0.6,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.sample_phrases",
+      "value": [
+        "Your cozy corner on the harbor",
+        "Small-batch roasts, brewed with love",
+        "Our favorites",
+        "What our neighbors say"
+      ],
+      "confidence": 0.7,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "voice.personality",
+      "value": "the welcoming host",
+      "confidence": 0.55,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.description",
+      "value": "Speaks warm \u2014 the copy favors short, concrete sentences over hype.",
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Harbor Latte \u2014 $4.50"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Sea Salt Caramel Espresso \u2014 $5.00"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Blueberry Morning Pastry \u2014 $3.25"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$4.50"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$5.00"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$3.25"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "identity.name",
+      "value": "Harbor & Bean Coffee House",
+      "confidence": 0.85,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.tagline",
+      "value": "A cozy neighborhood coffee house in Seaside. Small-batch roasts, fresh pastries, friendly faces.",
+      "confidence": 0.8,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Small-batch roasts, brewed with love"
+      },
+      "confidence": 0.55,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.channels",
+      "value": [
+        "phone",
+        "email"
+      ],
+      "confidence": 0.9,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.location",
+      "value": "42 Harbor Lane",
+      "confidence": 0.7,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.hours",
+      "value": "Mon\u2013Fri 7am\u20133pm; Sat\u2013Sun 8am\u20132pm",
+      "confidence": 0.75,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [],
+  [
+    {
+      "field": "voice.tone",
+      "value": [
+        "warm"
+      ],
+      "confidence": 0.6,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.sample_phrases",
+      "value": [
+        "Your cozy corner on the harbor",
+        "Small-batch roasts, brewed with love",
+        "Our favorites",
+        "What our neighbors say"
+      ],
+      "confidence": 0.7,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "voice.personality",
+      "value": "the welcoming host",
+      "confidence": 0.55,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.description",
+      "value": "Speaks warm \u2014 the copy favors short, concrete sentences over hype.",
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Harbor Latte \u2014 $4.50"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Sea Salt Caramel Espresso \u2014 $5.00"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Blueberry Morning Pastry \u2014 $3.25"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$4.50"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$5.00"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$3.25"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "identity.name",
+      "value": "Harbor & Bean Coffee House",
+      "confidence": 0.85,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.tagline",
+      "value": "A cozy neighborhood coffee house in Seaside. Small-batch roasts, fresh pastries, friendly faces.",
+      "confidence": 0.8,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Small-batch roasts, brewed with love"
+      },
+      "confidence": 0.55,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.channels",
+      "value": [
+        "phone",
+        "email"
+      ],
+      "confidence": 0.9,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.location",
+      "value": "42 Harbor Lane",
+      "confidence": 0.7,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.hours",
+      "value": "Mon\u2013Fri 7am\u20133pm; Sat\u2013Sun 8am\u20132pm",
+      "confidence": 0.75,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [],
+  [
+    {
+      "field": "voice.tone",
+      "value": [
+        "warm"
+      ],
+      "confidence": 0.6,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.sample_phrases",
+      "value": [
+        "Your cozy corner on the harbor",
+        "Small-batch roasts, brewed with love",
+        "Our favorites",
+        "What our neighbors say"
+      ],
+      "confidence": 0.7,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "voice.personality",
+      "value": "the welcoming host",
+      "confidence": 0.55,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.description",
+      "value": "Speaks warm \u2014 the copy favors short, concrete sentences over hype.",
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Harbor Latte \u2014 $4.50"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Sea Salt Caramel Espresso \u2014 $5.00"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Blueberry Morning Pastry \u2014 $3.25"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$4.50"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$5.00"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$3.25"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "identity.name",
+      "value": "Coffee Roastery",
+      "confidence": 0.85,
+      "sources": [
+        "https://www.ghcoffeeco.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.tagline",
+      "value": "G.H. Coffee Company specializes in fresh, flavorful coffees from around the world.   We only roast in small batches assuring your Coffee is always FRESH.",
+      "confidence": 0.8,
+      "sources": [
+        "https://www.ghcoffeeco.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [],
+  [],
+  [],
+  [
+    {
+      "field": "operations.systems",
+      "value": [
+        "google_analytics"
+      ],
+      "confidence": 0.9,
+      "sources": [
+        "https://www.ghcoffeeco.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "voice.tone",
+      "value": [
+        "warm",
+        "playful",
+        "professional"
+      ],
+      "confidence": 0.6,
+      "sources": [
+        "https://www.ghcoffeeco.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "voice.personality",
+      "value": "the friendly neighbor who remembers your name",
+      "confidence": 0.55,
+      "sources": [
+        "https://www.ghcoffeeco.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.description",
+      "value": "Speaks playful, professional, warm \u2014 the copy favors short, concrete sentences over hype.",
+      "confidence": 0.5,
+      "sources": [
+        "https://www.ghcoffeeco.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "SHOP"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "https://www.ghcoffeeco.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Shop Coffees"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "https://www.ghcoffeeco.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Coffee Roastery - G.H. Coffee Company HOME"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "https://www.ghcoffeeco.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [],
+  [
+    {
+      "field": "identity.name",
+      "value": "Coffee Roastery",
+      "confidence": 0.85,
+      "sources": [
+        "https://www.ghcoffeeco.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.tagline",
+      "value": "G.H. Coffee Company specializes in fresh, flavorful coffees from around the world.   We only roast in small batches assuring your Coffee is always FRESH.",
+      "confidence": 0.8,
+      "sources": [
+        "https://www.ghcoffeeco.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [],
+  [],
+  [],
+  [
+    {
+      "field": "operations.systems",
+      "value": [
+        "google_analytics"
+      ],
+      "confidence": 0.9,
+      "sources": [
+        "https://www.ghcoffeeco.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "voice.tone",
+      "value": [
+        "warm",
+        "playful",
+        "professional"
+      ],
+      "confidence": 0.6,
+      "sources": [
+        "https://www.ghcoffeeco.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "voice.personality",
+      "value": "the friendly neighbor who remembers your name",
+      "confidence": 0.55,
+      "sources": [
+        "https://www.ghcoffeeco.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.description",
+      "value": "Speaks playful, professional, warm \u2014 the copy favors short, concrete sentences over hype.",
+      "confidence": 0.5,
+      "sources": [
+        "https://www.ghcoffeeco.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Shop Coffees"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "https://www.ghcoffeeco.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Coffee Roastery - G.H. Coffee Company HOME"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "https://www.ghcoffeeco.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [],
+  [
+    {
+      "field": "identity.name",
+      "value": "Coffee Roastery",
+      "confidence": 0.85,
+      "sources": [
+        "https://www.ghcoffeeco.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.tagline",
+      "value": "G.H. Coffee Company specializes in fresh, flavorful coffees from around the world.   We only roast in small batches assuring your Coffee is always FRESH.",
+      "confidence": 0.8,
+      "sources": [
+        "https://www.ghcoffeeco.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [],
+  [],
+  [],
+  [
+    {
+      "field": "operations.systems",
+      "value": [
+        "google_analytics"
+      ],
+      "confidence": 0.9,
+      "sources": [
+        "https://www.ghcoffeeco.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "voice.tone",
+      "value": [
+        "warm",
+        "playful",
+        "professional"
+      ],
+      "confidence": 0.6,
+      "sources": [
+        "https://www.ghcoffeeco.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "voice.personality",
+      "value": "the friendly neighbor who remembers your name",
+      "confidence": 0.55,
+      "sources": [
+        "https://www.ghcoffeeco.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.description",
+      "value": "Speaks playful, professional, warm \u2014 the copy favors short, concrete sentences over hype.",
+      "confidence": 0.5,
+      "sources": [
+        "https://www.ghcoffeeco.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Shop Coffees"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "https://www.ghcoffeeco.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Coffee Roastery - G.H. Coffee Company HOME"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "https://www.ghcoffeeco.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [],
+  [
+    {
+      "field": "identity.name",
+      "value": "Coffee Roastery",
+      "confidence": 0.85,
+      "sources": [
+        "https://www.ghcoffeeco.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.tagline",
+      "value": "G.H. Coffee Company specializes in fresh, flavorful coffees from around the world.   We only roast in small batches assuring your Coffee is always FRESH.",
+      "confidence": 0.8,
+      "sources": [
+        "https://www.ghcoffeeco.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [],
+  [],
+  [],
+  [
+    {
+      "field": "operations.systems",
+      "value": [
+        "google_analytics"
+      ],
+      "confidence": 0.9,
+      "sources": [
+        "https://www.ghcoffeeco.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "voice.tone",
+      "value": [
+        "warm",
+        "playful",
+        "professional"
+      ],
+      "confidence": 0.6,
+      "sources": [
+        "https://www.ghcoffeeco.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "voice.personality",
+      "value": "the friendly neighbor who remembers your name",
+      "confidence": 0.55,
+      "sources": [
+        "https://www.ghcoffeeco.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.description",
+      "value": "Speaks playful, professional, warm \u2014 the copy favors short, concrete sentences over hype.",
+      "confidence": 0.5,
+      "sources": [
+        "https://www.ghcoffeeco.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Shop Coffees"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "https://www.ghcoffeeco.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Coffee Roastery - G.H. Coffee Company HOME"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "https://www.ghcoffeeco.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [],
+  [
+    {
+      "field": "identity.name",
+      "value": "G.H. Coffee Company",
+      "confidence": 0.85,
+      "sources": [
+        "https://www.ghcoffeeco.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.tagline",
+      "value": "G.H. Coffee Company specializes in fresh, flavorful coffees from around the world.   We only roast in small batches assuring your Coffee is always FRESH.",
+      "confidence": 0.8,
+      "sources": [
+        "https://www.ghcoffeeco.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [],
+  [],
+  [],
+  [
+    {
+      "field": "operations.systems",
+      "value": [
+        "google_analytics"
+      ],
+      "confidence": 0.9,
+      "sources": [
+        "https://www.ghcoffeeco.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "voice.tone",
+      "value": [
+        "warm",
+        "playful",
+        "professional"
+      ],
+      "confidence": 0.6,
+      "sources": [
+        "https://www.ghcoffeeco.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "voice.personality",
+      "value": "the friendly neighbor who remembers your name",
+      "confidence": 0.55,
+      "sources": [
+        "https://www.ghcoffeeco.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.description",
+      "value": "Speaks playful, professional, warm \u2014 the copy favors short, concrete sentences over hype.",
+      "confidence": 0.5,
+      "sources": [
+        "https://www.ghcoffeeco.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Shop Coffees"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "https://www.ghcoffeeco.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Coffee Roastery - G.H. Coffee Company HOME"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "https://www.ghcoffeeco.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [],
+  [
+    {
+      "field": "identity.name",
+      "value": "Nunzio&#x27;s Kitchen",
+      "confidence": 0.85,
+      "sources": [
+        "https://nunzioskitchen.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.tagline",
+      "value": "Family-owned Italian restaurant and pizzeria at 521 Raritan St, Sayreville, NJ. Hand-tossed specialty pies, pan pizzas, classic pastas, calzones, and locally-sourced Italian entrees. BYOB. Dine-in, takeout, delivery, and catering. Call (732) 727-1060.",
+      "confidence": 0.8,
+      "sources": [
+        "https://nunzioskitchen.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "A family table, set for Sayreville."
+      },
+      "confidence": 0.55,
+      "sources": [
+        "https://nunzioskitchen.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Your doorstep is waiting."
+      },
+      "confidence": 0.55,
+      "sources": [
+        "https://nunzioskitchen.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Sayreville keeps talking."
+      },
+      "confidence": 0.55,
+      "sources": [
+        "https://nunzioskitchen.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Find us on Raritan Street."
+      },
+      "confidence": 0.55,
+      "sources": [
+        "https://nunzioskitchen.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.channels",
+      "value": [
+        "phone",
+        "email"
+      ],
+      "confidence": 0.9,
+      "sources": [
+        "https://nunzioskitchen.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.location",
+      "value": "521 Raritan St",
+      "confidence": 0.7,
+      "sources": [
+        "https://nunzioskitchen.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [],
+  [],
+  [
+    {
+      "field": "voice.tone",
+      "value": [
+        "warm"
+      ],
+      "confidence": 0.6,
+      "sources": [
+        "https://nunzioskitchen.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.sample_phrases",
+      "value": [
+        "Hand-tossed pies, family recipes, and a warm Sayreville welcome.",
+        "A family table, set for Sayreville.",
+        "Your doorstep is waiting.",
+        "Sayreville keeps talking."
+      ],
+      "confidence": 0.7,
+      "sources": [
+        "https://nunzioskitchen.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "voice.personality",
+      "value": "the welcoming host",
+      "confidence": 0.55,
+      "sources": [
+        "https://nunzioskitchen.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.description",
+      "value": "Speaks warm \u2014 the copy favors short, concrete sentences over hype.",
+      "confidence": 0.5,
+      "sources": [
+        "https://nunzioskitchen.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "View Menu"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "https://nunzioskitchen.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Order Online Now"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "https://nunzioskitchen.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "TakeoutReady in 15\u201320 min"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "https://nunzioskitchen.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Delivery30\u201340 min \u00b7 Sayreville area"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "https://nunzioskitchen.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "See the full menu"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "https://nunzioskitchen.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Antipasti"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "https://nunzioskitchen.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Salads"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "https://nunzioskitchen.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Panini"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "https://nunzioskitchen.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Desserts"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "https://nunzioskitchen.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [],
+  [
+    {
+      "field": "identity.name",
+      "value": "Nunzio's Kitchen",
+      "confidence": 0.85,
+      "sources": [
+        "https://nunzioskitchen.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.tagline",
+      "value": "Family-owned Italian restaurant and pizzeria at 521 Raritan St, Sayreville, NJ. Hand-tossed specialty pies, pan pizzas, classic pastas, calzones, and locally-sourced Italian entrees. BYOB. Dine-in, takeout, delivery, and catering. Call (732) 727-1060.",
+      "confidence": 0.8,
+      "sources": [
+        "https://nunzioskitchen.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "A family table, set for Sayreville."
+      },
+      "confidence": 0.55,
+      "sources": [
+        "https://nunzioskitchen.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Your doorstep is waiting."
+      },
+      "confidence": 0.55,
+      "sources": [
+        "https://nunzioskitchen.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Sayreville keeps talking."
+      },
+      "confidence": 0.55,
+      "sources": [
+        "https://nunzioskitchen.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Find us on Raritan Street."
+      },
+      "confidence": 0.55,
+      "sources": [
+        "https://nunzioskitchen.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.channels",
+      "value": [
+        "phone",
+        "email"
+      ],
+      "confidence": 0.9,
+      "sources": [
+        "https://nunzioskitchen.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.location",
+      "value": "521 Raritan St",
+      "confidence": 0.7,
+      "sources": [
+        "https://nunzioskitchen.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [],
+  [],
+  [
+    {
+      "field": "voice.tone",
+      "value": [
+        "warm"
+      ],
+      "confidence": 0.6,
+      "sources": [
+        "https://nunzioskitchen.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.sample_phrases",
+      "value": [
+        "Hand-tossed pies, family recipes, and a warm Sayreville welcome.",
+        "A family table, set for Sayreville.",
+        "Your doorstep is waiting.",
+        "Sayreville keeps talking."
+      ],
+      "confidence": 0.7,
+      "sources": [
+        "https://nunzioskitchen.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "voice.personality",
+      "value": "the welcoming host",
+      "confidence": 0.55,
+      "sources": [
+        "https://nunzioskitchen.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.description",
+      "value": "Speaks warm \u2014 the copy favors short, concrete sentences over hype.",
+      "confidence": 0.5,
+      "sources": [
+        "https://nunzioskitchen.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Antipasti"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "https://nunzioskitchen.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Salads"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "https://nunzioskitchen.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Panini"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "https://nunzioskitchen.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Desserts"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "https://nunzioskitchen.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [],
+  [
+    {
+      "field": "identity.name",
+      "value": "Nunzio's Kitchen",
+      "confidence": 0.85,
+      "sources": [
+        "https://nunzioskitchen.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.tagline",
+      "value": "Family-owned Italian restaurant and pizzeria at 521 Raritan St, Sayreville, NJ. Hand-tossed specialty pies, pan pizzas, classic pastas, calzones, and locally-sourced Italian entrees. BYOB. Dine-in, takeout, delivery, and catering. Call (732) 727-1060.",
+      "confidence": 0.8,
+      "sources": [
+        "https://nunzioskitchen.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [],
+  [
+    {
+      "field": "operations.channels",
+      "value": [
+        "phone",
+        "email"
+      ],
+      "confidence": 0.9,
+      "sources": [
+        "https://nunzioskitchen.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.location",
+      "value": "521 Raritan St",
+      "confidence": 0.7,
+      "sources": [
+        "https://nunzioskitchen.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [],
+  [],
+  [
+    {
+      "field": "voice.tone",
+      "value": [
+        "warm"
+      ],
+      "confidence": 0.6,
+      "sources": [
+        "https://nunzioskitchen.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.sample_phrases",
+      "value": [
+        "Hand-tossed pies, family recipes, and a warm Sayreville welcome.",
+        "A family table, set for Sayreville.",
+        "Your doorstep is waiting.",
+        "Sayreville keeps talking."
+      ],
+      "confidence": 0.7,
+      "sources": [
+        "https://nunzioskitchen.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "voice.personality",
+      "value": "the welcoming host",
+      "confidence": 0.55,
+      "sources": [
+        "https://nunzioskitchen.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.description",
+      "value": "Speaks warm \u2014 the copy favors short, concrete sentences over hype.",
+      "confidence": 0.5,
+      "sources": [
+        "https://nunzioskitchen.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Antipasti"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "https://nunzioskitchen.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Salads"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "https://nunzioskitchen.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Panini"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "https://nunzioskitchen.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Desserts"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "https://nunzioskitchen.com/"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [],
+  [
+    {
+      "field": "identity.name",
+      "value": "Harbor & Bean Coffee House",
+      "confidence": 0.85,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.tagline",
+      "value": "A cozy neighborhood coffee house in Seaside. Small-batch roasts, fresh pastries, friendly faces.",
+      "confidence": 0.8,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Small-batch roasts, brewed with love"
+      },
+      "confidence": 0.55,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.channels",
+      "value": [
+        "phone",
+        "email"
+      ],
+      "confidence": 0.9,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.location",
+      "value": "42 Harbor Lane",
+      "confidence": 0.7,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.hours",
+      "value": "Mon\u2013Fri 7am\u20133pm; Sat\u2013Sun 8am\u20132pm",
+      "confidence": 0.75,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [],
+  [
+    {
+      "field": "voice.tone",
+      "value": [
+        "warm"
+      ],
+      "confidence": 0.6,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.sample_phrases",
+      "value": [
+        "Your cozy corner on the harbor",
+        "Small-batch roasts, brewed with love",
+        "Our favorites",
+        "What our neighbors say"
+      ],
+      "confidence": 0.7,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "voice.personality",
+      "value": "the welcoming host",
+      "confidence": 0.55,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.description",
+      "value": "Speaks warm \u2014 the copy favors short, concrete sentences over hype.",
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Harbor Latte \u2014 $4.50"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Sea Salt Caramel Espresso \u2014 $5.00"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Blueberry Morning Pastry \u2014 $3.25"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$4.50"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$5.00"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$3.25"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "identity.name",
+      "value": "Harbor & Bean Coffee House",
+      "confidence": 0.85,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.tagline",
+      "value": "A cozy neighborhood coffee house in Seaside. Small-batch roasts, fresh pastries, friendly faces.",
+      "confidence": 0.8,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Small-batch roasts, brewed with love"
+      },
+      "confidence": 0.55,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.channels",
+      "value": [
+        "phone",
+        "email"
+      ],
+      "confidence": 0.9,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.location",
+      "value": "42 Harbor Lane",
+      "confidence": 0.7,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.hours",
+      "value": "Mon\u2013Fri 7am\u20133pm; Sat\u2013Sun 8am\u20132pm",
+      "confidence": 0.75,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [],
+  [
+    {
+      "field": "voice.tone",
+      "value": [
+        "warm"
+      ],
+      "confidence": 0.6,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.sample_phrases",
+      "value": [
+        "Your cozy corner on the harbor",
+        "Small-batch roasts, brewed with love",
+        "Our favorites",
+        "What our neighbors say"
+      ],
+      "confidence": 0.7,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "voice.personality",
+      "value": "the welcoming host",
+      "confidence": 0.55,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.description",
+      "value": "Speaks warm \u2014 the copy favors short, concrete sentences over hype.",
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Harbor Latte \u2014 $4.50"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Sea Salt Caramel Espresso \u2014 $5.00"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Blueberry Morning Pastry \u2014 $3.25"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$4.50"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$5.00"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$3.25"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "identity.name",
+      "value": "Harbor & Bean Coffee House",
+      "confidence": 0.85,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.tagline",
+      "value": "A cozy neighborhood coffee house in Seaside. Small-batch roasts, fresh pastries, friendly faces.",
+      "confidence": 0.8,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Small-batch roasts, brewed with love"
+      },
+      "confidence": 0.55,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.channels",
+      "value": [
+        "phone",
+        "email"
+      ],
+      "confidence": 0.9,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.location",
+      "value": "42 Harbor Lane",
+      "confidence": 0.7,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.hours",
+      "value": "Mon\u2013Fri 7am\u20133pm; Sat\u2013Sun 8am\u20132pm",
+      "confidence": 0.75,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [],
+  [
+    {
+      "field": "voice.tone",
+      "value": [
+        "warm"
+      ],
+      "confidence": 0.6,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.sample_phrases",
+      "value": [
+        "Your cozy corner on the harbor",
+        "Small-batch roasts, brewed with love",
+        "Our favorites",
+        "What our neighbors say"
+      ],
+      "confidence": 0.7,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "voice.personality",
+      "value": "the welcoming host",
+      "confidence": 0.55,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.description",
+      "value": "Speaks warm \u2014 the copy favors short, concrete sentences over hype.",
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Harbor Latte \u2014 $4.50"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Sea Salt Caramel Espresso \u2014 $5.00"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Blueberry Morning Pastry \u2014 $3.25"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$4.50"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$5.00"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$3.25"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "identity.name",
+      "value": "Harbor & Bean Coffee House",
+      "confidence": 0.85,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.tagline",
+      "value": "A cozy neighborhood coffee house in Seaside. Small-batch roasts, fresh pastries, friendly faces.",
+      "confidence": 0.8,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Small-batch roasts, brewed with love"
+      },
+      "confidence": 0.55,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.channels",
+      "value": [
+        "phone",
+        "email"
+      ],
+      "confidence": 0.9,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.location",
+      "value": "42 Harbor Lane",
+      "confidence": 0.7,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.hours",
+      "value": "Mon\u2013Fri 7am\u20133pm; Sat\u2013Sun 8am\u20132pm",
+      "confidence": 0.75,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [],
+  [
+    {
+      "field": "voice.tone",
+      "value": [
+        "warm"
+      ],
+      "confidence": 0.6,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.sample_phrases",
+      "value": [
+        "Your cozy corner on the harbor",
+        "Small-batch roasts, brewed with love",
+        "Our favorites",
+        "What our neighbors say"
+      ],
+      "confidence": 0.7,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "voice.personality",
+      "value": "the welcoming host",
+      "confidence": 0.55,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.description",
+      "value": "Speaks warm \u2014 the copy favors short, concrete sentences over hype.",
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Harbor Latte \u2014 $4.50"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Sea Salt Caramel Espresso \u2014 $5.00"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Blueberry Morning Pastry \u2014 $3.25"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$4.50"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$5.00"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$3.25"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "identity.name",
+      "value": "Harbor & Bean Coffee House",
+      "confidence": 0.85,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.tagline",
+      "value": "A cozy neighborhood coffee house in Seaside. Small-batch roasts, fresh pastries, friendly faces.",
+      "confidence": 0.8,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Small-batch roasts, brewed with love"
+      },
+      "confidence": 0.55,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.channels",
+      "value": [
+        "phone",
+        "email"
+      ],
+      "confidence": 0.9,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.location",
+      "value": "42 Harbor Lane",
+      "confidence": 0.7,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.hours",
+      "value": "Mon\u2013Fri 7am\u20133pm; Sat\u2013Sun 8am\u20132pm",
+      "confidence": 0.75,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [],
+  [
+    {
+      "field": "voice.tone",
+      "value": [
+        "warm"
+      ],
+      "confidence": 0.6,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.sample_phrases",
+      "value": [
+        "Your cozy corner on the harbor",
+        "Small-batch roasts, brewed with love",
+        "Our favorites",
+        "What our neighbors say"
+      ],
+      "confidence": 0.7,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "voice.personality",
+      "value": "the welcoming host",
+      "confidence": 0.55,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.description",
+      "value": "Speaks warm \u2014 the copy favors short, concrete sentences over hype.",
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Harbor Latte \u2014 $4.50"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Sea Salt Caramel Espresso \u2014 $5.00"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Blueberry Morning Pastry \u2014 $3.25"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$4.50"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$5.00"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$3.25"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "identity.name",
+      "value": "Harbor & Bean Coffee House",
+      "confidence": 0.85,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.tagline",
+      "value": "A cozy neighborhood coffee house in Seaside. Small-batch roasts, fresh pastries, friendly faces.",
+      "confidence": 0.8,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Small-batch roasts, brewed with love"
+      },
+      "confidence": 0.55,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.channels",
+      "value": [
+        "phone",
+        "email"
+      ],
+      "confidence": 0.9,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.location",
+      "value": "42 Harbor Lane",
+      "confidence": 0.7,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.hours",
+      "value": "Mon\u2013Fri 7am\u20133pm; Sat\u2013Sun 8am\u20132pm",
+      "confidence": 0.75,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [],
+  [
+    {
+      "field": "voice.tone",
+      "value": [
+        "warm"
+      ],
+      "confidence": 0.6,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.sample_phrases",
+      "value": [
+        "Your cozy corner on the harbor",
+        "Small-batch roasts, brewed with love",
+        "Our favorites",
+        "What our neighbors say"
+      ],
+      "confidence": 0.7,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "voice.personality",
+      "value": "the welcoming host",
+      "confidence": 0.55,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.description",
+      "value": "Speaks warm \u2014 the copy favors short, concrete sentences over hype.",
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Harbor Latte \u2014 $4.50"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Sea Salt Caramel Espresso \u2014 $5.00"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Blueberry Morning Pastry \u2014 $3.25"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$4.50"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$5.00"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$3.25"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "identity.name",
+      "value": "Harbor & Bean Coffee House",
+      "confidence": 0.85,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.tagline",
+      "value": "A cozy neighborhood coffee house in Seaside. Small-batch roasts, fresh pastries, friendly faces.",
+      "confidence": 0.8,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Small-batch roasts, brewed with love"
+      },
+      "confidence": 0.55,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.channels",
+      "value": [
+        "phone",
+        "email"
+      ],
+      "confidence": 0.9,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.location",
+      "value": "42 Harbor Lane",
+      "confidence": 0.7,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.hours",
+      "value": "Mon\u2013Fri 7am\u20133pm; Sat\u2013Sun 8am\u20132pm",
+      "confidence": 0.75,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [],
+  [
+    {
+      "field": "voice.tone",
+      "value": [
+        "warm"
+      ],
+      "confidence": 0.6,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.sample_phrases",
+      "value": [
+        "Your cozy corner on the harbor",
+        "Small-batch roasts, brewed with love",
+        "Our favorites",
+        "What our neighbors say"
+      ],
+      "confidence": 0.7,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "voice.personality",
+      "value": "the welcoming host",
+      "confidence": 0.55,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.description",
+      "value": "Speaks warm \u2014 the copy favors short, concrete sentences over hype.",
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Harbor Latte \u2014 $4.50"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Sea Salt Caramel Espresso \u2014 $5.00"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Blueberry Morning Pastry \u2014 $3.25"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$4.50"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$5.00"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$3.25"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "identity.name",
+      "value": "Harbor & Bean Coffee House",
+      "confidence": 0.85,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.tagline",
+      "value": "A cozy neighborhood coffee house in Seaside. Small-batch roasts, fresh pastries, friendly faces.",
+      "confidence": 0.8,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Small-batch roasts, brewed with love"
+      },
+      "confidence": 0.55,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.channels",
+      "value": [
+        "phone",
+        "email"
+      ],
+      "confidence": 0.9,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.location",
+      "value": "42 Harbor Lane",
+      "confidence": 0.7,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.hours",
+      "value": "Mon\u2013Fri 7am\u20133pm; Sat\u2013Sun 8am\u20132pm",
+      "confidence": 0.75,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [],
+  [
+    {
+      "field": "voice.tone",
+      "value": [
+        "warm"
+      ],
+      "confidence": 0.6,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.sample_phrases",
+      "value": [
+        "Your cozy corner on the harbor",
+        "Small-batch roasts, brewed with love",
+        "Our favorites",
+        "What our neighbors say"
+      ],
+      "confidence": 0.7,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "voice.personality",
+      "value": "the welcoming host",
+      "confidence": 0.55,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.description",
+      "value": "Speaks warm \u2014 the copy favors short, concrete sentences over hype.",
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Harbor Latte \u2014 $4.50"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Sea Salt Caramel Espresso \u2014 $5.00"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Blueberry Morning Pastry \u2014 $3.25"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$4.50"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$5.00"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$3.25"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "identity.name",
+      "value": "Harbor & Bean Coffee House",
+      "confidence": 0.85,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.tagline",
+      "value": "A cozy neighborhood coffee house in Seaside. Small-batch roasts, fresh pastries, friendly faces.",
+      "confidence": 0.8,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Small-batch roasts, brewed with love"
+      },
+      "confidence": 0.55,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.channels",
+      "value": [
+        "phone",
+        "email"
+      ],
+      "confidence": 0.9,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.location",
+      "value": "42 Harbor Lane",
+      "confidence": 0.7,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.hours",
+      "value": "Mon\u2013Fri 7am\u20133pm; Sat\u2013Sun 8am\u20132pm",
+      "confidence": 0.75,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [],
+  [
+    {
+      "field": "voice.tone",
+      "value": [
+        "warm"
+      ],
+      "confidence": 0.6,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.sample_phrases",
+      "value": [
+        "Your cozy corner on the harbor",
+        "Small-batch roasts, brewed with love",
+        "Our favorites",
+        "What our neighbors say"
+      ],
+      "confidence": 0.7,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "voice.personality",
+      "value": "the welcoming host",
+      "confidence": 0.55,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.description",
+      "value": "Speaks warm \u2014 the copy favors short, concrete sentences over hype.",
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Harbor Latte \u2014 $4.50"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Sea Salt Caramel Espresso \u2014 $5.00"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Blueberry Morning Pastry \u2014 $3.25"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$4.50"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$5.00"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$3.25"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "identity.name",
+      "value": "Harbor & Bean Coffee House",
+      "confidence": 0.85,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.tagline",
+      "value": "A cozy neighborhood coffee house in Seaside. Small-batch roasts, fresh pastries, friendly faces.",
+      "confidence": 0.8,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Small-batch roasts, brewed with love"
+      },
+      "confidence": 0.55,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.channels",
+      "value": [
+        "phone",
+        "email"
+      ],
+      "confidence": 0.9,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.location",
+      "value": "42 Harbor Lane",
+      "confidence": 0.7,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.hours",
+      "value": "Mon\u2013Fri 7am\u20133pm; Sat\u2013Sun 8am\u20132pm",
+      "confidence": 0.75,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [],
+  [
+    {
+      "field": "voice.tone",
+      "value": [
+        "warm"
+      ],
+      "confidence": 0.6,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.sample_phrases",
+      "value": [
+        "Your cozy corner on the harbor",
+        "Small-batch roasts, brewed with love",
+        "Our favorites",
+        "What our neighbors say"
+      ],
+      "confidence": 0.7,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "voice.personality",
+      "value": "the welcoming host",
+      "confidence": 0.55,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.description",
+      "value": "Speaks warm \u2014 the copy favors short, concrete sentences over hype.",
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Harbor Latte \u2014 $4.50"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Sea Salt Caramel Espresso \u2014 $5.00"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Blueberry Morning Pastry \u2014 $3.25"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$4.50"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$5.00"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$3.25"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "identity.name",
+      "value": "Harbor & Bean Coffee House",
+      "confidence": 0.85,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.tagline",
+      "value": "A cozy neighborhood coffee house in Seaside. Small-batch roasts, fresh pastries, friendly faces.",
+      "confidence": 0.8,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Small-batch roasts, brewed with love"
+      },
+      "confidence": 0.55,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.channels",
+      "value": [
+        "phone",
+        "email"
+      ],
+      "confidence": 0.9,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.location",
+      "value": "42 Harbor Lane",
+      "confidence": 0.7,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.hours",
+      "value": "Mon\u2013Fri 7am\u20133pm; Sat\u2013Sun 8am\u20132pm",
+      "confidence": 0.75,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [],
+  [
+    {
+      "field": "voice.tone",
+      "value": [
+        "warm"
+      ],
+      "confidence": 0.6,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.sample_phrases",
+      "value": [
+        "Your cozy corner on the harbor",
+        "Small-batch roasts, brewed with love",
+        "Our favorites",
+        "What our neighbors say"
+      ],
+      "confidence": 0.7,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "voice.personality",
+      "value": "the welcoming host",
+      "confidence": 0.55,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.description",
+      "value": "Speaks warm \u2014 the copy favors short, concrete sentences over hype.",
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Harbor Latte \u2014 $4.50"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Sea Salt Caramel Espresso \u2014 $5.00"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Blueberry Morning Pastry \u2014 $3.25"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$4.50"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$5.00"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$3.25"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "identity.name",
+      "value": "Harbor & Bean Coffee House",
+      "confidence": 0.85,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.tagline",
+      "value": "A cozy neighborhood coffee house in Seaside. Small-batch roasts, fresh pastries, friendly faces.",
+      "confidence": 0.8,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Small-batch roasts, brewed with love"
+      },
+      "confidence": 0.55,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.channels",
+      "value": [
+        "phone",
+        "email"
+      ],
+      "confidence": 0.9,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.location",
+      "value": "42 Harbor Lane",
+      "confidence": 0.7,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.hours",
+      "value": "Mon\u2013Fri 7am\u20133pm; Sat\u2013Sun 8am\u20132pm",
+      "confidence": 0.75,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [],
+  [
+    {
+      "field": "voice.tone",
+      "value": [
+        "warm"
+      ],
+      "confidence": 0.6,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.sample_phrases",
+      "value": [
+        "Your cozy corner on the harbor",
+        "Small-batch roasts, brewed with love",
+        "Our favorites",
+        "What our neighbors say"
+      ],
+      "confidence": 0.7,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "voice.personality",
+      "value": "the welcoming host",
+      "confidence": 0.55,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.description",
+      "value": "Speaks warm \u2014 the copy favors short, concrete sentences over hype.",
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Harbor Latte \u2014 $4.50"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Sea Salt Caramel Espresso \u2014 $5.00"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Blueberry Morning Pastry \u2014 $3.25"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$4.50"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$5.00"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$3.25"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "identity.name",
+      "value": "Harbor & Bean Coffee House",
+      "confidence": 0.85,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.tagline",
+      "value": "A cozy neighborhood coffee house in Seaside. Small-batch roasts, fresh pastries, friendly faces.",
+      "confidence": 0.8,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Small-batch roasts, brewed with love"
+      },
+      "confidence": 0.55,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.channels",
+      "value": [
+        "phone",
+        "email"
+      ],
+      "confidence": 0.9,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.location",
+      "value": "42 Harbor Lane",
+      "confidence": 0.7,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.hours",
+      "value": "Mon\u2013Fri 7am\u20133pm; Sat\u2013Sun 8am\u20132pm",
+      "confidence": 0.75,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [],
+  [
+    {
+      "field": "voice.tone",
+      "value": [
+        "warm"
+      ],
+      "confidence": 0.6,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.sample_phrases",
+      "value": [
+        "Your cozy corner on the harbor",
+        "Small-batch roasts, brewed with love",
+        "Our favorites",
+        "What our neighbors say"
+      ],
+      "confidence": 0.7,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "voice.personality",
+      "value": "the welcoming host",
+      "confidence": 0.55,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.description",
+      "value": "Speaks warm \u2014 the copy favors short, concrete sentences over hype.",
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Harbor Latte \u2014 $4.50"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Sea Salt Caramel Espresso \u2014 $5.00"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Blueberry Morning Pastry \u2014 $3.25"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$4.50"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$5.00"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$3.25"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "identity.name",
+      "value": "Harbor & Bean Coffee House",
+      "confidence": 0.85,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.tagline",
+      "value": "A cozy neighborhood coffee house in Seaside. Small-batch roasts, fresh pastries, friendly faces.",
+      "confidence": 0.8,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Small-batch roasts, brewed with love"
+      },
+      "confidence": 0.55,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.channels",
+      "value": [
+        "phone",
+        "email"
+      ],
+      "confidence": 0.9,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "identity.location",
+      "value": "42 Harbor Lane",
+      "confidence": 0.7,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "operations.hours",
+      "value": "Mon\u2013Fri 7am\u20133pm; Sat\u2013Sun 8am\u20132pm",
+      "confidence": 0.75,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [],
+  [
+    {
+      "field": "voice.tone",
+      "value": [
+        "warm"
+      ],
+      "confidence": 0.6,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.sample_phrases",
+      "value": [
+        "Your cozy corner on the harbor",
+        "Small-batch roasts, brewed with love",
+        "Our favorites",
+        "What our neighbors say"
+      ],
+      "confidence": 0.7,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "voice.personality",
+      "value": "the welcoming host",
+      "confidence": 0.55,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "voice.description",
+      "value": "Speaks warm \u2014 the copy favors short, concrete sentences over hype.",
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Harbor Latte \u2014 $4.50"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Sea Salt Caramel Espresso \u2014 $5.00"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "Blueberry Morning Pastry \u2014 $3.25"
+      },
+      "confidence": 0.45,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ],
+  [
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$4.50"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$5.00"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    },
+    {
+      "field": "offerings",
+      "value": {
+        "name": "offering",
+        "price_hint": "$3.25"
+      },
+      "confidence": 0.5,
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "extractor_agent": "extractor:website"
+    }
+  ]
+]

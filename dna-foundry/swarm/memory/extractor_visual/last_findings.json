@@ -1,0 +1,166 @@
+[
+  [],
+  [],
+  [
+    {
+      "field": "visual.primary_color",
+      "value": "#2a2c2c",
+      "confidence": 0.9,
+      "sources": [
+        "https://www.ghcoffeeco.com/"
+      ],
+      "extractor_agent": "extractor:visual"
+    },
+    {
+      "field": "visual.secondary_color",
+      "value": "#999999",
+      "confidence": 0.85,
+      "sources": [
+        "https://www.ghcoffeeco.com/"
+      ],
+      "extractor_agent": "extractor:visual"
+    },
+    {
+      "field": "visual.font_pairing",
+      "value": "Lobster / Lobster Fallback",
+      "confidence": 0.9,
+      "sources": [
+        "https://www.ghcoffeeco.com/"
+      ],
+      "extractor_agent": "extractor:visual"
+    }
+  ],
+  [
+    {
+      "field": "visual.primary_color",
+      "value": "#2a2c2c",
+      "confidence": 0.9,
+      "sources": [
+        "https://www.ghcoffeeco.com/"
+      ],
+      "extractor_agent": "extractor:visual"
+    },
+    {
+      "field": "visual.secondary_color",
+      "value": "#999999",
+      "confidence": 0.85,
+      "sources": [
+        "https://www.ghcoffeeco.com/"
+      ],
+      "extractor_agent": "extractor:visual"
+    },
+    {
+      "field": "visual.font_pairing",
+      "value": "Lobster / Lobster Fallback",
+      "confidence": 0.9,
+      "sources": [
+        "https://www.ghcoffeeco.com/"
+      ],
+      "extractor_agent": "extractor:visual"
+    }
+  ],
+  [
+    {
+      "field": "visual.primary_color",
+      "value": "#2a2c2c",
+      "confidence": 0.9,
+      "sources": [
+        "https://www.ghcoffeeco.com/"
+      ],
+      "extractor_agent": "extractor:visual"
+    },
+    {
+      "field": "visual.secondary_color",
+      "value": "#999999",
+      "confidence": 0.85,
+      "sources": [
+        "https://www.ghcoffeeco.com/"
+      ],
+      "extractor_agent": "extractor:visual"
+    },
+    {
+      "field": "visual.font_pairing",
+      "value": "Lobster / Lobster Fallback",
+      "confidence": 0.9,
+      "sources": [
+        "https://www.ghcoffeeco.com/"
+      ],
+      "extractor_agent": "extractor:visual"
+    }
+  ],
+  [
+    {
+      "field": "visual.primary_color",
+      "value": "#2a2c2c",
+      "confidence": 0.9,
+      "sources": [
+        "https://www.ghcoffeeco.com/"
+      ],
+      "extractor_agent": "extractor:visual"
+    },
+    {
+      "field": "visual.secondary_color",
+      "value": "#999999",
+      "confidence": 0.85,
+      "sources": [
+        "https://www.ghcoffeeco.com/"
+      ],
+      "extractor_agent": "extractor:visual"
+    },
+    {
+      "field": "visual.font_pairing",
+      "value": "Lobster / Lobster Fallback",
+      "confidence": 0.9,
+      "sources": [
+        "https://www.ghcoffeeco.com/"
+      ],
+      "extractor_agent": "extractor:visual"
+    }
+  ],
+  [
+    {
+      "field": "visual.primary_color",
+      "value": "#2a2c2c",
+      "confidence": 0.9,
+      "sources": [
+        "https://www.ghcoffeeco.com/"
+      ],
+      "extractor_agent": "extractor:visual"
+    },
+    {
+      "field": "visual.secondary_color",
+      "value": "#999999",
+      "confidence": 0.85,
+      "sources": [
+        "https://www.ghcoffeeco.com/"
+      ],
+      "extractor_agent": "extractor:visual"
+    },
+    {
+      "field": "visual.font_pairing",
+      "value": "Lobster / Lobster Fallback",
+      "confidence": 0.9,
+      "sources": [
+        "https://www.ghcoffeeco.com/"
+      ],
+      "extractor_agent": "extractor:visual"
+    }
+  ],
+  [],
+  [],
+  [],
+  [],
+  [],
+  [],
+  [],
+  [],
+  [],
+  [],
+  [],
+  [],
+  [],
+  [],
+  [],
+  [],
+  []
+]

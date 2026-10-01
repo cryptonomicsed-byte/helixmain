@@ -1,0 +1,22 @@
+{
+  "budget": {
+    "llm_tokens": 2000,
+    "pages": 5
+  },
+  "invariants": [
+    "Colors and fonts are measured from CSS only. Guessing a hex code is a violation.",
+    "Neutral colors (near-black, near-white, near-grays) are excluded from the brand palette.",
+    "Style keywords come from evidence; the heuristic warmth classifier is the floor, the LLM prompt is the upgrade."
+  ],
+  "owns": [
+    "home",
+    "offerings"
+  ],
+  "role": "Art director. Measures visual identity from real stylesheets: frequency-counted colors and observed font families. The LLM only interprets style from measured facts \u2014 it never invents a hex code.",
+  "skills": [
+    "visual_css"
+  ],
+  "version": "1.0.0",
+  "agent": "extractor:visual",
+  "memory_namespace": "extractor_visual"
+}

@@ -1,0 +1,33 @@
+{
+  "card_id": "dna_51aeb3da",
+  "card_version": 3,
+  "generated_at": "2026-10-01T09:15:26.978Z",
+  "rules": [
+    {
+      "topic": "returns",
+      "rule": "Policies | Harbor & Bean Coffee House Our policies Returns & refunds If you're not happy with your drink, we'll remake it on the spot — no questions asked.",
+      "risk": "high",
+      "verdict": "approval_required",
+      "source_confidence": 0.65
+    },
+    {
+      "topic": "cancellations",
+      "rule": "For catering orders, cancellations made 48 hours in advance receive a full refund.",
+      "risk": "high",
+      "verdict": "approval_required",
+      "source_confidence": 0.65
+    },
+    {
+      "topic": "privacy",
+      "rule": "Privacy We never sell your personal information.",
+      "risk": "medium",
+      "verdict": "approval_required",
+      "source_confidence": 0.65
+    }
+  ],
+  "defaults": {
+    "low": "allow",
+    "medium": "approval_required",
+    "high": "escalate"
+  }
+}

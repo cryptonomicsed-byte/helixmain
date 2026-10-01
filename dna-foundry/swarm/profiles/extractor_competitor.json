@@ -1,0 +1,21 @@
+{
+  "budget": {
+    "llm_tokens": 2000,
+    "pages": 6
+  },
+  "invariants": [
+    "An empty competitor list beats a hallucinated one.",
+    "Every competitor carries the URL where it was found (outbound link or on-site mention).",
+    "Search-API enrichment is stubbed and documented; it does not run without a key."
+  ],
+  "memory_namespace": "extractor_competitor",
+  "owns": [
+    "home",
+    "about",
+    "offerings"
+  ],
+  "role": "Discovers competitors from evidence: outbound links to other businesses, on-site vs-comparisons, and (when configured) a search API. Never invents.",
+  "skills": [],
+  "status": "active",
+  "agent": "extractor:competitor"
+}

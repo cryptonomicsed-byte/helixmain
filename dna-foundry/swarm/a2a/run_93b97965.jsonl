@@ -1,0 +1,2 @@
+{"id": "msg_2ae128f7", "from": "extractor:website", "to": "broadcast", "type": "crawl_plan", "payload": {"buckets": {}, "home": null}, "ts": "2026-10-01T08:01:29.162711+00:00"}
+{"id": "msg_d1593495", "from": "extractor:competitor", "to": "orchestrator", "type": "no_competitor_evidence", "payload": {"pages": 1}, "ts": "2026-10-01T08:01:29.182874+00:00"}

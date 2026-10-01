@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Helix DNA Foundry — Operator</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="bg"></div>
+<header class="topbar glass">
+  <div class="brand"><span class="helix">◈</span> Helix DNA Foundry</div>
+  <nav class="tabs" role="tablist">
+    <button class="tab active" data-tab="md" role="tab">CARD.md</button>
+    <button class="tab" data-tab="json" role="tab">Card JSON</button>
+    <button class="tab" data-tab="diff" role="tab" id="diff-tab">Diff v1 → v2</button>
+  </nav>
+  <div class="meta">
+    <span id="card-id" class="pill">—</span>
+    <span id="card-ver" class="pill accent">—</span>
+    <span id="card-hash" class="pill mono" title="canonical SHA-256 of the compiled card">—</span>
+  </div>
+</header>
+
+<main id="tab-md" class="view">
+  <section class="glass envelope">
+    <h2>Envelope <span class="sub">the md file is the card</span></h2>
+    <dl id="envelope" class="kv"></dl>
+    <p id="hash-note" class="note"></p>
+  </section>
+  <article id="md-body" class="glass md"></article>
+</main>
+
+<main id="tab-json" class="view" hidden>
+  <section class="glass">
+    <h2>Compiled machine view <span class="sub">JSON is compiled from CARD.md, not the source of truth</span></h2>
+    <pre id="json-body" class="json"></pre>
+  </section>
+</main>
+
+<main id="tab-diff" class="view" hidden>
+  <section class="glass diff-head">
+    <h2>Line diff <span class="sub" id="diff-sub">—</span></h2>
+    <div id="diff-body" class="diff"></div>
+  </section>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,3 @@
+{"id": "msg_39dffb9a", "from": "extractor:website", "to": "broadcast", "type": "crawl_plan", "payload": {"buckets": {}, "home": null}, "ts": "2026-10-01T08:02:12.715698+00:00"}
+{"id": "msg_b5b5a121", "from": "extractor:strategy", "to": "broadcast", "type": "pages_seen", "payload": {"agent": "extractor:strategy", "pages": ["file:///tmp/demo-site/index.html"]}, "ts": "2026-10-01T08:02:12.733052+00:00"}
+{"id": "msg_f632757f", "from": "extractor:competitor", "to": "orchestrator", "type": "no_competitor_evidence", "payload": {"pages": 1}, "ts": "2026-10-01T08:02:12.737499+00:00"}

@@ -1,0 +1,583 @@
+{
+  "$id": "https://helixmain.ai/contracts/dna-card.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "The Business DNA card: a versioned, machine-readable source of truth for one company. Everything an agent believes about the business compiles FROM this card \u2014 system prompts, policy seeds, tool allowlists, RAG manifests. Field-level provenance means every fact cites its source and confidence (this replaces BrandDNA.confidenceScore with something strictly better: per-field confidence). When the business changes, re-extract and recompile; agents never drift on stale prompts. The card is a superset of Sacred Core's BrandDNA: every BrandDNA field has a home here.",
+  "properties": {
+    "competitors": {
+      "description": "Discovered from outbound links and vs/alternative mentions. NEVER invented \u2014 an empty list beats a hallucinated one.",
+      "items": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "positioning": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "created_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "customers": {
+      "properties": {
+        "personas": {
+          "items": {
+            "properties": {
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "name": {
+                "type": "string"
+              },
+              "pain_points": {
+                "description": "Mined from FAQ questions and review themes \u2014 a question IS a pain point.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "role": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "touchpoints": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "field_provenance": {
+      "additionalProperties": {
+        "properties": {
+          "confidence": {
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          },
+          "extracted_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "extractor_agent": {
+            "description": "Which swarm agent extracted it, e.g. extractor:website.",
+            "type": "string"
+          },
+          "sources": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "sources",
+          "confidence",
+          "extracted_at"
+        ],
+        "type": "object"
+      },
+      "description": "Field path (e.g. 'voice.tone') -> where it came from and how sure we are.",
+      "type": "object"
+    },
+    "hash": {
+      "description": "SHA-256 of the canonical JSON of this version. The card is content-addressed.",
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "id": {
+      "pattern": "^dna_[a-z0-9]{8,}$",
+      "type": "string"
+    },
+    "identity": {
+      "properties": {
+        "elevator_pitch": {
+          "description": "One-sentence pitch: what the business does and for whom.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "founded": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "location": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "mission": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "tagline": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "values": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "insights": {
+      "description": "Patterns the swarm discovered that the owner may not have noticed: sentiment shifts, offering gaps, review themes. The 'AI sees what we haven't' surface.",
+      "items": {
+        "properties": {
+          "detail": {
+            "type": "string"
+          },
+          "evidence": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "detail"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "knowledge": {
+      "description": "Ingested knowledge: pointers to chunked corpora, not the corpora themselves.",
+      "items": {
+        "properties": {
+          "chunks": {
+            "type": "integer"
+          },
+          "kind": {
+            "enum": [
+              "faq",
+              "policy_doc",
+              "manual",
+              "product_catalog",
+              "review_corpus",
+              "other"
+            ]
+          },
+          "ref": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ref",
+          "kind",
+          "title"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "offerings": {
+      "items": {
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "price_hint": {
+            "description": "Observed pricing text, e.g. 'from $18'. Not a quote.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "operations": {
+      "properties": {
+        "channels": {
+          "items": {
+            "enum": [
+              "web_chat",
+              "phone",
+              "email",
+              "social",
+              "in_person"
+            ]
+          },
+          "type": "array"
+        },
+        "hours": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "systems": {
+          "description": "Systems the business already runs, e.g. square, gmail.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "organization_id": {
+      "type": "string"
+    },
+    "policies": {
+      "description": "Operating policies that become policy-engine seeds: returns, refunds, escalation, compliance.",
+      "items": {
+        "properties": {
+          "rule": {
+            "type": "string"
+          },
+          "topic": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "topic",
+          "rule"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "previous_version": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "status": {
+      "enum": [
+        "draft",
+        "in_review",
+        "approved",
+        "retired"
+      ],
+      "type": "string"
+    },
+    "strategy": {
+      "description": "The strategist's read: where the business stands and where it's going.",
+      "properties": {
+        "key_messaging": {
+          "description": "The 3 messages the business repeats everywhere.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "positioning": {
+          "description": "One line: how the business positions itself against alternatives.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "swot": {
+          "properties": {
+            "opportunities": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "strengths": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "threats": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "weaknesses": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "version": {
+      "description": "Monotonic integer. Diff v(n) vs v(n-1) to see the business evolve.",
+      "minimum": 1,
+      "type": "integer"
+    },
+    "visual": {
+      "description": "Measured from real CSS, not guessed: top colors by frequency, font families by usage. The LLM only interprets style, never invents hex codes.",
+      "properties": {
+        "design_system": {
+          "description": "LLM-interpreted: e.g. 'warm minimalism, generous whitespace'.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "font_pairing": {
+          "description": "Observed font families, e.g. 'GT America / Georgia'.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "image_style": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "primary_color": {
+          "description": "Most frequent non-neutral color in CSS.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "secondary_color": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "style_keywords": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "voice": {
+      "properties": {
+        "description": {
+          "description": "Concise description of how the business sounds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "donts": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "personality": {
+          "description": "Concise personality sketch, e.g. 'the knowledgeable regular'.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sample_phrases": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "sonic": {
+          "description": "Sonic identity: how the brand sounds beyond words.",
+          "properties": {
+            "music_genre": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "sound_keywords": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "voice_type": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "sonic_logo": {
+              "description": "The 3-5s brand mnemonic (the 'ta-dum'). asset_ref is a content hash; the file lives at foundry/assets/<hex>.mp3 and is immutable \u2014 regeneration mints a new hash with the new card version.",
+              "type": "object",
+              "properties": {
+                "description": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "asset_ref": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Content hash: sha256:<hex>."
+                },
+                "duration_s": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "voice_logo": {
+              "description": "Spoken tagline/greeting in the brand voice.",
+              "type": "object",
+              "properties": {
+                "script": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "voice_profile": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "TTS voice id used, e.g. avocado_v2:MAI_03."
+                },
+                "asset_ref": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Content hash: sha256:<hex>."
+                }
+              }
+            },
+            "ui_sounds": {
+              "description": "Short functional sounds for the business's app/site.",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "e.g. notification, success, error"
+                  },
+                  "description": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "asset_ref": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "Content hash: sha256:<hex>."
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              }
+            }
+          },
+          "type": "object"
+        },
+        "tone": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "previous_hash": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "acting_hash": {
+      "type": "string",
+      "description": "SHA-256 (sha256:-prefixed) of the canonical JSON of the acting layer (identity, voice, offerings, operations, policies, handoff, knowledge). Recomputed when the acting layer changes."
+    }
+  },
+  "required": [
+    "id",
+    "organization_id",
+    "version",
+    "status",
+    "identity",
+    "created_at",
+    "hash",
+    "acting_hash"
+  ],
+  "title": "BusinessDNACard",
+  "type": "object"
+}

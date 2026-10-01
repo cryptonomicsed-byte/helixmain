@@ -1,0 +1,3 @@
+{"id": "msg_27097c6a", "from": "extractor:website", "to": "broadcast", "type": "crawl_plan", "payload": {"buckets": {}, "home": null}, "ts": "2026-10-01T08:28:14.840383+00:00"}
+{"id": "msg_fe38b5b4", "from": "extractor:strategy", "to": "broadcast", "type": "pages_seen", "payload": {"agent": "extractor:strategy", "pages": ["https://www.ghcoffeeco.com/"]}, "ts": "2026-10-01T08:28:19.474776+00:00"}
+{"id": "msg_fe74731d", "from": "extractor:competitor", "to": "orchestrator", "type": "no_competitor_evidence", "payload": {"pages": 1}, "ts": "2026-10-01T08:28:24.497976+00:00"}

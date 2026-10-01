@@ -1,0 +1,68 @@
+{
+  "card_id": "dna_51aeb3da",
+  "brief": {
+    "business": "Harbor & Bean Coffee House",
+    "tagline": "A cozy neighborhood coffee house in Seaside. Small-batch roasts, fresh pastries, friendly faces.",
+    "elevator_pitch": "A cozy neighborhood coffee house in Seaside. Small-batch roasts, fresh pastries, friendly faces.",
+    "voice_type": null,
+    "music_genre": null,
+    "sound_keywords": [],
+    "tone": [
+      "warm",
+      "cozy",
+      "friendly",
+      "welcoming"
+    ],
+    "sample_phrases": [
+      "Your cozy corner on the harbor",
+      "Small-batch roasts, brewed with love",
+      "Our favorites"
+    ]
+  },
+  "prompts": {
+    "sonic_logo": {
+      "prompt": "Brand mnemonic for Harbor & Bean Coffee House (A cozy neighborhood coffee house in Seaside. Small-batch roasts, fresh pastries, friendly faces.). A 4-second sonic logo in the spirit of the Netflix ta-dum or Intel bong: warm acoustic, warm, welcoming mood, warm, cozy, friendly, welcoming character. Opens with a soft attack, rises through two or three notes, resolves to a single warm chord that rings out cleanly. Ownable, hummable, unmistakable. No vocals, no speech.",
+      "negative_prompt": "vocals, speech, muddy mix, harsh noise, long fade",
+      "duration_s": 4,
+      "format": "mp3"
+    },
+    "voice_logo": {
+      "script": "Welcome to Harbor and Bean Coffee House. A cozy neighborhood coffee house in Seaside.",
+      "voice_direction": "Speak as the brand's own voice: warm, natural speaking voice. Tone: warm, cozy, friendly, welcoming. Unhurried, one breath, smile audible.",
+      "voice_profile": "avocado_v2:MAI_03",
+      "language": "en",
+      "format": "mp3"
+    },
+    "ui_sounds": {
+      "notification": {
+        "prompt": "Soft notification chime for Harbor & Bean Coffee House: warm acoustic, warm, welcoming. A single gentle wooden knock followed by a warm muted tone, under one second, friendly not urgent.",
+        "duration_s": 0.9,
+        "format": "mp3"
+      },
+      "success": {
+        "prompt": "Success confirm for Harbor & Bean Coffee House: warm acoustic, warm, welcoming. Two rising notes resolving up, bright but soft, under 1.2 seconds.",
+        "duration_s": 1.2,
+        "format": "mp3"
+      },
+      "error": {
+        "prompt": "Gentle error nudge for Harbor & Bean Coffee House: warm acoustic, warm, welcoming. A single low rounded tone, no buzz, no harshness, under one second. Reassuring, not alarming.",
+        "duration_s": 0.8,
+        "format": "mp3"
+      }
+    }
+  },
+  "tts": {
+    "provider": "bundled-tts-cli",
+    "cli": "/opt/hatch/bin/tts",
+    "found": true,
+    "voice": "avocado_v2:MAI_03",
+    "language": "en"
+  },
+  "music": {
+    "provider": "stub",
+    "model": "fal-ai/stable-audio",
+    "endpoint": "https://fal.run/fal-ai/stable-audio",
+    "configured": false,
+    "note": "Set FAL_API_KEY to generate sonic logos and UI sounds; until then the sonic_brand skill stages briefs + prompts."
+  }
+}

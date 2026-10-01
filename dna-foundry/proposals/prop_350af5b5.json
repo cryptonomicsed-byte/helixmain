@@ -1,0 +1,46 @@
+{
+  "id": "prop_350af5b5",
+  "card_id": "dna_51aeb3da",
+  "card_version": 2,
+  "field": "operations.hours",
+  "old": "Mon\u2013Fri 7am\u20133pm; Sat\u2013Sun 8am\u20132pm",
+  "new": "Mon\u2013Fri 7am\u20135pm; Sat\u2013Sun 8am\u20132pm",
+  "evidence": "sense:tier2 (file:///tmp/demo-site/index.html)",
+  "confidence": 0.75,
+  "verdict": "auto",
+  "gate_reason": "low-risk factual update (operations.hours)",
+  "decision_trail": [
+    {
+      "question": "gate",
+      "provider": "heuristic",
+      "decision": true,
+      "confidence": 0.8,
+      "probabilities": {},
+      "cost_usd": 0.0,
+      "latency_ms": 0.0,
+      "fallback_reason": "jev: TYPESAFE_API_KEY not set (Jev early access pending); llm: HELIX_MODEL_GATEWAY_URL not set"
+    },
+    {
+      "question": "verify",
+      "provider": "heuristic",
+      "decision": 0.8,
+      "confidence": 0.6,
+      "probabilities": {},
+      "cost_usd": 0.0,
+      "latency_ms": 0.0,
+      "fallback_reason": "jev: TYPESAFE_API_KEY not set (Jev early access pending); llm: HELIX_MODEL_GATEWAY_URL not set"
+    }
+  ],
+  "verification": {
+    "method": "heuristic",
+    "gate_decision": true,
+    "gate_confidence": 0.8,
+    "support_score": 0.8,
+    "support_confidence": 0.6
+  },
+  "status": "applied",
+  "proposed_at": "2026-10-01T09:15:26.865367+00:00",
+  "version": 3,
+  "receipt": "rcpt_1b828f6a",
+  "new_card_id": "dna_51aeb3da"
+}

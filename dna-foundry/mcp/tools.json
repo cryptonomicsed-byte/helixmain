@@ -1,0 +1,182 @@
+{
+  "description": "Helix DNA Foundry MCP tools. Everything the foundry does is invocable: extract, get, compile, diff, propose_change, decide_proposal, sense.",
+  "tools": [
+    {
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "description": "Run the extractor swarm against a business URL (or file:// fixture) and emit a validated, versioned DNA card.",
+      "inputSchema": {
+        "properties": {
+          "organization_id": {
+            "description": "Organization contract id, e.g. org_demo0001",
+            "type": "string"
+          },
+          "url": {
+            "description": "Business website URL, or file:// path for fixtures",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "type": "object"
+      },
+      "name": "dna.extract"
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "description": "Fetch a DNA card by id.",
+      "inputSchema": {
+        "properties": {
+          "card_id": {
+            "description": "Card id, e.g. dna_80a09ce4",
+            "type": "string"
+          }
+        },
+        "required": [
+          "card_id"
+        ],
+        "type": "object"
+      },
+      "name": "dna.get"
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "description": "Deterministically compile a DNA card into system prompt, policy seed, tool allowlist, and RAG manifest.",
+      "inputSchema": {
+        "properties": {
+          "card_id": {
+            "description": "Card id to compile",
+            "type": "string"
+          }
+        },
+        "required": [
+          "card_id"
+        ],
+        "type": "object"
+      },
+      "name": "dna.compile"
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "description": "Field-level diff between two card versions.",
+      "inputSchema": {
+        "properties": {
+          "card_a": {
+            "description": "Older card id",
+            "type": "string"
+          },
+          "card_b": {
+            "description": "Newer card id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "card_a",
+          "card_b"
+        ],
+        "type": "object"
+      },
+      "name": "dna.diff"
+    },
+    {
+      "name": "dna.propose_change",
+      "description": "Propose a governed mutation to a DNA card (field, old, new, evidence, confidence). Low-risk factual updates auto-apply and mint a new version with hash chain + changelog + receipt; identity/voice/policy/competitor changes (and stale proposals) go to awaiting_approval.",
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "card_id": {
+            "type": "string",
+            "description": "Card id, e.g. dna_80a09ce4"
+          },
+          "field": {
+            "type": "string",
+            "description": "Dotted field path, e.g. operations.hours"
+          },
+          "old": {
+            "description": "Current value the proposer saw"
+          },
+          "new": {
+            "description": "Proposed new value"
+          },
+          "evidence": {
+            "type": "string",
+            "description": "Source for the change, e.g. google_listing"
+          },
+          "confidence": {
+            "type": "number",
+            "description": "0-1, default 0.7"
+          }
+        },
+        "required": [
+          "card_id",
+          "field",
+          "old",
+          "new"
+        ]
+      }
+    },
+    {
+      "name": "dna.decide_proposal",
+      "description": "Approve or deny a pending proposal (dna.propose_change with gate awaiting_approval/conflict). Approval mints the new card version.",
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "proposal_id": {
+            "type": "string"
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "approve",
+              "deny"
+            ]
+          },
+          "decided_by": {
+            "type": "string",
+            "description": "default: operator"
+          }
+        },
+        "required": [
+          "proposal_id",
+          "decision"
+        ]
+      }
+    },
+    {
+      "name": "dna.sense",
+      "description": "Tiered, cost-efficient re-crawl: Tier-0 change detection (conditional HTTP / sitemap / SHA-256, ~$0.0001), Tier-1 heuristic triage, Tier-2 targeted extraction emitting dna.propose_change proposals, Tier-3 full re-extract on redesign. Adaptive per-site cadence from the volatility sidecar.",
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "organization_id": {
+            "type": "string"
+          },
+          "force": {
+            "type": "boolean",
+            "description": "ignore adaptive cadence"
+          }
+        },
+        "required": [
+          "organization_id"
+        ]
+      }
+    }
+  ]
+}

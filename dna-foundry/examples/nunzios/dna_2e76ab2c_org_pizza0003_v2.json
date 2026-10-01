@@ -1,0 +1,237 @@
+{
+  "id": "dna_2e76ab2c",
+  "version": 2,
+  "hash": "01da339a33ced8fef97403031734b8a189adb6fd93a335d8010dfb31a44696b7",
+  "previous_version": 1,
+  "previous_hash": "87ffe76876546de26e5efb87dd2e7bc4dd619a00c8cd32e6d7d82d697a1274ba",
+  "organization_id": "org_pizza0003",
+  "status": "draft",
+  "created_at": "2026-10-01T09:09:20.691352+00:00",
+  "identity": {
+    "name": "Nunzio's Kitchen",
+    "elevator_pitch": "Nunzio's Kitchen is a family-run Italian kitchen in Sayreville, NJ, serving handmade classics at a table that feels like home.",
+    "mission": "Feed our neighbors like family.",
+    "values": [
+      "Family first",
+      "Handmade, never rushed",
+      "Neighbors are regulars"
+    ],
+    "location": "521 Raritan St, Sayreville, NJ 08872",
+    "phone": "(732) 727-1060",
+    "email": "hello@nunzioskitchen.com",
+    "timezone": "America/New_York",
+    "tagline": "A family table, set for Sayreville."
+  },
+  "voice": {
+    "tone": [
+      "warm",
+      "familial",
+      "handmade",
+      "welcoming"
+    ],
+    "personality": "Like being welcomed into an Italian family's dining room \u2014 unhurried, generous, and glad you came.",
+    "sample_phrases": [
+      "Mangia! There's plenty.",
+      "You're family here."
+    ],
+    "donts": [
+      "Never rushed or transactional",
+      "Never pretentious about the food"
+    ],
+    "lexicon_use": [
+      "family",
+      "homemade",
+      "from our kitchen"
+    ],
+    "sonic": {
+      "voice_logo": {
+        "script": "Welcome to Nunzio's Kitchen. A family table, set for Sayreville.",
+        "voice_profile": "avocado_v2:MAI_03",
+        "asset_ref": "sha256:feaaf23d56ef73c7ca6391ffd6ccbe8fe5b2b29d807ad05722b6bdb45a757e58"
+      }
+    }
+  },
+  "offerings": [
+    {
+      "name": "Margherita Pizza",
+      "kind": "menu item",
+      "description": "Hand-stretched crust, San Marzano tomato, fresh mozzarella, basil.",
+      "price": null,
+      "orderable": true,
+      "confidence": 0.6
+    },
+    {
+      "name": "Chicken Parmigiana",
+      "kind": "menu item",
+      "description": "Breaded cutlet, marinara, melted mozzarella, side of pasta.",
+      "price": null,
+      "orderable": true,
+      "confidence": 0.6
+    },
+    {
+      "name": "Sunday Family Dinner",
+      "kind": "experience",
+      "description": "Weekly Sunday table \u2014 bring the whole family. Call ahead for large parties.",
+      "price": null,
+      "orderable": false,
+      "confidence": 0.6
+    }
+  ],
+  "operations": {
+    "hours": "Call for current hours",
+    "channels": [
+      "phone",
+      "in_person"
+    ],
+    "human_confirm": [
+      "refunds",
+      "allergen questions",
+      "large parties"
+    ],
+    "notes": "BYOB. No online ordering yet \u2014 call (732) 727-1060."
+  },
+  "policies": [
+    {
+      "topic": "refunds",
+      "rule": "Handled case by case \u2014 please ask for the manager on duty.",
+      "source": "owner",
+      "confidence": 0.9
+    },
+    {
+      "topic": "allergens",
+      "rule": "Tell us about allergies before ordering; the kitchen will confirm what's safe. Allergen questions hand off to staff, never answered by the agent.",
+      "source": "owner",
+      "confidence": 0.9
+    }
+  ],
+  "handoff": {
+    "to_human": [
+      "refunds",
+      "allergen questions",
+      "catering inquiries"
+    ],
+    "contact": "(732) 727-1060"
+  },
+  "knowledge": [
+    {
+      "ref": "https://nunzioskitchen.com/",
+      "kind": "other",
+      "title": "Nunzio's Kitchen website",
+      "chunks": 1
+    }
+  ],
+  "field_provenance": {
+    "identity": {
+      "sources": [
+        "https://nunzioskitchen.com/"
+      ],
+      "confidence": 0.7,
+      "extractor_agent": "example:hand-authored",
+      "extracted_at": "2026-10-01T09:09:20.691352+00:00"
+    },
+    "knowledge": {
+      "sources": [
+        "owner:interview"
+      ],
+      "confidence": 0.9,
+      "extractor_agent": "example:hand-authored",
+      "extracted_at": "2026-10-01T09:09:20.691352+00:00"
+    },
+    "offerings": {
+      "sources": [
+        "https://nunzioskitchen.com/"
+      ],
+      "confidence": 0.6,
+      "extractor_agent": "example:hand-authored",
+      "extracted_at": "2026-10-01T09:09:20.691352+00:00"
+    },
+    "operations": {
+      "sources": [
+        "https://nunzioskitchen.com/"
+      ],
+      "confidence": 0.6,
+      "extractor_agent": "example:hand-authored",
+      "extracted_at": "2026-10-01T09:09:20.691352+00:00"
+    },
+    "policies": {
+      "sources": [
+        "owner:interview"
+      ],
+      "confidence": 0.9,
+      "extractor_agent": "example:hand-authored",
+      "extracted_at": "2026-10-01T09:09:20.691352+00:00"
+    },
+    "voice": {
+      "sources": [
+        "https://nunzioskitchen.com/"
+      ],
+      "confidence": 0.6,
+      "extractor_agent": "example:hand-authored",
+      "extracted_at": "2026-10-01T09:09:20.691352+00:00"
+    },
+    "voice.sonic": {
+      "sources": [
+        "sha256:feaaf23d56ef73c7ca6391ffd6ccbe8fe5b2b29d807ad05722b6bdb45a757e58"
+      ],
+      "confidence": 0.9,
+      "extractor_agent": "skill:sonic_brand",
+      "extracted_at": "2026-10-01T09:10:31.825744+00:00"
+    }
+  },
+  "strategy": {
+    "swot": {
+      "strengths": [
+        "Family-run story regulars love",
+        "Handmade dough and sauces"
+      ],
+      "weaknesses": [
+        "No online ordering yet",
+        "Limited delivery radius"
+      ],
+      "opportunities": [
+        "Sunday family dinner tradition",
+        "Local event catering"
+      ],
+      "threats": [
+        "Chain pizzerias on price",
+        "Rising ingredient costs"
+      ]
+    },
+    "positioning": "The neighborhood's family table \u2014 handmade Italian without the white-tablecloth markup.",
+    "key_messaging": [
+      "Handmade like nonna's",
+      "You're family here"
+    ]
+  },
+  "customers": {
+    "personas": [
+      {
+        "name": "Sayreville regular",
+        "pain_points": [
+          "Want to order online",
+          "Need large-party seating"
+        ],
+        "confidence": 0.4,
+        "source": "category:inference \u2014 confirm with owner",
+        "description": "Local family that orders Friday pizza night."
+      }
+    ]
+  },
+  "competitors": [
+    {
+      "name": "Local independents",
+      "note": "Other family pizzerias in the Sayreville area (inferred from category \u2014 confirm with owner)",
+      "confidence": 0.4,
+      "source": "category:inference"
+    }
+  ],
+  "insights": [
+    {
+      "title": "BYOB is a differentiator",
+      "detail": "Few local Italian spots are BYOB; lead with it in messaging.",
+      "confidence": 0.5,
+      "source": "category:inference"
+    }
+  ],
+  "acting_hash": "51334313e3d91a25990482444cf30dffcc6ae0cedd0ab3dbd31af72a0873fe56"
+}

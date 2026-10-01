@@ -1,0 +1,43 @@
+{
+  "id": "rcpt_1b828f6a",
+  "organization_id": "org_demo0001",
+  "agent_id": "agent_foundry",
+  "task_id": "prop_350af5b5",
+  "action_id": "dna.propose_change",
+  "policy_decision_id": "pdec_prop_350af5b5",
+  "worker_id": "worker_foundry",
+  "tool": "dna.mutate",
+  "verification_id": "ver_rcpt_1b828f6a",
+  "result_summary": "card dna_51aeb3da v3: operations.hours updated (auto-applied)",
+  "decision_trail": [
+    {
+      "question": "gate",
+      "provider": "heuristic",
+      "decision": true,
+      "confidence": 0.8,
+      "probabilities": {},
+      "cost_usd": 0.0,
+      "latency_ms": 0.0,
+      "fallback_reason": "jev: TYPESAFE_API_KEY not set (Jev early access pending); llm: HELIX_MODEL_GATEWAY_URL not set"
+    },
+    {
+      "question": "verify",
+      "provider": "heuristic",
+      "decision": 0.8,
+      "confidence": 0.6,
+      "probabilities": {},
+      "cost_usd": 0.0,
+      "latency_ms": 0.0,
+      "fallback_reason": "jev: TYPESAFE_API_KEY not set (Jev early access pending); llm: HELIX_MODEL_GATEWAY_URL not set"
+    }
+  ],
+  "verification": {
+    "method": "heuristic",
+    "gate_decision": true,
+    "gate_confidence": 0.8,
+    "support_score": 0.8,
+    "support_confidence": 0.6
+  },
+  "cost_usd": 0.0,
+  "minted_at": "2026-10-01T09:15:26.892191+00:00"
+}

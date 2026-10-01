@@ -1,0 +1,53 @@
+{
+  "org": "org_demo0001",
+  "sites": {
+    "file:///tmp/demo-site/index.html": {
+      "interval_days": 1.75,
+      "consecutive_unchanged": 0,
+      "volatility": 0.9,
+      "last_run": "2026-10-01T09:15:26.859835+00:00",
+      "etag": null,
+      "last_modified": null,
+      "html_hash": "cb89a08559821f5c40abed0a0f38ee76abb95759f64ed2e01126a59c5fc87c1e",
+      "text": "Your cozy corner on the harbor Small-batch roasts, brewed with love Welcome to Harbor &amp; Bean! We're a family-run coffee house pouring delicious small-batch roasts every morning. Come relax, bring a friend, and enjoy the warmest welcome in Seaside. Our favorites Harbor Latte \u2014 $4.50 Sea Salt Caramel Espresso \u2014 $5.00 Blueberry Morning Pastry \u2014 $3.25 Visit us Open Mon\u2013Fri 7am\u20135pm, Sat\u2013Sun 8am\u20132pm. Find us at 42 Harbor Lane, Seaside. Call (555) 123-4567 or email hello@harborandbean.example. What our neighbors say The friendliest staff and the best latte in town. Cozy atmosphere, I'm here every morning! \u2014 Maya R. Fresh pastries, great coffee, wonderful service. A true neighborhood gem. \u2014 Daniel K.",
+      "sitemap_lastmod": null,
+      "js_render": false
+    },
+    "file:///tmp/demo-site/about.html": {
+      "interval_days": 3.5,
+      "consecutive_unchanged": 2,
+      "volatility": 0.55,
+      "last_run": "2026-10-01T09:15:26.999270+00:00",
+      "etag": null,
+      "last_modified": null,
+      "html_hash": "b4f32c8493d8529e8f9e26952ef55c94575e9c609d854eeccb76dbff4d400805",
+      "text": "About Us | Harbor & Bean Coffee House Our story Harbor &amp; Bean was founded in 2019 by the Alvarez family. Our mission is to be the warmest gathering place in Seaside \u2014 great coffee, honest prices, everybody welcome. Our values: community first, quality without pretense, and sustainability in every cup.",
+      "sitemap_lastmod": null,
+      "js_render": false
+    },
+    "file:///tmp/demo-site/faq.html": {
+      "interval_days": 3.5,
+      "consecutive_unchanged": 2,
+      "volatility": 0.55,
+      "last_run": "2026-10-01T09:15:26.999341+00:00",
+      "etag": null,
+      "last_modified": null,
+      "html_hash": "762e922773f7b639c35a118c3b3e9ee3050a43d42795eeb7e36e20631a1c448e",
+      "text": "FAQ | Harbor & Bean Coffee House Frequently asked questions Do you offer catering? Yes! We cater events of 20+ people with 48 hours notice. Do you have wifi? Free wifi for all guests, no purchase necessary.",
+      "sitemap_lastmod": null,
+      "js_render": false
+    },
+    "file:///tmp/demo-site/policies.html": {
+      "interval_days": 3.5,
+      "consecutive_unchanged": 2,
+      "volatility": 0.55,
+      "last_run": "2026-10-01T09:15:26.999375+00:00",
+      "etag": null,
+      "last_modified": null,
+      "html_hash": "9f0c6912d6fa787ea3925331ac9b2fd5035dc9a123de975ad28abb955b86f6b1",
+      "text": "Policies | Harbor & Bean Coffee House Our policies Returns &amp; refunds If you're not happy with your drink, we'll remake it on the spot \u2014 no questions asked. For catering orders, cancellations made 48 hours in advance receive a full refund. Privacy We never sell your personal information. Loyalty program emails are opt-in only.",
+      "sitemap_lastmod": null,
+      "js_render": false
+    }
+  }
+}

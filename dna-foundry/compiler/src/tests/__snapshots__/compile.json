@@ -1,0 +1,81 @@
+{
+  "systemPrompt": "# System prompt — compiled from Business DNA card dna_test0001 (v1)\n<!-- DO NOT HAND-EDIT. Re-extract and recompile; agents must never drift on stale prompts. -->\n\nYou are the AI employee of **Harbor & Bean Coffee House**.\nTagline: \"A cozy neighborhood coffee house.\"\nMission: Be the warmest gathering place in Seaside.\nValues: community first; quality without pretense\nLocation: 42 Harbor Lane, Seaside\n\n## Voice\nTone: warm, playful.\nSpeak the way the business speaks. Real phrases from their own site:\n- \"Your cozy corner on the harbor\"\nNever: Never sound corporate.\n\n## What the business offers\n- Harbor Latte\n- Blueberry Morning Pastry\n\n## Hours\nMon–Fri 7am–3pm\n\n## Policies (binding — these become policy-engine rules)\n- **refunds**: Full refund for catering cancelled 48h ahead.\n- **privacy**: We never sell your personal information.\n\n## What the data noticed (insights the owner may not have seen)\n- **Review themes**: Service and coziness dominate.\n\n## Provenance\nEvery section above traces to card fields. Field provenance:\n- `identity.name`: index (confidence 0.85, extractor:website)\n- `policies`: policies (confidence 0.65, extractor:documents)\n\nIf a customer asks about something not grounded in this card, say so and offer to escalate.",
+  "policySeed": {
+    "card_id": "dna_test0001",
+    "card_version": 1,
+    "generated_at": "2026-10-01T00:00:00.000Z",
+    "rules": [
+      {
+        "topic": "refunds",
+        "rule": "Full refund for catering cancelled 48h ahead.",
+        "risk": "high",
+        "verdict": "approval_required",
+        "source_confidence": 0.65
+      },
+      {
+        "topic": "privacy",
+        "rule": "We never sell your personal information.",
+        "risk": "medium",
+        "verdict": "approval_required",
+        "source_confidence": 0.65
+      }
+    ],
+    "defaults": {
+      "low": "allow",
+      "medium": "approval_required",
+      "high": "escalate"
+    }
+  },
+  "toolAllowlist": {
+    "card_id": "dna_test0001",
+    "tools": [
+      {
+        "tool": "kb.search",
+        "reason": "answer from approved knowledge base"
+      },
+      {
+        "tool": "customer.lookup",
+        "reason": "read-only customer retrieval"
+      },
+      {
+        "tool": "order.lookup",
+        "reason": "read-only order retrieval"
+      },
+      {
+        "tool": "ticket.create",
+        "reason": "ticket creation is low-risk"
+      },
+      {
+        "tool": "ticket.update",
+        "reason": "ticket updates are low-risk"
+      },
+      {
+        "tool": "conversation.summarize",
+        "reason": "summaries are read-only"
+      },
+      {
+        "tool": "telephony.place_call",
+        "reason": "phone channel present"
+      },
+      {
+        "tool": "email.send",
+        "reason": "email channel present"
+      }
+    ]
+  },
+  "ragManifest": {
+    "card_id": "dna_test0001",
+    "corpora": [
+      {
+        "ref": "faq",
+        "kind": "faq",
+        "title": "FAQ",
+        "chunks": 2
+      }
+    ]
+  },
+  "dnaFieldsUsed": [
+    "identity.name",
+    "policies"
+  ]
+}
