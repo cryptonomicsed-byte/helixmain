@@ -3,248 +3,243 @@
 
 **Target:** Hostinger VPS `2.25.70.156`, `agents` user  
 **Card under test:** `dna_51aeb3da` v3 (Harbor & Bean Coffee House, demo fixture)  
-**Goal:** Prove that a ZeroClaw instance inside an OpenShell-enforced sandbox (a) boots under 10ms, (b) idles under 5MB RAM, and (c) cannot reach any host outside its allowlist — verified at the kernel, not in userspace.  
+**OpenShell version:** v0.1.2 (https://github.com/NVIDIA/OpenShell/releases/tag/v0.1.2)  
+**Goal:** Prove that a ZeroClaw instance inside an OpenShell sandbox (a) starts within the gateway's default timeout, (b) idles at a measured RAM footprint, and (c) cannot reach any host outside its policy — verified via proxy deny log, not assumed.  
 **Extrapolation target:** 18 simultaneous card sandboxes fit the VPS within margin.
+
+---
+
+## Architecture note (read before running)
+
+OpenShell is **gateway + supervisor + container drivers**, not a wrapper binary around Docker.
+
+- **Gateway** (`openshell-gateway`): control plane, runs on the host. Manages sandboxes, enforces policy, routes network through its proxy.
+- **Sandbox**: a container (Docker driver on this VPS) launched by the gateway. ZeroClaw runs inside.
+- **Policy**: YAML file passed to `openshell sandbox create`. Network enforcement is via the gateway's L4/L7 proxy — denied connections return HTTP 403 from the proxy, not kernel EPERM.
+- **Credentials (Providers)**: registered separately at the gateway, not declared in the policy YAML. OpenShell injects them only to approved endpoints.
+
+There is no `open-shell load-lsm` command. Landlock (filesystem) is applied at sandbox creation by the supervisor.
 
 ---
 
 ## Pre-flight checklist (run as `agents` user)
 
 ```bash
-# 1. Confirm Docker availability
-which docker && docker info 2>&1 | head -20
-# Expected: daemon running, storage driver overlayfs or overlay2.
-# If "permission denied": try `sudo docker info` or check if `herdr` wraps it.
-# If not installed: see §A below.
-
-# 2. Kernel version — Landlock requires ≥ 5.13
+# 1. Kernel version — Landlock requires ≥ 5.13
 uname -r
-# If < 5.13, Landlock is absent; flag to Justin before continuing.
+# If < 5.13, filesystem Landlock enforcement falls back to best_effort.
+# Our policy uses hard_requirement — confirm kernel version before proceeding.
 
-# 3. gVisor (runsc) available?
-which runsc || echo "gVisor not installed"
-# Needed for full Docker+gVisor isolation. Without it, use --runtime=runc as fallback
-# (still gets OpenShell enforcement; just loses gVisor's syscall filter layer).
+# 2. Docker available (compute driver for the gateway)
+which docker && docker info 2>&1 | grep -E "^(Server Version|Storage Driver|Operating System)"
+# If "permission denied": check if agents is in docker group, or if herdr wraps it.
 
-# 4. Disk space — 18 sandboxes need headroom
-df -h /var/lib/docker 2>/dev/null || df -h /
+# 3. OpenShell already installed?
+which openshell && openshell --version
+which openshell-gateway && openshell-gateway --version
+# If not installed: proceed to §B.
 
-# 5. Check outbound connectivity from VPS to inference endpoint
-curl -s --max-time 3 -o /dev/null -w "%{http_code}" https://api.deepseek.com/health || echo "blocked"
-```
+# 4. Disk space
+df -h /
 
----
-
-## §A — Install Docker (if absent)
-
-```bash
-# Debian/Ubuntu on Hostinger:
-curl -fsSL https://get.docker.com | sh
-sudo usermod -aG docker agents
-# Re-login or: newgrp docker
-docker info
+# 5. Outbound connectivity from VPS to inference endpoint
+curl -s --max-time 3 -o /dev/null -w "%{http_code}" https://openrouter.ai/api/v1/models || echo "blocked"
 ```
 
 ---
 
 ## §B — Install OpenShell
 
-OpenShell ships as a single Rust binary + kernel module loader. The binary enforces
-Landlock filesystem rules and intercepts connect(2) via eBPF/LSM hook.
-
 ```bash
-# Pull the release binary (check https://github.com/nvidia/open-shell/releases for latest)
-OPENSHELL_VERSION="0.4.2"
-curl -fsSL "https://github.com/nvidia/open-shell/releases/download/v${OPENSHELL_VERSION}/open-shell-x86_64-linux.tar.gz" \
-  | tar -xz -C /usr/local/bin/
-chmod +x /usr/local/bin/open-shell
+# Install CLI + gateway via the official installer
+curl -LsSf https://raw.githubusercontent.com/NVIDIA/OpenShell/main/install.sh | sh
 
-# Verify
-open-shell --version
-
-# Load the LSM companion (requires CAP_SYS_ADMIN or sudo once at boot):
-sudo open-shell load-lsm
-# Confirm:
-open-shell status
-# Expected: "LSM hook: active, Landlock: available"
+# Verify both components
+openshell --version
+openshell-gateway --version
+# Expected: v0.1.2 for both
 ```
 
-> **Note:** If `sudo` is unavailable to `agents` user, ask Justin to run `open-shell load-lsm` once
-> and confirm via `open-shell status`. The enforcement layer persists until reboot.
-
----
-
-## §C — Prepare card sandbox files
+The installer places `openshell` and `openshell-gateway` in `~/.local/bin` or `/usr/local/bin` depending on privileges. If PATH doesn't pick them up:
 
 ```bash
-# Working directory on VPS
-SANDBOX_ROOT="/home/agents/sandboxes"
-CARD_ID="dna_51aeb3da"
-mkdir -p "${SANDBOX_ROOT}/${CARD_ID}"/{data,minipae,tmp}
-
-# Copy compiled outputs from local helixmain repo (via scp or gh-push.py surrogate):
-#   dna-foundry/compiled/dna_51aeb3da_v3/openshell-policy.yaml → VPS
-
-# Place policy
-cp openshell-policy.yaml "${SANDBOX_ROOT}/${CARD_ID}/openshell-policy.yaml"
-
-# Pull ZeroClaw image (< 3.4 MB, target < 5 MB idle)
-docker pull ghcr.io/helixmain/zeroclaw:latest
-docker images ghcr.io/helixmain/zeroclaw:latest --format "{{.Size}}"
-# Expected: < 10MB compressed. Fail if > 20MB — image bloat means we need to rebuild.
-
-# Pull PocketBase (ops store, runs as sidecar)
-docker pull ghcr.io/helixmain/pocketbase-card:latest
+export PATH="$HOME/.local/bin:$PATH"
 ```
 
 ---
 
-## §D — Boot the sandbox
+## §C — Start the gateway (Docker driver)
+
+The gateway must be running before any sandbox commands work.
 
 ```bash
-CARD_ID="dna_51aeb3da"
-SANDBOX_ROOT="/home/agents/sandboxes"
-POLICY="${SANDBOX_ROOT}/${CARD_ID}/openshell-policy.yaml"
+mkdir -p ~/.config/openshell
 
-# Boot hold-queue sidecar first (ZeroClaw connects to it on startup)
-docker run -d \
-  --name "hq-${CARD_ID}" \
-  --network bridge \
-  -p 127.0.0.1:9100:9100 \
-  ghcr.io/helixmain/hold-queue-sidecar:latest
+cat > ~/.config/openshell/gateway.toml << 'EOF'
+[openshell]
+version = 2
 
-# Boot PocketBase ops store
-docker run -d \
-  --name "pb-${CARD_ID}" \
-  --network bridge \
-  -p 127.0.0.1:8090:8090 \
-  -v "${SANDBOX_ROOT}/${CARD_ID}/data:/pb_data" \
-  ghcr.io/helixmain/pocketbase-card:latest
+[openshell.gateway]
+bind_address = "127.0.0.1:8080"
+log_level = "info"
+compute_driver = "docker"
 
-# Boot ZeroClaw inside OpenShell enforcement
-# open-shell exec wraps the container process with Landlock + connect hook
-docker run -d \
-  --name "zc-${CARD_ID}" \
-  --runtime=runsc \
-  --network bridge \
-  --memory=256m \
-  --cpu-shares=512 \
-  -v "${SANDBOX_ROOT}/${CARD_ID}/data:/data/sandbox/${CARD_ID}" \
-  -v "${SANDBOX_ROOT}/${CARD_ID}/minipae:/data/minipae/${CARD_ID}" \
-  -v "${SANDBOX_ROOT}/${CARD_ID}/tmp:/tmp/sandbox-${CARD_ID}" \
-  -e CARD_ID="${CARD_ID}" \
-  -e HOLD_QUEUE_URL="http://127.0.0.1:9100" \
-  -e POCKETBASE_URL="http://127.0.0.1:8090" \
-  ghcr.io/helixmain/zeroclaw:latest \
-  open-shell exec --policy="${POLICY}" -- zeroclaw serve
+[openshell.gateway.auth]
+allow_unauthenticated_users = true
 
-# Confirm all three are running
-docker ps --filter "name=${CARD_ID}" --format "table {{.Names}}\t{{.Status}}"
+[openshell.drivers.docker]
+default_image = "ubuntu:24.04"
+image_pull_policy = "if_not_present"
+sandbox_label = "helix-spike"
+EOF
+
+# Start the gateway (background)
+openshell-gateway --config ~/.config/openshell/gateway.toml &
+GATEWAY_PID=$!
+
+# Confirm it's listening
+sleep 2 && curl -sf http://127.0.0.1:8080/health && echo "gateway up"
 ```
 
 ---
 
-## §E — Measure idle RAM
+## §D — Register the inference provider
 
-Wait 30s for ZeroClaw to finish startup, then:
+Credentials are Providers, not policy fields. Register the OpenRouter key once:
+
+```bash
+# Reads key from env; do not inline secrets in shell history
+OPENROUTER_KEY="<paste key here>"
+openshell provider add \
+  --name openrouter \
+  --type bearer \
+  --secret "$OPENROUTER_KEY" \
+  --host openrouter.ai
+unset OPENROUTER_KEY
+```
+
+OpenShell will inject this key only to requests bound for `openrouter.ai` — exactly the behaviour the policy file's `inference` network policy declares.
+
+---
+
+## §E — Create the sandbox
+
+```bash
+CARD_ID="dna_51aeb3da"
+POLICY="spikes/openshell/openshell-policy.example.yaml"
+
+openshell sandbox create \
+  --name "zeroclaw-${CARD_ID}" \
+  --policy "${POLICY}" \
+  --image ubuntu:24.04
+```
+
+If the sandbox image needs ZeroClaw pre-installed, use a custom image or exec-install after creation. For the spike, the goal is verifying the policy enforcement layer — ZeroClaw startup can be stubbed with `curl` or `sleep` inside the sandbox.
+
+```bash
+# Confirm sandbox is running
+openshell sandbox list
+```
+
+---
+
+## §F — Measure idle RAM
+
+With the sandbox running:
 
 ```bash
 CARD_ID="dna_51aeb3da"
 
-# RSS of the ZeroClaw process (not Docker overhead)
-docker exec "zc-${CARD_ID}" cat /proc/1/status | grep -E "^(VmRSS|VmPeak|VmSize)"
+# Via Docker stats (OpenShell uses Docker as compute driver)
+docker stats --no-stream "$(docker ps --filter label=helix-spike --filter name=${CARD_ID} -q)"
+# Record: MEM USAGE column
 
-# Full container memory via Docker stats (one-shot)
-docker stats --no-stream "zc-${CARD_ID}" "pb-${CARD_ID}" "hq-${CARD_ID}" \
-  --format "table {{.Name}}\t{{.MemUsage}}\t{{.MemPerc}}"
+# Via /proc inside the sandbox
+openshell sandbox exec "zeroclaw-${CARD_ID}" -- cat /proc/1/status | grep -E "^(VmRSS|VmPeak|VmSize)"
+```
+
+**Pass criteria:** record the actual numbers. Do not compare against targets until measured.
+
+---
+
+## §G — Verify egress enforcement
+
+Network enforcement goes through the gateway proxy. Denied connections return 403, not EPERM.
+
+```bash
+CARD_ID="dna_51aeb3da"
+SBX="zeroclaw-${CARD_ID}"
+
+# Connect to the sandbox shell
+openshell sandbox connect "${SBX}"
+```
+
+Inside the sandbox:
+
+```bash
+# Attempt 1: allowed endpoint (inference) — must succeed
+curl -s --max-time 5 -o /dev/null -w "ALLOWED: %{http_code}\n" https://openrouter.ai/api/v1/models
+# Expected: ALLOWED: 200
+
+# Attempt 2: blocked endpoint — must be denied by proxy
+curl -v --max-time 5 https://8.8.8.8/ 2>&1 | grep -E "(403|policy_denied|refused|Failed)"
+# Expected: HTTP 403 from proxy with {"error":"policy_denied",...}
+# Fail if: connection succeeds, or times out without a 403 (means proxy isn't intercepting)
+
+# Attempt 3: blocked endpoint, different host
+curl -v --max-time 5 https://api.openai.com/ 2>&1 | grep -E "(403|policy_denied|refused)"
+# Expected: HTTP 403
+
+exit  # exit sandbox shell
+```
+
+Check the deny log from the host:
+
+```bash
+openshell logs "zeroclaw-${CARD_ID}" --since 5m --source sandbox
+# Expected lines like:
+# [timestamp] [sandbox] [OCSF] NET:OPEN [MED] DENIED /usr/bin/curl -> 8.8.8.8:443 [reason:network connections not allowed by policy]
 ```
 
 **Pass criteria:**
-- `zc-` VmRSS ≤ 5 MB
-- `pb-` + `hq-` combined ≤ 60 MB (PocketBase is the heavy sidecar)
-- Full stack (all three containers) ≤ 80 MB resident
+- Allowed endpoint returns 200
+- Blocked endpoints return 403 with `policy_denied` in body (not timeout, not connection refused)
+- Every denied attempt appears in the sandbox log
 
 ---
 
-## §F — Verify egress denial at kernel
-
-This is the proof step. OpenShell must drop the connection before `connect(2)` returns,
-not after userspace rejects it.
+## §H — Startup: connect latency
 
 ```bash
-CARD_ID="dna_51aeb3da"
+time openshell sandbox create \
+  --name "zeroclaw-latency-test" \
+  --policy "spikes/openshell/openshell-policy.example.yaml" \
+  --image ubuntu:24.04 \
+  --no-keep
 
-# Attempt 1: allowed endpoint — must succeed
-docker exec "zc-${CARD_ID}" \
-  curl -s --max-time 3 -o /dev/null -w "ALLOWED:%{http_code}\n" \
-  http://127.0.0.1:9100/health
-# Expected: ALLOWED:200
-
-# Attempt 2: blocked endpoint — must fail at kernel (ECONNREFUSED or EPERM, not timeout)
-docker exec "zc-${CARD_ID}" \
-  curl -v --max-time 3 http://8.8.8.8:80/ 2>&1 | tail -5
-# Expected: "connect: Operation not permitted" (EPERM from LSM hook)
-# Fail if: timeout (means hook isn't blocking, just slow) or if connection succeeds
-
-# Attempt 3: inference endpoint subdomain substitution (must block non-allowlisted subdomains)
-docker exec "zc-${CARD_ID}" \
-  curl -v --max-time 3 https://exfil.attacker.com/ 2>&1 | tail -5
-# Expected: EPERM
-
-# Strace the blocked connect for the kernel audit trail:
-docker exec "zc-${CARD_ID}" \
-  strace -e connect curl --max-time 2 http://1.2.3.4/ 2>&1 | grep -E "connect|EPERM|refused"
-```
-
-**Pass criteria:**
-- Allowed: HTTP 200 from hold-queue sidecar health endpoint
-- Blocked: `EPERM` (not `ETIMEDOUT`) — proves kernel enforcement not firewall timeout
-- No TCP SYN visible in `tcpdump` on the host for blocked destinations
-
-```bash
-# Confirm via tcpdump on host (run as root / with sudo):
-sudo tcpdump -c 10 -i any dst host 1.2.3.4 2>&1
-# Expected: zero packets captured — kernel dropped before network stack
+# Note wall-clock time from command start to sandbox-ready.
+# The sandbox is Docker-based; ZeroClaw startup is separate from container startup.
+# Record both: container-ready time, and time until ZeroClaw health endpoint responds.
 ```
 
 ---
 
-## §G — Startup latency check
+## §I — Extrapolation to 18 cards
 
-```bash
-# Time from docker run to ZeroClaw ready (health endpoint responding)
-time docker run --rm \
-  --name "zc-latency-test" \
-  --runtime=runsc \
-  ghcr.io/helixmain/zeroclaw:latest \
-  open-shell exec --policy="${POLICY}" -- zeroclaw serve --health-check-exit
-# Expected: < 10s wall clock (gVisor adds ~1-2s; ZeroClaw startup target < 10ms)
-
-# Isolate ZeroClaw startup time alone (without gVisor overhead):
-docker run --rm \
-  --name "zc-latency-runc" \
-  --runtime=runc \
-  ghcr.io/helixmain/zeroclaw:latest \
-  open-shell exec --policy="${POLICY}" -- zeroclaw serve --health-check-exit
-```
-
----
-
-## §H — Extrapolation to 18 cards
-
-With measurements from §E and §F in hand, fill in this table:
+Fill in after §F measurements:
 
 | Metric | 1 card (measured) | 18 cards (projected) | VPS headroom |
 |--------|-------------------|----------------------|--------------|
-| ZeroClaw RSS | ___ MB | ___ MB | 1GB RAM VPS |
-| Full stack RSS | ___ MB | ___ MB | |
-| Startup latency | ___ ms | parallel, so same | |
-| Egress: EPERM confirmed | pass/fail | all must pass | |
+| ZeroClaw RSS | ___ MB | ___ MB | 1 GB RAM VPS |
+| Full sandbox (container) | ___ MB | ___ MB | |
+| Gateway overhead (shared) | ___ MB | shared, once | |
+| Startup latency | ___ s | parallel, so same | |
+| Egress 403 confirmed | pass/fail | all must pass | |
 
 **Projection formula:**
+
 ```
-18_card_total_mb = (zeroclaw_rss_mb + pb_rss_mb + hq_rss_mb) * 18
-                 + shared_base_mb   # kernel, Docker daemon, OpenShell LSM
+18_card_total_mb = per_sandbox_mb * 18 + gateway_overhead_mb
 ```
 
 **Acceptable range:** ≤ 700 MB resident (leaves 300 MB for OS + herdr runner on 1 GB VPS).  
@@ -253,12 +248,14 @@ If over budget, evaluate shared PocketBase (one process, N schemas) as mitigatio
 
 ---
 
-## §I — Teardown
+## §J — Teardown
 
 ```bash
 CARD_ID="dna_51aeb3da"
-docker stop "zc-${CARD_ID}" "pb-${CARD_ID}" "hq-${CARD_ID}"
-docker rm   "zc-${CARD_ID}" "pb-${CARD_ID}" "hq-${CARD_ID}"
+openshell sandbox delete "zeroclaw-${CARD_ID}"
+
+# Stop gateway
+kill $GATEWAY_PID 2>/dev/null || pkill openshell-gateway
 ```
 
 ---
@@ -267,14 +264,14 @@ docker rm   "zc-${CARD_ID}" "pb-${CARD_ID}" "hq-${CARD_ID}"
 
 | # | Check | Evidence |
 |---|-------|----------|
-| 1 | Docker available on VPS | `docker info` output |
-| 2 | Kernel ≥ 5.13 (Landlock) | `uname -r` output |
-| 3 | OpenShell LSM active | `open-shell status` output |
-| 4 | ZeroClaw boots < 10s | §G timing |
-| 5 | ZeroClaw idle ≤ 5 MB RSS | §E `/proc/1/status` |
-| 6 | Egress denied with EPERM | §F strace output |
-| 7 | No SYN to blocked dest | §F tcpdump output |
-| 8 | 18-card projection ≤ 700 MB | §H table |
+| 1 | Kernel ≥ 5.13 (Landlock) | `uname -r` output |
+| 2 | Gateway starts, health 200 | `curl http://127.0.0.1:8080/health` |
+| 3 | Sandbox creates without error | `openshell sandbox list` |
+| 4 | Allowed endpoint reachable | curl → 200 from inside sandbox |
+| 5 | Blocked endpoint returns 403 | curl → 403 + `policy_denied` |
+| 6 | Denied attempts in log | `openshell logs` output |
+| 7 | RAM per sandbox measured | §F docker stats numbers |
+| 8 | 18-card projection ≤ 700 MB | §I table filled |
 
 All 8 green → OpenShell is production-ready for Phase 2. Record results in `SPIKE_REPORT.md`.
 
@@ -282,12 +279,6 @@ All 8 green → OpenShell is production-ready for Phase 2. Record results in `SP
 
 ## Blocker: SSH access
 
-Outbound SSH to `2.25.70.156:22` is currently blocked from the dev VM (egress proxy, blocked
-since September). To run this runbook:
-
-**Option A — Justin runs it directly** as `agents` user, pastes output back.  
-**Option B — Hermes runs it** via its established gateway path from the F1–F5 work.  
-**Option C — `herdr` runner** on the VPS executes it as a job if herdr has shell dispatch.
-
-Start with the pre-flight (§B pre-flight checklist) and report back `docker info` output.
-That single answer unblocks everything else.
+Outbound SSH to `2.25.70.156:22` is blocked from the dev VM since September.  
+To run this runbook: Justin runs it directly as `agents` user, or Hermes routes it via its established gateway path from the F1–F5 work.  
+Start with the pre-flight — `uname -r` and `docker info` output unblocks everything else.

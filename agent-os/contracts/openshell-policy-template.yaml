@@ -1,72 +1,72 @@
 # card.compile_openshell_policy — source template
-# Placeholders: {{card_id}}, {{card_version}}, {{card_hash}}, {{acting_hash}},
-#   {{inference_host}}, {{inference_port}}, {{inference_vault_key}},
-#   {{hold_queue_host}}, {{hold_queue_port}},
-#   {{pocketbase_host}}, {{pocketbase_port}}
+# Schema: https://docs.nvidia.com/openshell/latest/how-it-works/policies/schema
+# (OpenShell v0.1.x; rejects unknown fields — do not add fields outside this schema)
+#
+# Placeholders: {{card_id}}, {{card_version}}, {{acting_hash}},
+#   {{inference_host}}, {{inference_port}},
+#   {{hold_queue_port}}, {{pocketbase_port}}
 # Compiler fills all {{…}} from card Operations section + runtime config.
 # Output path: compiled/{{card_id}}_v{{card_version}}/openshell-policy.yaml
+#
+# NOTE on credentials: inference API key is a Provider, not declared here.
+#   Register it at gateway startup: `openshell provider add --name inference ...`
+#   OpenShell injects it only to endpoints that declare the provider by name.
+#
+# NOTE on loopback (hold_queue, pocketbase): OpenShell's proxy intercepts
+#   outbound connections; loopback reachability depends on gateway network mode.
+#   Validate this during the spike — may require host networking or a sidecar
+#   accessible by container hostname instead of 127.0.0.1.
 
-policy_version: "1.0"
-card_id: "{{card_id}}"
-card_version: {{card_version}}
+version: 1
 
-filesystem:
-  enforcement: landlock
-  allow:
-    - path: "/app/zeroclaw"
-      access: [read, execute]
-    - path: "/app/pocketbase"
-      access: [read, execute]
-    - path: "/data/sandbox/{{card_id}}"
-      access: [read, write, create, remove_file]
-    - path: "/data/minipae/{{card_id}}"
-      access: [read, write, create]
-    - path: "/tmp/sandbox-{{card_id}}"
-      access: [read, write, create, remove_file, remove_dir]
-    - path: "/etc/ssl/certs"
-      access: [read]
-    - path: "/lib"
-      access: [read, execute]
-    - path: "/usr/lib"
-      access: [read, execute]
+filesystem_policy:
+  include_workdir: true
+  read_only:
+    - /bin
+    - /usr
+    - /lib
+    - /proc
+    - /dev/urandom
+    - /app/zeroclaw
+    - /etc
+    - /var/log
+  read_write:
+    - /data/sandbox/{{card_id}}
+    - /data/minipae/{{card_id}}
+    - /tmp/sandbox-{{card_id}}
+    - /dev/null
 
-network:
-  enforcement: connect_hook
-  deny_by_default: true
-  allow:
-    - id: hold_queue_sidecar
-      host: "{{hold_queue_host}}"
-      port: {{hold_queue_port}}
-      protocol: tcp
-      description: "hold-queue sidecar"
-    - id: inference_endpoint
-      host: "{{inference_host}}"
-      port: {{inference_port}}
-      protocol: tls
-      description: "inference endpoint"
-    - id: pocketbase_local
-      host: "{{pocketbase_host}}"
-      port: {{pocketbase_port}}
-      protocol: tcp
-      description: "PocketBase ops store"
+landlock:
+  compatibility: hard_requirement
 
-credentials:
-  inject:
-    - vault_key: "{{inference_vault_key}}"
-      inject_as: "Authorization"
-      header_prefix: "Bearer "
-      only_at: "{{inference_host}}:{{inference_port}}"
-    - vault_key: "hold_queue_token"
-      inject_as: "X-Hold-Queue-Token"
-      only_at: "{{hold_queue_host}}:{{hold_queue_port}}"
+process:
+  run_as_user: agent
+  run_as_group: agent
 
-resources:
-  memory_limit_mb: 256
-  cpu_shares: 512
-  max_open_files: 256
-  max_processes: 16
+network_policies:
+  hold_queue:
+    name: hold-queue-sidecar
+    endpoints:
+      - host: 127.0.0.1
+        port: {{hold_queue_port}}
+    binaries:
+      - path: /app/zeroclaw/zeroclaw
 
-reload:
-  watch_file: true
-  signal_on_reload: SIGHUP
-  card_acting_hash: "{{acting_hash}}"
+  inference:
+    name: inference-endpoint
+    endpoints:
+      - host: "{{inference_host}}"
+        port: {{inference_port}}
+        protocol: rest
+        enforcement: enforce
+        access: full
+    binaries:
+      - path: /app/zeroclaw/zeroclaw
+
+  pocketbase:
+    name: pocketbase-ops-store
+    endpoints:
+      - host: 127.0.0.1
+        port: {{pocketbase_port}}
+    binaries:
+      - path: /app/zeroclaw/zeroclaw
