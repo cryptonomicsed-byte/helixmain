@@ -3,6 +3,13 @@ import { emitCardMd, actingHash, ACTING_KEYS } from "./card-md";
 import { parseCardMd, verifyCardMd } from "./card-md-parse";
 
 export { canonicalJson, cardHash, emitCardMd, actingHash, ACTING_KEYS, parseCardMd, verifyCardMd };
+export {
+  compileOpenshellPolicy,
+  type SandboxEndpoint,
+  type SandboxRuntimeConfig,
+  type OpenshellPolicyDocument,
+  type CompiledOpenshellPolicy,
+} from "./openshell-policy";
 
 /**
  * Helix DNA Foundry — deterministic compiler.
