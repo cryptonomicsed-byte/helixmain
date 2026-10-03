@@ -30,10 +30,10 @@ filesystem_policy:
     - /app/zeroclaw
     - /etc
     - /var/log
+    - /card/{{card_id}} # card mount: CARD.md + compiled soul.md/memory.md (matches compiler)
   read_write:
-    - /data/sandbox/{{card_id}}
-    - /data/minipae/{{card_id}}
-    - /tmp/sandbox-{{card_id}}
+    - /data/{{card_id}} # per-card data dir (matches compiler)
+    - /tmp
     - /dev/null
 
 landlock:
