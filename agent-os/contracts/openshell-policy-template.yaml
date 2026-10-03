@@ -1,0 +1,72 @@
+# card.compile_openshell_policy — source template
+# Placeholders: {{card_id}}, {{card_version}}, {{card_hash}}, {{acting_hash}},
+#   {{inference_host}}, {{inference_port}}, {{inference_vault_key}},
+#   {{hold_queue_host}}, {{hold_queue_port}},
+#   {{pocketbase_host}}, {{pocketbase_port}}
+# Compiler fills all {{…}} from card Operations section + runtime config.
+# Output path: compiled/{{card_id}}_v{{card_version}}/openshell-policy.yaml
+
+policy_version: "1.0"
+card_id: "{{card_id}}"
+card_version: {{card_version}}
+
+filesystem:
+  enforcement: landlock
+  allow:
+    - path: "/app/zeroclaw"
+      access: [read, execute]
+    - path: "/app/pocketbase"
+      access: [read, execute]
+    - path: "/data/sandbox/{{card_id}}"
+      access: [read, write, create, remove_file]
+    - path: "/data/minipae/{{card_id}}"
+      access: [read, write, create]
+    - path: "/tmp/sandbox-{{card_id}}"
+      access: [read, write, create, remove_file, remove_dir]
+    - path: "/etc/ssl/certs"
+      access: [read]
+    - path: "/lib"
+      access: [read, execute]
+    - path: "/usr/lib"
+      access: [read, execute]
+
+network:
+  enforcement: connect_hook
+  deny_by_default: true
+  allow:
+    - id: hold_queue_sidecar
+      host: "{{hold_queue_host}}"
+      port: {{hold_queue_port}}
+      protocol: tcp
+      description: "hold-queue sidecar"
+    - id: inference_endpoint
+      host: "{{inference_host}}"
+      port: {{inference_port}}
+      protocol: tls
+      description: "inference endpoint"
+    - id: pocketbase_local
+      host: "{{pocketbase_host}}"
+      port: {{pocketbase_port}}
+      protocol: tcp
+      description: "PocketBase ops store"
+
+credentials:
+  inject:
+    - vault_key: "{{inference_vault_key}}"
+      inject_as: "Authorization"
+      header_prefix: "Bearer "
+      only_at: "{{inference_host}}:{{inference_port}}"
+    - vault_key: "hold_queue_token"
+      inject_as: "X-Hold-Queue-Token"
+      only_at: "{{hold_queue_host}}:{{hold_queue_port}}"
+
+resources:
+  memory_limit_mb: 256
+  cpu_shares: 512
+  max_open_files: 256
+  max_processes: 16
+
+reload:
+  watch_file: true
+  signal_on_reload: SIGHUP
+  card_acting_hash: "{{acting_hash}}"

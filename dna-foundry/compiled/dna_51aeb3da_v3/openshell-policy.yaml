@@ -1,0 +1,86 @@
+# card.compile_openshell_policy output
+# card_id: dna_51aeb3da
+# card_version: 3
+# card_hash: sha256:d2023db5eeb891ca0a6ba5111db43c5ee1368b54fb22edb98f452434a9afacc3
+# generated_at: 2026-10-01T09:15:27Z
+# tool: card.compile_openshell_policy v0.1 (spike)
+
+policy_version: "1.0"
+card_id: "dna_51aeb3da"
+card_version: 3
+
+# ── Landlock filesystem confinement (hard requirement) ────────────────────────
+# No path outside this set is reachable from the sandbox process, including
+# /proc/net, /sys, /etc/resolv.conf, or any other side-channel path.
+filesystem:
+  enforcement: landlock
+  allow:
+    - path: "/app/zeroclaw"
+      access: [read, execute]
+    - path: "/app/pocketbase"
+      access: [read, execute]
+    - path: "/data/sandbox/dna_51aeb3da"
+      access: [read, write, create, remove_file]
+    - path: "/data/minipae/dna_51aeb3da"
+      access: [read, write, create]
+    - path: "/tmp/sandbox-dna_51aeb3da"
+      access: [read, write, create, remove_file, remove_dir]
+    - path: "/etc/ssl/certs"
+      access: [read]
+    - path: "/lib"
+      access: [read, execute]
+    - path: "/usr/lib"
+      access: [read, execute]
+  # Everything else: implicit deny via Landlock ruleset activation.
+
+# ── Network egress allowlist ──────────────────────────────────────────────────
+# Policy check runs on every connect(2). Unknown destinations are dropped
+# at the kernel before the syscall returns ECONNREFUSED.
+network:
+  enforcement: connect_hook
+  deny_by_default: true
+  allow:
+    - id: hold_queue_sidecar
+      host: "127.0.0.1"
+      port: 9100
+      protocol: tcp
+      description: "hold-queue sidecar — proposals/confirms only"
+    - id: inference_endpoint
+      host: "api.deepseek.com"
+      port: 443
+      protocol: tls
+      description: "DeepSeek inference endpoint (custom.deepseek vault key)"
+    - id: pocketbase_local
+      host: "127.0.0.1"
+      port: 8090
+      protocol: tcp
+      description: "PocketBase ops store — loopback only"
+
+# ── Credential injection ──────────────────────────────────────────────────────
+# OpenShell injects secrets at the approved endpoint only; the process
+# never sees the raw key. Vault key name → destination binding.
+credentials:
+  inject:
+    - vault_key: "custom.deepseek"
+      inject_as: "Authorization"
+      header_prefix: "Bearer "
+      only_at: "api.deepseek.com:443"
+    - vault_key: "hold_queue_token"
+      inject_as: "X-Hold-Queue-Token"
+      only_at: "127.0.0.1:9100"
+
+# ── Sandbox resource limits ───────────────────────────────────────────────────
+resources:
+  memory_limit_mb: 256
+  cpu_shares: 512        # ~half a core burst, no guaranteed share
+  max_open_files: 256
+  max_processes: 16
+
+# ── Live policy reload ────────────────────────────────────────────────────────
+# OpenShell watches this file; reload does NOT restart ZeroClaw.
+# Triggered automatically when card acting_hash changes (card.compile_openshell_policy
+# rewrites this file; MATRIX sandbox manager sends SIGHUP to the policy watcher).
+reload:
+  watch_file: true
+  signal_on_reload: SIGHUP
+  card_acting_hash: "sha256:ff125bb457a72be0de95cd5129759de2af3d916c1e8ec88131be95f68476a1c2"
