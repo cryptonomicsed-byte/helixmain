@@ -247,10 +247,9 @@ With measurements from §E and §F in hand, fill in this table:
                  + shared_base_mb   # kernel, Docker daemon, OpenShell LSM
 ```
 
-**Acceptable range:** Total ≤ 700 MB resident (leaves 300 MB for OS + herdr runner on 1 GB VPS).  
-If ZeroClaw idles at 3 MB and sidecars at 60 MB → (63 MB × 18) = 1,134 MB — **over budget**.  
-Mitigation: share one PocketBase instance per 3–4 cards (separate schemas, one process).  
-Shared-PocketBase projection: (3 MB ZeroClaw × 18) + (5 PocketBase × 15 MB) = 129 MB. **In budget.**
+**Acceptable range:** ≤ 700 MB resident (leaves 300 MB for OS + herdr runner on 1 GB VPS).  
+Fill measured values above, then run the formula. Do not pre-claim a result.  
+If over budget, evaluate shared PocketBase (one process, N schemas) as mitigation — measure that too.
 
 ---
 
