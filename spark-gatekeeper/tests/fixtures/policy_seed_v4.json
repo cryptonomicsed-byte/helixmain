@@ -1,0 +1,33 @@
+{
+  "card_id": "dna_c1640d90",
+  "card_version": 4,
+  "generated_at": "2026-10-04T05:43:46.863Z",
+  "rules": [
+    {
+      "topic": "refunds",
+      "rule": "Not happy with your order? Call (732) 721-3163 and ask for the manager on duty — we’ll make it right.",
+      "risk": "high",
+      "verdict": "approval_required",
+      "source_confidence": 0.65
+    },
+    {
+      "topic": "allergens",
+      "rule": "Tell us about food allergies before you order. The kitchen will confirm what’s safe. Allergen questions always go to our staff, never to an automated system.",
+      "risk": "low",
+      "verdict": "allow",
+      "source_confidence": 0.65
+    },
+    {
+      "topic": "large_orders",
+      "rule": "Party trays and large orders need advance notice — call at least a day ahead.",
+      "risk": "low",
+      "verdict": "allow",
+      "source_confidence": 0.65
+    }
+  ],
+  "defaults": {
+    "low": "allow",
+    "medium": "approval_required",
+    "high": "escalate"
+  }
+}
