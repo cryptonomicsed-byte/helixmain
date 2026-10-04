@@ -226,9 +226,15 @@ export function emitCardMd(card: any, changelog: string[]): string {
 
   // 5. Operations
   L.push("## Operations");
+  if (ops.hours) {
+    L.push(bl("**Hours:** " + ops.hours));
+    L.push(machineV("hour", 1, { text: ops.hours }));
+  }
+  for (const c of ops.channels || []) {
+    L.push(bl("**Channel:** " + c));
+    L.push(machineV("channel", 1, { name: c }));
+  }
   L.push.apply(L, present([
-    ops.hours ? bl("**Hours:** " + ops.hours) : null,
-    ops.channels && ops.channels.length ? bl("**Channels:** " + joinList(ops.channels, ", ")) : null,
     ops.delivery_fence ? bl("**Delivery:** " + ops.delivery_fence) : null,
     ops.catering ? bl("**Catering:** " + ops.catering) : null,
     ops.human_confirm && ops.human_confirm.length ? bl("**Human confirm:** " + joinList(ops.human_confirm, "; ")) : null,

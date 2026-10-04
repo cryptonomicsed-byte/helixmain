@@ -24,7 +24,9 @@ export interface ParsedCardMd {
 }
 
 /** Current known anchor versions per section type. */
-const ANCHOR_VERSIONS: Record<string, number> = { offering: 1, policy: 1, knowledge: 1, voice_dont: 1 };
+const ANCHOR_VERSIONS: Record<string, number> = {
+  offering: 1, policy: 1, knowledge: 1, voice_dont: 1, hour: 1, channel: 1,
+};
 
 interface SectionAnchor { version: number; data: any; implicit: boolean; }
 
@@ -115,6 +117,23 @@ function parse3StateSection<T = any>(
     cardProvenance[`${itemKey}[${i}]`] = { state: "inferred", queued_for_confirmation: true };
   });
   return { items: inferred, anchorProvenance: {}, cardProvenance, errors: [] };
+}
+
+function parseHourProse(lines: string[]): any[] {
+  return bullets(lines)
+    .map(b => { const h = kv(b, "Hours"); return h !== null ? { text: h } : null; })
+    .filter(Boolean);
+}
+
+function parseChannelProse(lines: string[]): any[] {
+  const items: any[] = [];
+  for (const b of bullets(lines)) {
+    const c = kv(b, "Channel");  // new per-item format
+    if (c !== null) { items.push({ name: c }); continue; }
+    const cs = kv(b, "Channels");  // old joined format (inferred fallback)
+    if (cs !== null) { for (const name of listVal(cs, ",")) items.push({ name }); }
+  }
+  return items;
 }
 
 function parseDontProse(lines: string[]): any[] {
@@ -420,18 +439,27 @@ export function parseCardMd(
   );
   if (offerResult.items.length) card.offerings = offerResult.items;
 
-  // 5. Operations
+  // 5. Operations — hours and channels use 3-state anchor pattern
+  const hourResult = parse3StateSection(
+    sec["Operations"] || [], "hour", "operations.hours",
+    parseHourProse, opts?.prevProvenance,
+  );
+  const channelResult = parse3StateSection(
+    sec["Operations"] || [], "channel", "operations.channels",
+    parseChannelProse, opts?.prevProvenance,
+  );
   {
     const o: any = {};
     for (const b of bullets(sec["Operations"] || [])) {
-      const h = kv(b, "Hours"); if (h !== null) o.hours = h;
-      const c = kv(b, "Channels"); if (c !== null) o.channels = listVal(c, ",");
       const dv = kv(b, "Delivery"); if (dv !== null) o.delivery_fence = dv;
       const ct = kv(b, "Catering"); if (ct !== null) o.catering = ct;
       const hc = kv(b, "Human confirm"); if (hc !== null) o.human_confirm = listVal(hc, ";");
       const sy = kv(b, "Systems"); if (sy !== null) o.systems = listVal(sy, ",");
       const nt = kv(b, "Notes"); if (nt !== null) o.notes = nt;
     }
+    // hour is a single-value field; channel items map back to string[]
+    if (hourResult.items.length) o.hours = hourResult.items[0].text;
+    if (channelResult.items.length) o.channels = channelResult.items.map((c: any) => c.name);
     if (Object.keys(o).length) card.operations = o;
   }
 
@@ -464,8 +492,8 @@ export function parseCardMd(
 
   // Combined anchor_missing check — all 3-state sections
   const allAnchorErrors = [
-    ...dontsResult.errors, ...offerResult.errors,
-    ...policyResult.errors, ...knowledgeResult.errors,
+    ...dontsResult.errors, ...offerResult.errors, ...policyResult.errors,
+    ...hourResult.errors, ...channelResult.errors, ...knowledgeResult.errors,
   ];
   if (allAnchorErrors.length > 0) {
     return { card, changelog: [], frontmatter: fm, anchorErrors: allAnchorErrors };
@@ -489,6 +517,8 @@ export function parseCardMd(
       ...dontsResult.cardProvenance,
       ...offerResult.cardProvenance,
       ...policyResult.cardProvenance,
+      ...hourResult.cardProvenance,
+      ...channelResult.cardProvenance,
       ...knowledgeResult.cardProvenance,
     };
     if (Object.keys(merged).length) card.field_provenance = merged;
@@ -607,6 +637,8 @@ export function parseCardMd(
     ...dontsResult.anchorProvenance,
     ...offerResult.anchorProvenance,
     ...policyResult.anchorProvenance,
+    ...hourResult.anchorProvenance,
+    ...channelResult.anchorProvenance,
     ...knowledgeResult.anchorProvenance,
   };
   return {

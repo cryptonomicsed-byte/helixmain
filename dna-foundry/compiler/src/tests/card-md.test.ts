@@ -310,6 +310,46 @@ test("anchor state: unknown policy version is a hard error", () => {
   );
 });
 
+// ── hour + channel 3-state tests ─────────────────────────────────────────────
+
+test("anchor state: hour@1 is accepted and trusted over prose", () => {
+  const md = emitCardMd(CARD, CHANGELOG);
+  assert.match(md, /<!-- machine:hour@1 \{/);
+  const p = parseCardMd(md);
+  assert.equal(p.card.operations.hours, "Mon–Fri 11am–9pm");
+  assert.equal(p.anchorProvenance?.["operations.hours[0]"]?.state, "anchored");
+  assert.equal(p.anchorProvenance?.["operations.hours[0]"]?.anchor_version, 1);
+  assert.equal(p.anchorErrors, undefined);
+});
+
+test("anchor state: unknown hour version is a hard error", () => {
+  const md = emitCardMd(CARD, CHANGELOG);
+  const future = md.replace(/machine:hour@1/g, "machine:hour@99");
+  assert.throws(
+    () => parseCardMd(future),
+    /hour anchor version 99 is unknown/,
+  );
+});
+
+test("anchor state: channel@1 is accepted and trusted over prose", () => {
+  const md = emitCardMd(CARD, CHANGELOG);
+  assert.match(md, /<!-- machine:channel@1 \{/);
+  const p = parseCardMd(md);
+  assert.equal(p.card.operations.channels[0], "phone");
+  assert.equal(p.anchorProvenance?.["operations.channels[0]"]?.state, "anchored");
+  assert.equal(p.anchorProvenance?.["operations.channels[0]"]?.anchor_version, 1);
+  assert.equal(p.anchorErrors, undefined);
+});
+
+test("anchor state: unknown channel version is a hard error", () => {
+  const md = emitCardMd(CARD, CHANGELOG);
+  const future = md.replace(/machine:channel@1/g, "machine:channel@99");
+  assert.throws(
+    () => parseCardMd(future),
+    /channel anchor version 99 is unknown/,
+  );
+});
+
 // ── Knowledge 3-state tests ───────────────────────────────────────────────────
 
 test("anchor state: knowledge@1 is accepted and trusted over prose", () => {
