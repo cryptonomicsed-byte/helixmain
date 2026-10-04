@@ -18,9 +18,9 @@ filesystem_policy:
     - /etc
     - /var/log
   read_write:
-    - /data/sandbox/dna_51aeb3da
-    - /data/minipae/dna_51aeb3da
-    - /tmp/sandbox-dna_51aeb3da
+    - /data/sandbox/dna_c1640d90
+    - /data/minipae/dna_c1640d90
+    - /tmp/sandbox-dna_c1640d90
     - /dev/null
 
 landlock:

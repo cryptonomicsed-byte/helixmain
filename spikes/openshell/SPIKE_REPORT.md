@@ -1,5 +1,5 @@
 # OpenShell Spike Report
-## Card: dna_51aeb3da (Harbor & Bean) · VPS 2.25.70.156
+## Card: dna_c1640d90 (Santino's Pizza) · VPS 2.25.70.156
 
 **Status:** PENDING — blocked on Docker confirmation (see VPS_RUNBOOK.md §Blocker)  
 **Date:** —  

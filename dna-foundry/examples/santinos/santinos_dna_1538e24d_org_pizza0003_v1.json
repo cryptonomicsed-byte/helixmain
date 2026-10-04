@@ -1,0 +1,229 @@
+{
+  "id": "dna_1538e24d",
+  "organization_id": "org_pizza0003",
+  "version": 1,
+  "previous_version": null,
+  "status": "draft",
+  "created_at": "2026-10-04T05:38:51.188633+00:00",
+  "identity": {
+    "name": "Santino's Pizza",
+    "tagline": "Family owned and operated since 1970.",
+    "elevator_pitch": "Santino's Pizza is a family owned and operated pizzeria in Parlin, NJ, serving hand-tossed pies since 1970.",
+    "mission": "Feed our neighbors like family.",
+    "values": [
+      "Family first",
+      "Hand-tossed, never rushed",
+      "Parlin's neighborhood table"
+    ],
+    "location": "499 Ernston Rd, Parlin, NJ 08859",
+    "phone": "(732) 721-3163",
+    "website": "https://santinospizzanj.com",
+    "timezone": "America/New_York"
+  },
+  "voice": {
+    "tone": [
+      "warm",
+      "familial",
+      "unhurried",
+      "welcoming"
+    ],
+    "personality": "Like being welcomed into a family pizzeria \u2014 unhurried, generous, and glad you came.",
+    "donts": [
+      "Never rushed or transactional",
+      "Never pretentious about the food"
+    ],
+    "lexicon_use": [
+      "family",
+      "hand-tossed",
+      "since 1970"
+    ],
+    "sample_phrases": [
+      "Mangia! There's plenty.",
+      "Family owned since 1970."
+    ]
+  },
+  "offerings": [
+    {
+      "name": "Classic Cheese Pizza",
+      "kind": "menu item",
+      "description": "Hand-tossed crust, tomato sauce, mozzarella.",
+      "price": null,
+      "orderable": true,
+      "confidence": 0.6
+    },
+    {
+      "name": "Pepperoni Pizza",
+      "kind": "menu item",
+      "description": "Hand-tossed crust, tomato sauce, mozzarella, pepperoni.",
+      "price": null,
+      "orderable": true,
+      "confidence": 0.6
+    },
+    {
+      "name": "Chicken Parmigiana",
+      "kind": "menu item",
+      "description": "Breaded cutlet, marinara, melted mozzarella.",
+      "price": null,
+      "orderable": true,
+      "confidence": 0.6
+    },
+    {
+      "name": "Party Trays",
+      "kind": "experience",
+      "description": "Large orders and party trays \u2014 call ahead so the kitchen can plan.",
+      "price": null,
+      "orderable": false,
+      "confidence": 0.6
+    }
+  ],
+  "operations": {
+    "hours": "Call for current hours",
+    "channels": [
+      "phone",
+      "in_person"
+    ],
+    "human_confirm": [
+      "refunds",
+      "allergen questions",
+      "large parties"
+    ],
+    "notes": "No online ordering yet \u2014 call (732) 721-3163."
+  },
+  "policies": [
+    {
+      "topic": "refunds",
+      "rule": "Handled case by case \u2014 please ask for the manager on duty.",
+      "source": "owner",
+      "confidence": 0.9
+    },
+    {
+      "topic": "allergens",
+      "rule": "Tell us about allergies before ordering; the kitchen will confirm what's safe. Allergen questions hand off to staff, never answered by the agent.",
+      "source": "owner",
+      "confidence": 0.9
+    }
+  ],
+  "handoff": {
+    "to_human": [
+      "refunds",
+      "allergen questions",
+      "large parties"
+    ],
+    "contact": "(732) 721-3163"
+  },
+  "knowledge": [
+    {
+      "ref": "https://santinospizzanj.com/",
+      "kind": "other",
+      "title": "Santino's Pizza website",
+      "chunks": 1
+    }
+  ],
+  "field_provenance": {
+    "identity": {
+      "sources": [
+        "https://santinospizzanj.com/"
+      ],
+      "confidence": 0.7,
+      "extracted_at": "2026-10-04T05:38:51.188633+00:00",
+      "extractor_agent": "example:hand-authored"
+    },
+    "voice": {
+      "sources": [
+        "https://santinospizzanj.com/"
+      ],
+      "confidence": 0.6,
+      "extracted_at": "2026-10-04T05:38:51.188633+00:00",
+      "extractor_agent": "example:hand-authored"
+    },
+    "offerings": {
+      "sources": [
+        "https://santinospizzanj.com/"
+      ],
+      "confidence": 0.6,
+      "extracted_at": "2026-10-04T05:38:51.188633+00:00",
+      "extractor_agent": "example:hand-authored"
+    },
+    "operations": {
+      "sources": [
+        "https://santinospizzanj.com/"
+      ],
+      "confidence": 0.6,
+      "extracted_at": "2026-10-04T05:38:51.188633+00:00",
+      "extractor_agent": "example:hand-authored"
+    },
+    "policies": {
+      "sources": [
+        "owner:interview"
+      ],
+      "confidence": 0.9,
+      "extracted_at": "2026-10-04T05:38:51.188633+00:00",
+      "extractor_agent": "example:hand-authored"
+    },
+    "knowledge": {
+      "sources": [
+        "owner:interview"
+      ],
+      "confidence": 0.9,
+      "extracted_at": "2026-10-04T05:38:51.188633+00:00",
+      "extractor_agent": "example:hand-authored"
+    }
+  },
+  "strategy": {
+    "positioning": "Parlin's neighborhood pizzeria \u2014 family owned since 1970, hand-tossed pies without the fuss.",
+    "swot": {
+      "strengths": [
+        "Family-owned story regulars love",
+        "Serving Parlin since 1970"
+      ],
+      "weaknesses": [
+        "No online ordering yet",
+        "Menu prices not published"
+      ],
+      "opportunities": [
+        "Party trays and large orders",
+        "Local event catering"
+      ],
+      "threats": [
+        "Chain pizzerias on price",
+        "Rising ingredient costs"
+      ]
+    },
+    "key_messaging": [
+      "Hand-tossed since 1970",
+      "You're family here"
+    ]
+  },
+  "customers": {
+    "personas": [
+      {
+        "name": "Parlin regular",
+        "description": "Local family that orders Friday pizza night.",
+        "pain_points": [
+          "Want to order online",
+          "Need large-party trays"
+        ],
+        "confidence": 0.4,
+        "source": "category:inference \u2014 confirm with owner"
+      }
+    ]
+  },
+  "competitors": [
+    {
+      "name": "Local independents",
+      "note": "Other family pizzerias in the Parlin area (inferred from category \u2014 confirm with owner)",
+      "confidence": 0.4,
+      "source": "category:inference"
+    }
+  ],
+  "insights": [
+    {
+      "title": "Since-1970 story is the differentiator",
+      "detail": "Five decades of family ownership is the lead message; few local competitors can match it.",
+      "confidence": 0.5,
+      "source": "category:inference"
+    }
+  ],
+  "acting_hash": "98ca51d9ae71f1efa1f78221a76f997109fb0f6ce44bd2124eb77173e8ce89bc",
+  "hash": "6a4b88da9e0d140b6b6a602a3a46f9bbb8f8896cac95f52eb52492b6fe9bc9c4"
+}

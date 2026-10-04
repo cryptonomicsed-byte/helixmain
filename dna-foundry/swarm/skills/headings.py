@@ -26,7 +26,7 @@ def run(ctx):
         if len(h) < 4 or h.lower() in _NOISE or h.lower() in seen:
             continue
         if looks_like_noise(h):
-            continue  # section headings ("A family table, set for Sayreville.") aren't offerings
+            continue  # section headings ("Family owned and operated since 1970.") aren't offerings
         seen.add(h.lower())
         out.append(Finding("offerings", {"name": h}, 0.55, [url]))
         if len(seen) >= 8:

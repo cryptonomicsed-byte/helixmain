@@ -15,21 +15,22 @@ const FIXTURE = {
   created_at: "2026-10-01T00:00:00Z",
   hash: "0".repeat(64),
   identity: {
-    name: "Harbor & Bean Coffee House",
-    tagline: "A cozy neighborhood coffee house.",
-    mission: "Be the warmest gathering place in Seaside.",
-    values: ["community first", "quality without pretense"],
-    location: "42 Harbor Lane, Seaside",
+    name: "Santino's Pizza",
+    tagline: "Family owned and operated since 1970.",
+    mission: "Feed our neighbors like family.",
+    values: ["family first", "hand-tossed, never rushed"],
+    location: "499 Ernston Rd, Parlin, NJ 08859",
+    phone: "(732) 721-3163",
   },
   voice: {
-    tone: ["warm", "playful"],
-    sample_phrases: ["Your cozy corner on the harbor"],
+    tone: ["warm", "familial"],
+    sample_phrases: ["Family owned since 1970"],
     donts: ["Never sound corporate."],
   },
-  offerings: [{ name: "Harbor Latte" }, { name: "Blueberry Morning Pastry" }],
-  operations: { hours: "Mon–Fri 7am–3pm", channels: ["phone", "email"] },
+  offerings: [{ name: "Classic Cheese Pizza" }, { name: "Pepperoni Pizza" }],
+  operations: { hours: "Mon–Fri 11am–9pm", channels: ["phone"] },
   policies: [
-    { topic: "refunds", rule: "Full refund for catering cancelled 48h ahead." },
+    { topic: "refunds", rule: "Ask for the manager on duty — handled case by case." },
     { topic: "privacy", rule: "We never sell your personal information." },
   ],
   insights: [{ title: "Review themes", detail: "Service and coziness dominate.", evidence: [] }],
@@ -65,7 +66,7 @@ test("tool allowlist follows declared channels", () => {
   const { toolAllowlist } = compileCard(FIXTURE);
   const tools = toolAllowlist.tools.map((t: { tool: string }) => t.tool);
   assert.ok(tools.includes("telephony.place_call"), "phone channel -> telephony tool");
-  assert.ok(tools.includes("email.send"), "email channel -> email tool");
+  assert.ok(!tools.includes("email.send"), "no email channel -> no email tool");
   assert.ok(tools.includes("kb.search"), "kb.search always present");
   assert.ok(!tools.includes("social.post"), "no social channel -> no social tool");
 });

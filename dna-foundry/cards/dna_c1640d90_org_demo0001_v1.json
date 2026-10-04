@@ -1,0 +1,362 @@
+{
+  "id": "dna_c1640d90",
+  "organization_id": "org_demo0001",
+  "version": 1,
+  "previous_version": null,
+  "status": "draft",
+  "created_at": "2026-10-04T05:39:28.079367+00:00",
+  "identity": {
+    "name": "Santino's Pizza",
+    "tagline": "Family owned and operated since 1970. Classic pizza in Parlin, NJ.",
+    "location": "499 Ernston Rd, Parlin, NJ 08859",
+    "phone": "(732) 721-3163",
+    "website": "https://santinospizzanj.com",
+    "values": [
+      "family first",
+      "hand-tossed pies",
+      "feed our neighbors like family"
+    ],
+    "elevator_pitch": "Family owned and operated since 1970 \u2014 hand-tossed pies in Parlin, NJ."
+  },
+  "voice": {
+    "tone": [
+      "warm",
+      "familial",
+      "unhurried",
+      "welcoming"
+    ],
+    "sample_phrases": [
+      "Family owned and operated since 1970",
+      "Classic pizza in Parlin, NJ",
+      "Our favorites",
+      "What our neighbors say"
+    ],
+    "personality": "Family-run, neighborly pizzeria greeting everyone like a local.",
+    "description": "Sounds like a friendly neighbor inviting you in for a Friday pizza night.",
+    "donts": [
+      "Use cold, corporate or impersonal language.",
+      "Brag with aggressive sales hype or pressure.",
+      "Rush a caller off the phone."
+    ]
+  },
+  "offerings": [
+    {
+      "name": "Classic Cheese Pizza",
+      "kind": "pizza",
+      "price": null,
+      "orderable": true,
+      "confidence": 0.6
+    },
+    {
+      "name": "Pepperoni Pizza",
+      "kind": "pizza",
+      "price": null,
+      "orderable": true,
+      "confidence": 0.6
+    },
+    {
+      "name": "White Pizza",
+      "kind": "pizza",
+      "price": null,
+      "orderable": true,
+      "confidence": 0.6
+    },
+    {
+      "name": "Chicken Parmigiana",
+      "kind": "entree",
+      "price": null,
+      "orderable": true,
+      "confidence": 0.6
+    },
+    {
+      "name": "Baked Ziti",
+      "kind": "entree",
+      "price": null,
+      "orderable": true,
+      "confidence": 0.6
+    },
+    {
+      "name": "Garlic Knots",
+      "kind": "side",
+      "price": null,
+      "orderable": true,
+      "confidence": 0.6
+    },
+    {
+      "name": "Garden Salad",
+      "kind": "side",
+      "price": null,
+      "orderable": true,
+      "confidence": 0.6
+    }
+  ],
+  "operations": {
+    "channels": [
+      "phone"
+    ],
+    "hours": "Mon\u2013Fri 11am\u20139pm; Sat\u2013Sun 12pm\u20138pm"
+  },
+  "policies": [
+    {
+      "topic": "refunds",
+      "rule": "Not happy with your order? Call (732) 721-3163 and ask for the manager on duty \u2014 we\u2019ll make it right."
+    },
+    {
+      "topic": "allergens",
+      "rule": "Tell us about food allergies before you order. The kitchen will confirm what\u2019s safe. Allergen questions always go to our staff, never to an automated system."
+    },
+    {
+      "topic": "large_orders",
+      "rule": "Party trays and large orders need advance notice \u2014 call at least a day ahead."
+    }
+  ],
+  "knowledge": [
+    {
+      "ref": "file:///tmp/demo-site/faq.html",
+      "kind": "faq",
+      "title": "Faq.Html",
+      "chunks": 1
+    },
+    {
+      "ref": "file:///tmp/demo-site/policies.html",
+      "kind": "policy_doc",
+      "title": "Policies.Html",
+      "chunks": 1
+    },
+    {
+      "ref": "file:///tmp/demo-site/index.html",
+      "kind": "review_corpus",
+      "title": "Google reviews summary",
+      "chunks": 1
+    }
+  ],
+  "insights": [
+    {
+      "title": "Recurring review themes",
+      "detail": "Google rating 4.1 across 42 reviews \u2014 a Parlin neighborhood staple.",
+      "evidence": [
+        "Rated 4.1 stars across 42 Google reviews \u2014 a Parlin neighborhood staple."
+      ]
+    }
+  ],
+  "strategy": {
+    "key_messaging": [
+      "Family owned and operated since 1970",
+      "Classic pizza in Parlin, NJ",
+      "Our favorites",
+      "Feed our neighbors like family"
+    ],
+    "positioning": "Family-owned Parlin pizzeria serving hand-tossed pies since 1970.",
+    "swot": {
+      "strengths": [
+        "Family owned and operated since 1970",
+        "Parlin neighborhood staple"
+      ],
+      "weaknesses": [
+        "No online ordering yet",
+        "Menu prices not published"
+      ],
+      "opportunities": [],
+      "threats": []
+    }
+  },
+  "customers": {
+    "personas": [
+      {
+        "name": "Parlin regular",
+        "role": "Friday pizza night family",
+        "pain_points": [
+          "Wants to order online",
+          "Needs large-party trays"
+        ],
+        "source": "category:inference \u2014 confirm with owner"
+      }
+    ]
+  },
+  "competitors": [
+    {
+      "name": "Domino's",
+      "positioning": "national pizza chain (inferred from category \u2014 confirm with owner)"
+    },
+    {
+      "name": "Pizza Hut",
+      "positioning": "national pizza chain (inferred from category \u2014 confirm with owner)"
+    },
+    {
+      "name": "Local independents",
+      "positioning": "other nearby pizzerias in this category \u2014 ask the owner to name them (inferred from category \u2014 confirm with owner)"
+    }
+  ],
+  "field_provenance": {
+    "identity.name": {
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "confidence": 0.85,
+      "extracted_at": "2026-10-04T05:39:28.079367+00:00",
+      "extractor_agent": "extractor:website"
+    },
+    "identity.tagline": {
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "confidence": 0.8,
+      "extracted_at": "2026-10-04T05:39:28.079367+00:00",
+      "extractor_agent": "extractor:website"
+    },
+    "identity.location": {
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "confidence": 0.85,
+      "extracted_at": "2026-10-04T05:39:28.079367+00:00",
+      "extractor_agent": "extractor:website"
+    },
+    "identity.values": {
+      "sources": [
+        "file:///tmp/demo-site/about.html"
+      ],
+      "confidence": 0.7,
+      "extracted_at": "2026-10-04T05:39:28.079367+00:00",
+      "extractor_agent": "extractor:website"
+    },
+    "identity.elevator_pitch": {
+      "sources": [
+        "file:///tmp/demo-site/about.html"
+      ],
+      "confidence": 0.75,
+      "extracted_at": "2026-10-04T05:39:28.079367+00:00",
+      "extractor_agent": "extractor:website"
+    },
+    "voice.tone": {
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "confidence": 0.6,
+      "extracted_at": "2026-10-04T05:39:28.079367+00:00",
+      "extractor_agent": "extractor:website"
+    },
+    "voice.sample_phrases": {
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "confidence": 0.6,
+      "extracted_at": "2026-10-04T05:39:28.079367+00:00",
+      "extractor_agent": "extractor:website"
+    },
+    "voice.personality": {
+      "sources": [
+        "file:///tmp/demo-site/about.html"
+      ],
+      "confidence": 0.6,
+      "extracted_at": "2026-10-04T05:39:28.079367+00:00",
+      "extractor_agent": "extractor:website"
+    },
+    "voice.description": {
+      "sources": [
+        "file:///tmp/demo-site/about.html"
+      ],
+      "confidence": 0.6,
+      "extracted_at": "2026-10-04T05:39:28.079367+00:00",
+      "extractor_agent": "extractor:website"
+    },
+    "voice.donts": {
+      "sources": [
+        "file:///tmp/demo-site/policies.html"
+      ],
+      "confidence": 0.55,
+      "extracted_at": "2026-10-04T05:39:28.079367+00:00",
+      "extractor_agent": "extractor:website"
+    },
+    "offerings": {
+      "sources": [
+        "file:///tmp/demo-site/menu.html"
+      ],
+      "confidence": 0.6,
+      "extracted_at": "2026-10-04T05:39:28.079367+00:00",
+      "extractor_agent": "extractor:website"
+    },
+    "operations.hours": {
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "confidence": 0.85,
+      "extracted_at": "2026-10-04T05:39:28.079367+00:00",
+      "extractor_agent": "extractor:website"
+    },
+    "operations.channels": {
+      "sources": [
+        "file:///tmp/demo-site/faq.html"
+      ],
+      "confidence": 0.9,
+      "extracted_at": "2026-10-04T05:39:28.079367+00:00",
+      "extractor_agent": "extractor:website"
+    },
+    "policies": {
+      "sources": [
+        "file:///tmp/demo-site/policies.html"
+      ],
+      "confidence": 0.65,
+      "extracted_at": "2026-10-04T05:39:28.079367+00:00",
+      "extractor_agent": "extractor:website"
+    },
+    "knowledge": {
+      "sources": [
+        "file:///tmp/demo-site/faq.html"
+      ],
+      "confidence": 0.7,
+      "extracted_at": "2026-10-04T05:39:28.079367+00:00",
+      "extractor_agent": "extractor:website"
+    },
+    "insights": {
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "confidence": 0.6,
+      "extracted_at": "2026-10-04T05:39:28.079367+00:00",
+      "extractor_agent": "extractor:website"
+    },
+    "strategy.positioning": {
+      "sources": [
+        "file:///tmp/demo-site/about.html"
+      ],
+      "confidence": 0.6,
+      "extracted_at": "2026-10-04T05:39:28.079367+00:00",
+      "extractor_agent": "extractor:website"
+    },
+    "strategy.key_messaging": {
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "confidence": 0.6,
+      "extracted_at": "2026-10-04T05:39:28.079367+00:00",
+      "extractor_agent": "extractor:website"
+    },
+    "strategy.swot": {
+      "sources": [
+        "file:///tmp/demo-site/about.html"
+      ],
+      "confidence": 0.55,
+      "extracted_at": "2026-10-04T05:39:28.079367+00:00",
+      "extractor_agent": "extractor:website"
+    },
+    "customers.personas": {
+      "sources": [
+        "file:///tmp/demo-site/index.html"
+      ],
+      "confidence": 0.5,
+      "extracted_at": "2026-10-04T05:39:28.079367+00:00",
+      "extractor_agent": "extractor:website"
+    },
+    "competitors": {
+      "sources": [
+        "category:inference"
+      ],
+      "confidence": 0.4,
+      "extracted_at": "2026-10-04T05:39:28.079367+00:00",
+      "extractor_agent": "extractor:website"
+    }
+  },
+  "acting_hash": "ea375c4b777e56838972a800a537c91fad803f239aa2d05b75d4f047f0ca63bb",
+  "hash": "b3d686f40a2f9ec1570c4a08b9cf1ec63edf9a72717e0e03d52f8aec29a0cdcc"
+}

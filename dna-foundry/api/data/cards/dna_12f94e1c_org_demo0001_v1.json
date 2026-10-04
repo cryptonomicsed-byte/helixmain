@@ -1,0 +1,196 @@
+{
+  "id": "dna_12f94e1c",
+  "organization_id": "org_demo0001",
+  "version": 1,
+  "previous_version": null,
+  "status": "draft",
+  "created_at": "2026-10-04T05:40:16.294222+00:00",
+  "identity": {
+    "name": "Santino's Pizza",
+    "tagline": "Family owned and operated since 1970. Classic pizza in Parlin, NJ.",
+    "location": "499 Ernston Rd, Parlin, NJ 08859",
+    "phone": "(732) 721-3163",
+    "website": "https://santinospizzanj.com",
+    "values": [
+      "family first",
+      "hand-tossed pies",
+      "feed our neighbors like family"
+    ]
+  },
+  "voice": {
+    "tone": [
+      "warm",
+      "familial",
+      "welcoming"
+    ],
+    "sample_phrases": [
+      "Family owned and operated since 1970",
+      "Classic pizza in Parlin, NJ",
+      "Our favorites",
+      "What our neighbors say"
+    ]
+  },
+  "offerings": [
+    {
+      "name": "Classic Cheese Pizza",
+      "price": null
+    },
+    {
+      "name": "Pepperoni Pizza",
+      "price": null
+    },
+    {
+      "name": "White Pizza",
+      "price": null
+    },
+    {
+      "name": "Chicken Parmigiana",
+      "price": null
+    },
+    {
+      "name": "Baked Ziti",
+      "price": null
+    },
+    {
+      "name": "Garlic Knots",
+      "price": null
+    },
+    {
+      "name": "Garden Salad",
+      "price": null
+    }
+  ],
+  "operations": {
+    "channels": [
+      "phone"
+    ],
+    "hours": "Mon\u2013Fri 11am\u20139pm; Sat\u2013Sun 12pm\u20138pm"
+  },
+  "policies": [
+    {
+      "topic": "refunds",
+      "rule": "Not happy with your order? Call (732) 721-3163 and ask for the manager on duty."
+    },
+    {
+      "topic": "allergens",
+      "rule": "Tell us about food allergies before you order. The kitchen will confirm what\u2019s safe."
+    },
+    {
+      "topic": "large_orders",
+      "rule": "Party trays and large orders need advance notice \u2014 call at least a day ahead."
+    }
+  ],
+  "knowledge": [
+    {
+      "ref": "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/faq.html",
+      "kind": "faq",
+      "title": "Faq.Html",
+      "chunks": 1
+    },
+    {
+      "ref": "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/policies.html",
+      "kind": "policy_doc",
+      "title": "Policies.Html",
+      "chunks": 1
+    },
+    {
+      "ref": "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html",
+      "kind": "review_corpus",
+      "title": "Google reviews summary",
+      "chunks": 1
+    }
+  ],
+  "insights": [
+    {
+      "title": "Recurring review themes",
+      "detail": "Google rating 4.1 across 42 reviews \u2014 a Parlin neighborhood staple.",
+      "evidence": [
+        "Rated 4.1 stars across 42 Google reviews \u2014 a Parlin neighborhood staple."
+      ]
+    }
+  ],
+  "field_provenance": {
+    "identity.name": {
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "confidence": 0.85,
+      "extracted_at": "2026-10-04T05:40:16.294222+00:00",
+      "extractor_agent": "extractor:website"
+    },
+    "identity.tagline": {
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "confidence": 0.8,
+      "extracted_at": "2026-10-04T05:40:16.294222+00:00",
+      "extractor_agent": "extractor:website"
+    },
+    "identity.location": {
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "confidence": 0.7,
+      "extracted_at": "2026-10-04T05:40:16.294222+00:00",
+      "extractor_agent": "extractor:website"
+    },
+    "offerings": {
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/menu.html"
+      ],
+      "confidence": 0.55,
+      "extracted_at": "2026-10-04T05:40:16.294222+00:00",
+      "extractor_agent": "extractor:website"
+    },
+    "operations.channels": {
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/faq.html"
+      ],
+      "confidence": 0.9,
+      "extracted_at": "2026-10-04T05:40:16.294222+00:00",
+      "extractor_agent": "extractor:website"
+    },
+    "operations.hours": {
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "confidence": 0.75,
+      "extracted_at": "2026-10-04T05:40:16.294222+00:00",
+      "extractor_agent": "extractor:website"
+    },
+    "voice.tone": {
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "confidence": 0.6,
+      "extracted_at": "2026-10-04T05:40:16.294222+00:00",
+      "extractor_agent": "extractor:website"
+    },
+    "voice.sample_phrases": {
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/index.html"
+      ],
+      "confidence": 0.7,
+      "extracted_at": "2026-10-04T05:40:16.294222+00:00",
+      "extractor_agent": "extractor:website"
+    },
+    "policies": {
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/policies.html"
+      ],
+      "confidence": 0.65,
+      "extracted_at": "2026-10-04T05:40:16.294222+00:00",
+      "extractor_agent": "extractor:documents"
+    },
+    "knowledge": {
+      "sources": [
+        "file:///home/hatch/workspace/helixmain/dna-foundry/swarm/fixtures/acme-cafe/faq.html"
+      ],
+      "confidence": 0.7,
+      "extracted_at": "2026-10-04T05:40:16.294222+00:00",
+      "extractor_agent": "extractor:website"
+    }
+  },
+  "acting_hash": "919db7b66c3fc65485234c5b965954ad809fc889a15591b0598ccb595f8fac72",
+  "hash": "f42be92474dbca9420963c84808edf7dbeb8a9d97b3b408516b839a1231fdec6"
+}

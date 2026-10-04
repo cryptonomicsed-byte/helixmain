@@ -2,7 +2,7 @@
 ## One card · one sandbox · kernel-enforced egress
 
 **Target:** Hostinger VPS `2.25.70.156`, `agents` user  
-**Card under test:** `dna_51aeb3da` v3 (Harbor & Bean Coffee House, demo fixture)  
+**Card under test:** `dna_c1640d90` v3 (Santino's Pizza, demo fixture)  
 **OpenShell version:** v0.1.2 (https://github.com/NVIDIA/OpenShell/releases/tag/v0.1.2)  
 **Goal:** Prove that a ZeroClaw instance inside an OpenShell sandbox (a) starts within the gateway's default timeout, (b) idles at a measured RAM footprint, and (c) cannot reach any host outside its policy — verified via proxy deny log, not assumed.  
 **Extrapolation target:** 18 simultaneous card sandboxes fit the VPS within margin.
@@ -125,7 +125,7 @@ OpenShell will inject this key only to requests bound for `openrouter.ai` — ex
 ## §E — Create the sandbox
 
 ```bash
-CARD_ID="dna_51aeb3da"
+CARD_ID="dna_c1640d90"
 POLICY="spikes/openshell/openshell-policy.example.yaml"
 
 openshell sandbox create \
@@ -148,7 +148,7 @@ openshell sandbox list
 With the sandbox running:
 
 ```bash
-CARD_ID="dna_51aeb3da"
+CARD_ID="dna_c1640d90"
 
 # Via Docker stats (OpenShell uses Docker as compute driver)
 docker stats --no-stream "$(docker ps --filter label=helix-spike --filter name=${CARD_ID} -q)"
@@ -167,7 +167,7 @@ openshell sandbox exec "zeroclaw-${CARD_ID}" -- cat /proc/1/status | grep -E "^(
 Network enforcement goes through the gateway proxy. Denied connections return 403, not EPERM.
 
 ```bash
-CARD_ID="dna_51aeb3da"
+CARD_ID="dna_c1640d90"
 SBX="zeroclaw-${CARD_ID}"
 
 # Connect to the sandbox shell
@@ -251,7 +251,7 @@ If over budget, evaluate shared PocketBase (one process, N schemas) as mitigatio
 ## §J — Teardown
 
 ```bash
-CARD_ID="dna_51aeb3da"
+CARD_ID="dna_c1640d90"
 openshell sandbox delete "zeroclaw-${CARD_ID}"
 
 # Stop gateway

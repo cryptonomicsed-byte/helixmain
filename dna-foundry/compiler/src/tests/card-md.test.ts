@@ -12,8 +12,8 @@ const { canonicalJson, cardHash } = require("../business-md");
 const { emitCardMd, actingHash } = require("../card-md");
 const { parseCardMd, verifyCardMd } = require("../card-md-parse");
 
-const PY_HASH = "b106a05d0cccd45bfa836d58e29247ef082b4a6c974ddd26bd99b3d459f836bc";
-const PY_ACTING_HASH = "38b4033a969612265050d866ebd83d32b327ee39ce68b89a4c4da8aba05ba3e7";
+const PY_HASH = "5d53266858479ad4e423354b109601b3d47ae26c7db5bc47d80e3ae74819b20d";
+const PY_ACTING_HASH = "bc4c496a5b5cb1b47c92aeb317950ab91d167a174156b8f3d2760e032bbbd0ac";
 
 const CARD = {
   id: "dna_test0001",
@@ -23,46 +23,44 @@ const CARD = {
   status: "draft",
   created_at: "2026-10-01T00:00:00Z",
   identity: {
-    name: "Harbor & Bean Coffee House",
-    tagline: "A cozy neighborhood coffee house — small-batch roasts.",
-    elevator_pitch: "Small-batch roasts on the harbor, poured by people who know your name.",
-    location: "42 Harbor Lane, Seaside",
-    phone: "(555) 010-2030",
-    email: "hello@harborandbean.example",
+    name: "Santino's Pizza",
+    tagline: "Family owned and operated since 1970.",
+    elevator_pitch: "Family owned and operated since 1970 — hand-tossed pies in Parlin, NJ.",
+    location: "499 Ernston Rd, Parlin, NJ 08859",
+    phone: "(732) 721-3163",
     timezone: "America/New_York",
-    website: "https://harborandbean.example",
+    website: "https://santinospizzanj.com",
   },
   voice: {
-    tone: ["warm", "playful"],
-    personality: "The barista who remembers your order.",
-    sample_phrases: ["Your cozy corner on the harbor", "Small-batch, big welcome"],
+    tone: ["warm", "familial"],
+    personality: "The pizzeria that treats you like family.",
+    sample_phrases: ["Family owned since 1970", "Mangia! There's plenty."],
     donts: ["No corporate speak"],
-    lexicon_use: ["cozy", "small-batch"],
+    lexicon_use: ["family", "hand-tossed"],
     lexicon_never: ["synergy", "leverage"],
   },
   offerings: [
-    { name: "Espresso", kind: "drink", orderable: true, price: null, confidence: 0.8 },
-    { name: "Pour over", kind: "drink", orderable: true, price: 4.5, confidence: 0.7 },
+    { name: "Classic Cheese Pizza", kind: "pizza", orderable: true, price: null, confidence: 0.8 },
+    { name: "Pepperoni Pizza", kind: "pizza", orderable: true, price: null, confidence: 0.7 },
   ],
   operations: {
-    hours: "Mon–Fri 7am–3pm",
-    channels: ["phone", "email"],
-    delivery_fence: "Seaside downtown",
-    human_confirm: ["catering"],
+    hours: "Mon–Fri 11am–9pm",
+    channels: ["phone"],
+    human_confirm: ["large orders"],
   },
   policies: [{ topic: "Refunds", rule: "ask-human" }],
   handoff: {
-    open_hours: "phone (555) 010-2030",
+    open_hours: "phone (732) 721-3163",
     channel: "phone",
     after_hours: "take a message",
   },
-  knowledge: [{ title: "Menu", ref: "https://harborandbean.example/menu", kind: "page", chunks: 4 }],
+  knowledge: [{ title: "Menu", ref: "https://santinospizzanj.com/menu", kind: "page", chunks: 4 }],
   strategy: {
-    positioning: "The third place on Harbor Lane",
+    positioning: "Parlin's family pizzeria since 1970",
     swot: { strengths: ["Regulars"], threats: ["Chain across the street"] },
   },
   customers: {
-    personas: [{ name: "Mara R.", description: "Remote worker", inferred: true }],
+    personas: [{ name: "Parlin regular", description: "Friday pizza night family", inferred: true }],
   },
   competitors: [{ name: "Big Chain", inferred: true, positioning: "cheaper, faster" }],
   field_provenance: {
@@ -73,7 +71,7 @@ const CARD = {
       extractor_agent: "extractor:website",
     },
   },
-  acting_hash: "38b4033a969612265050d866ebd83d32b327ee39ce68b89a4c4da8aba05ba3e7",
+  acting_hash: "bc4c496a5b5cb1b47c92aeb317950ab91d167a174156b8f3d2760e032bbbd0ac",
 };
 
 const CHANGELOG = ["**v1** (2026-10-01T00:00:00Z): initial extraction — 12 findings"];
@@ -120,7 +118,7 @@ test("appendix is present but excluded from acting_hash", () => {
 
 test("tampering with the body is detected", () => {
   const md = emitCardMd(CARD, CHANGELOG);
-  const tampered = md.replace("**Name:** Harbor & Bean Coffee House", "**Name:** Harbor & Beans Coffee House");
+  const tampered = md.replace("**Name:** Santino's Pizza", "**Name:** Santino's Pizzas");
   assert.notEqual(tampered, md);
   const v = verifyCardMd(tampered);
   assert.equal(v.ok, false);
@@ -142,14 +140,14 @@ test("version chain (previous_version / previous_hash) survives a bump", () => {
   v2.version = 2;
   v2.previous_version = 1;
   v2.previous_hash = PY_HASH;
-  v2.operations.hours = "Mon–Fri 7am–5pm";
+  v2.operations.hours = "Mon–Fri 11am–10pm";
   const md = emitCardMd(v2, CHANGELOG.concat(["**v2** (2026-10-01T01:00:00Z): hours updated (receipt rcpt_x)"]));
   const p = parseCardMd(md);
   assert.equal(p.frontmatter.previous_version, "1");
   assert.equal(p.frontmatter.previous_hash, "sha256:" + PY_HASH);
   assert.equal(p.card.previous_version, 1);
   assert.equal(p.card.previous_hash, PY_HASH);
-  assert.equal(p.card.operations.hours, "Mon–Fri 7am–5pm");
+  assert.equal(p.card.operations.hours, "Mon–Fri 11am–10pm");
   assert.equal(verifyCardMd(md).ok, true);
 });
 
@@ -162,7 +160,7 @@ test("round-trip: sound section (assets + staged briefs) survives", () => {
       duration_s: 4,
     },
     voice_logo: {
-      script: "Welcome to Harbor and Bean Coffee House. Small-batch roasts in Seaside.",
+      script: "Welcome to Santino's Pizza. Family owned and operated since 1970.",
       voice_profile: "avocado_v2:MAI_03",
       asset_ref: "sha256:" + "b".repeat(64),
     },
@@ -184,10 +182,11 @@ test("round-trip: sound section (assets + staged briefs) survives", () => {
 
 test("round-trip: null price stays null, never invented", () => {
   const md = emitCardMd(CARD, CHANGELOG);
-  assert.match(md, /\*\*Espresso\*\* · kind: drink · orderable: yes · price: null · confidence: 0.8/);
+  assert.match(md, /\*\*Classic Cheese Pizza\*\* · kind: pizza · orderable: yes · price: null · confidence: 0.8/);
+  assert.match(md, /\*\*Pepperoni Pizza\*\* · kind: pizza · orderable: yes · price: null · confidence: 0.7/);
   const p = parseCardMd(md);
   assert.equal(p.card.offerings[0].price, null);
-  assert.equal(p.card.offerings[1].price, 4.5);
+  assert.equal(p.card.offerings[1].price, null);
 });
 
 test("sound states follow asset existence", () => {

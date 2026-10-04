@@ -74,8 +74,8 @@ def links(html: str) -> list[tuple[str, str]]:
 def looks_like_noise(t: str) -> bool:
     """Reject section headings and markup-concatenation artifacts as offerings.
 
-    Menu items are noun phrases, not sentences: "A family table, set for
-    Sayreville." is a heading. "TakeoutReady" / "Delivery30" are two
+    Menu items are noun phrases, not sentences: "Family owned and operated
+    since 1970." is a heading. "TakeoutReady" / "Delivery30" are two
     elements glued by stripped markup.
     """
     if not t:

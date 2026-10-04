@@ -6,16 +6,16 @@ import {
   type SandboxRuntimeConfig,
 } from "../index.js";
 
-// Confirmed card: the same Harbor & Bean fixture the 14/14 suite compiles.
+// Confirmed card: the same Santino's Pizza fixture the 14/14 suite compiles.
 // Minimal shape the policy compiler reads: id, version, acting sections.
 const CARD = {
   id: "dna_test0001",
   version: 1,
-  identity: { name: "Harbor & Bean Coffee House" },
+  identity: { name: "Santino's Pizza" },
   voice: { tone: ["warm"] },
-  offerings: [{ name: "Harbor Latte" }],
+  offerings: [{ name: "Classic Cheese Pizza" }],
   operations: { channels: ["phone"] },
-  policies: [{ topic: "refunds", rule: "Full refund for catering cancelled 48h ahead." }],
+  policies: [{ topic: "refunds", rule: "Ask for the manager on duty — handled case by case." }],
   knowledge: [],
   field_provenance: {},
 };

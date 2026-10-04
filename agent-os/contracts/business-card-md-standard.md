@@ -40,7 +40,7 @@ updated: 2026-10-01T07:40:00Z
 status: approved   # draft | in_review | approved | retired
 ---
 
-# Business Card: Harbor & Bean Coffee
+# Business Card: Santino's Pizza
 
 > Small-batch roastery and café on Main Street. We remember your order.
 
@@ -176,7 +176,7 @@ the JSON they were compiled from.
 
 Separator safety: the Markdown emitter joins persona bits with ` · `,
 and field values may legitimately contain ` · ` (e.g. a role of
-"Sayreville regular · specialty pie loyalist"). The parser treats
+"Parlin regular · Friday pizza night loyalist"). The parser treats
 unlabeled segments *after* a labeled field as continuations of that
 field, not as a description — only unlabeled segments before the first
 label become `description`.
@@ -184,7 +184,7 @@ label become `description`.
 ## Extraction hygiene
 
 - HTML entities in `<title>`/meta are unescaped before brand-name
-  parsing (`Nunzio&#x27;s Kitchen` → `Nunzio's Kitchen`).
+  parsing (`Santino&#x27;s Pizza` → `Santino's Pizza`).
 - Headings that read as sentences (end with `.`/`!`/`?`, contain `". "`)
   or look like markup-concatenation artifacts (`TakeoutReady`,
   `Delivery30`) are never offerings — menu items are noun phrases.

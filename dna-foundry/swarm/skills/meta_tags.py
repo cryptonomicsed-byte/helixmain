@@ -51,7 +51,7 @@ def run(ctx):
     name = meta_content(html, "og:site_name") or title_tag(html)
     if name:
         # "Coffee Roastery - G.H. Coffee Company" -> "G.H. Coffee Company"
-        # unescape entities: "Nunzio&#x27;s Kitchen" -> "Nunzio's Kitchen"
+        # unescape entities: "Santino&#x27;s Pizza" -> "Santino's Pizza"
         short = brand_name_from_title(_html.unescape(name))
         out.append(Finding("identity.name", short or name, 0.85, [url]))
     tagline = meta_content(html, "og:description", "description")

@@ -1,97 +1,123 @@
 {
-  "id": "dna_51aeb3da",
+  "id": "dna_c1640d90",
   "version": 3,
-  "hash": "d2023db5eeb891ca0a6ba5111db43c5ee1368b54fb22edb98f452434a9afacc3",
-  "acting_hash": "ff125bb457a72be0de95cd5129759de2af3d916c1e8ec88131be95f68476a1c2",
+  "hash": "73f747f0430347bc996da8eb6c7c1db4b4cf9c4050cabd76a760ff83b080d581",
+  "acting_hash": "b77b4976dbdc3deb560932d307f1100ba4eaa6ca83a4154681ef0a02b2ff7afc",
   "previous_version": 2,
-  "previous_hash": "dcf86cc16a8d6d39f1e138be7908e45f1ab33e53697336480d0d121acc549ea9",
+  "previous_hash": "ee8e99062ad2116bfdeb8cd2355a4a3dc6300848d0fc1bff4e99c40f4073b1c0",
   "organization_id": "org_demo0001",
   "status": "draft",
-  "created_at": "2026-10-01T09:15:26.865883+00:00",
+  "created_at": "2026-10-04T05:39:40.829591+00:00",
   "identity": {
-    "name": "Harbor & Bean Coffee House",
-    "elevator_pitch": "A cozy neighborhood coffee house in Seaside. Small-batch roasts, fresh pastries, friendly faces.",
+    "name": "Santino's Pizza",
+    "elevator_pitch": "Family owned and operated since 1970 \u2014 hand-tossed pies in Parlin, NJ.",
     "values": [
-      "community first",
-      "quality without pretense",
-      "and sustainability in every cup"
+      "family first",
+      "hand-tossed pies",
+      "feed our neighbors like family"
     ],
-    "location": "42 Harbor Lane",
-    "tagline": "A cozy neighborhood coffee house in Seaside. Small-batch roasts, fresh pastries, friendly faces."
+    "location": "499 Ernston Rd, Parlin, NJ 08859",
+    "phone": "(732) 721-3163",
+    "website": "https://santinospizzanj.com",
+    "tagline": "Family owned and operated since 1970. Classic pizza in Parlin, NJ."
   },
   "voice": {
     "tone": [
       "warm",
-      "cozy",
-      "friendly",
+      "familial",
+      "unhurried",
       "welcoming"
     ],
-    "personality": "Family-run, neighborly, warm harbor coffee house greeting everyone like a local.",
-    "description": "Sounds like a friendly neighbor inviting you in for a morning roast.",
+    "personality": "Family-run, neighborly pizzeria greeting everyone like a local.",
+    "description": "Sounds like a friendly neighbor inviting you in for a Friday pizza night.",
     "sample_phrases": [
-      "Your cozy corner on the harbor",
-      "Small-batch roasts, brewed with love",
+      "Family owned and operated since 1970",
+      "Classic pizza in Parlin, NJ",
       "Our favorites",
       "What our neighbors say"
     ],
     "donts": [
       "Use cold, corporate or impersonal language.",
       "Brag with aggressive sales hype or pressure.",
-      "Be snobby or exclusive about coffee expertise."
+      "Rush a caller off the phone."
     ],
     "sonic": {
       "voice_logo": {
-        "script": "Welcome to Harbor and Bean Coffee House. A cozy neighborhood coffee house in Seaside.",
+        "script": "Welcome to Santino's Pizza. Family owned and operated since 1970.",
         "voice_profile": "avocado_v2:MAI_03",
-        "asset_ref": "sha256:80c8fb558bdeecf3cb9898ed729a9f2f75896067ccc7cab63f2ade7537d4877a"
+        "asset_ref": "sha256:841512d994b3c6535ace7581a473e1ff90b11b8b7c44b83c4f43d8ad4ad61152"
       }
     }
   },
   "offerings": [
     {
-      "name": "Small-batch roasts, brewed with love"
+      "name": "Classic Cheese Pizza",
+      "kind": "pizza",
+      "price": null,
+      "orderable": true,
+      "confidence": 0.6
     },
     {
-      "name": "Harbor Latte \u2014 $4.50"
+      "name": "Pepperoni Pizza",
+      "kind": "pizza",
+      "price": null,
+      "orderable": true,
+      "confidence": 0.6
     },
     {
-      "name": "Sea Salt Caramel Espresso \u2014 $5.00"
+      "name": "White Pizza",
+      "kind": "pizza",
+      "price": null,
+      "orderable": true,
+      "confidence": 0.6
     },
     {
-      "name": "Blueberry Morning Pastry \u2014 $3.25"
+      "name": "Chicken Parmigiana",
+      "kind": "entree",
+      "price": null,
+      "orderable": true,
+      "confidence": 0.6
     },
     {
-      "name": "offering",
-      "price_hint": "$4.50"
+      "name": "Baked Ziti",
+      "kind": "entree",
+      "price": null,
+      "orderable": true,
+      "confidence": 0.6
     },
     {
-      "name": "offering",
-      "price_hint": "$5.00"
+      "name": "Garlic Knots",
+      "kind": "side",
+      "price": null,
+      "orderable": true,
+      "confidence": 0.6
     },
     {
-      "name": "offering",
-      "price_hint": "$3.25"
+      "name": "Garden Salad",
+      "kind": "side",
+      "price": null,
+      "orderable": true,
+      "confidence": 0.6
     }
   ],
   "operations": {
-    "hours": "Mon\u2013Fri 7am\u20135pm; Sat\u2013Sun 8am\u20132pm",
+    "hours": "Mon\u2013Fri 11am\u201310pm; Sat\u2013Sun 12pm\u20138pm",
     "channels": [
-      "phone",
-      "email"
+      "phone"
     ]
   },
   "policies": [
     {
-      "topic": "returns",
-      "rule": "Policies | Harbor & Bean Coffee House Our policies Returns & refunds If you're not happy with your drink, we'll remake it on the spot \u2014 no questions asked."
+      "topic": "refunds",
+      "rule": "Not happy with your order? Call (732) 721-3163 and ask for the manager on duty \u2014 we\u2019ll make it right."
     },
     {
-      "topic": "cancellations",
-      "rule": "For catering orders, cancellations made 48 hours in advance receive a full refund."
+      "topic": "allergens",
+      "rule": "Tell us about food allergies before you order. The kitchen will confirm what\u2019s safe. Allergen questions always go to our staff, never to an automated system."
     },
     {
-      "topic": "privacy",
-      "rule": "Privacy We never sell your personal information."
+      "topic": "large_orders",
+      "rule": "Party trays and large orders need advance notice \u2014 call at least a day ahead."
     }
   ],
   "knowledge": [
@@ -110,7 +136,7 @@
     {
       "ref": "file:///tmp/demo-site/index.html",
       "kind": "review_corpus",
-      "title": "On-site testimonials",
+      "title": "Google reviews summary",
       "chunks": 1
     }
   ],
@@ -120,32 +146,32 @@
         "category:inference"
       ],
       "confidence": 0.4,
-      "extractor_agent": "skill:competitor_inference",
-      "extracted_at": "2026-10-01T09:15:24.319890+00:00"
+      "extractor_agent": "extractor:website",
+      "extracted_at": "2026-10-04T05:39:28.079367+00:00"
     },
     "customers.personas": {
       "sources": [
         "file:///tmp/demo-site/index.html"
       ],
-      "confidence": 0.7,
-      "extractor_agent": "extractor:strategy",
-      "extracted_at": "2026-10-01T09:15:24.317659+00:00"
+      "confidence": 0.5,
+      "extractor_agent": "extractor:website",
+      "extracted_at": "2026-10-04T05:39:28.079367+00:00"
     },
     "identity.elevator_pitch": {
       "sources": [
-        "file:///tmp/demo-site/index.html"
+        "file:///tmp/demo-site/about.html"
       ],
-      "confidence": 0.65,
-      "extractor_agent": "extractor:strategy",
-      "extracted_at": "2026-10-01T09:15:24.317619+00:00"
+      "confidence": 0.75,
+      "extractor_agent": "extractor:website",
+      "extracted_at": "2026-10-04T05:39:28.079367+00:00"
     },
     "identity.location": {
       "sources": [
         "file:///tmp/demo-site/index.html"
       ],
-      "confidence": 0.7,
+      "confidence": 0.85,
       "extractor_agent": "extractor:website",
-      "extracted_at": "2026-10-01T09:15:24.317241+00:00"
+      "extracted_at": "2026-10-04T05:39:28.079367+00:00"
     },
     "identity.name": {
       "sources": [
@@ -153,7 +179,7 @@
       ],
       "confidence": 0.85,
       "extractor_agent": "extractor:website",
-      "extracted_at": "2026-10-01T09:15:24.317168+00:00"
+      "extracted_at": "2026-10-04T05:39:28.079367+00:00"
     },
     "identity.tagline": {
       "sources": [
@@ -161,56 +187,54 @@
       ],
       "confidence": 0.8,
       "extractor_agent": "extractor:website",
-      "extracted_at": "2026-10-01T09:15:24.317185+00:00"
+      "extracted_at": "2026-10-04T05:39:28.079367+00:00"
     },
     "identity.values": {
       "sources": [
         "file:///tmp/demo-site/about.html"
       ],
-      "confidence": 0.55,
-      "extractor_agent": "extractor:documents",
-      "extracted_at": "2026-10-01T09:15:24.317560+00:00"
+      "confidence": 0.7,
+      "extractor_agent": "extractor:website",
+      "extracted_at": "2026-10-04T05:39:28.079367+00:00"
     },
     "insights": {
       "sources": [
         "file:///tmp/demo-site/index.html"
       ],
-      "confidence": 0.55,
-      "extractor_agent": "extractor:reviews",
-      "extracted_at": "2026-10-01T09:15:24.317577+00:00"
+      "confidence": 0.6,
+      "extractor_agent": "extractor:website",
+      "extracted_at": "2026-10-04T05:39:28.079367+00:00"
     },
     "knowledge": {
       "sources": [
-        "file:///tmp/demo-site/faq.html",
-        "file:///tmp/demo-site/index.html",
-        "file:///tmp/demo-site/policies.html"
+        "file:///tmp/demo-site/faq.html"
       ],
-      "confidence": 0.8,
-      "extractor_agent": "extractor:documents",
-      "extracted_at": "2026-10-01T09:15:24.317600+00:00"
+      "confidence": 0.7,
+      "extractor_agent": "extractor:website",
+      "extracted_at": "2026-10-04T05:39:28.079367+00:00"
     },
     "offerings": {
       "sources": [
-        "file:///tmp/demo-site/index.html"
+        "file:///tmp/demo-site/menu.html"
       ],
-      "confidence": 0.55,
+      "confidence": 0.6,
       "extractor_agent": "extractor:website",
-      "extracted_at": "2026-10-01T09:15:24.317450+00:00"
+      "extracted_at": "2026-10-04T05:39:28.079367+00:00"
     },
     "operations.channels": {
       "sources": [
-        "file:///tmp/demo-site/index.html"
+        "file:///tmp/demo-site/faq.html"
       ],
       "confidence": 0.9,
       "extractor_agent": "extractor:website",
-      "extracted_at": "2026-10-01T09:15:24.317236+00:00"
+      "extracted_at": "2026-10-04T05:39:28.079367+00:00"
     },
     "operations.hours": {
       "sources": [
         "sense:tier2 (file:///tmp/demo-site/index.html)"
       ],
-      "confidence": 0.75,
-      "extracted_at": "2026-10-01T09:15:26.865894+00:00",
+      "confidence": 0.7,
+      "extracted_at": "2026-10-04T05:39:40.829598+00:00",
       "extractor_agent": "mutator:dna.propose_change"
     },
     "policies": {
@@ -218,145 +242,134 @@
         "file:///tmp/demo-site/policies.html"
       ],
       "confidence": 0.65,
-      "extractor_agent": "extractor:documents",
-      "extracted_at": "2026-10-01T09:15:24.317524+00:00"
+      "extractor_agent": "extractor:website",
+      "extracted_at": "2026-10-04T05:39:28.079367+00:00"
     },
     "strategy.key_messaging": {
       "sources": [
         "file:///tmp/demo-site/index.html"
       ],
-      "confidence": 0.75,
-      "extractor_agent": "extractor:strategy",
-      "extracted_at": "2026-10-01T09:15:24.317641+00:00"
+      "confidence": 0.6,
+      "extractor_agent": "extractor:website",
+      "extracted_at": "2026-10-04T05:39:28.079367+00:00"
     },
     "strategy.positioning": {
       "sources": [
-        "file:///tmp/demo-site/index.html"
+        "file:///tmp/demo-site/about.html"
       ],
-      "confidence": 0.75,
-      "extractor_agent": "extractor:strategy",
-      "extracted_at": "2026-10-01T09:15:24.317622+00:00"
+      "confidence": 0.6,
+      "extractor_agent": "extractor:website",
+      "extracted_at": "2026-10-04T05:39:28.079367+00:00"
     },
     "strategy.swot": {
       "sources": [
-        "file:///tmp/demo-site/index.html"
+        "file:///tmp/demo-site/about.html"
       ],
-      "confidence": 0.7,
-      "extractor_agent": "extractor:strategy",
-      "extracted_at": "2026-10-01T09:15:24.317687+00:00"
+      "confidence": 0.55,
+      "extractor_agent": "extractor:website",
+      "extracted_at": "2026-10-04T05:39:28.079367+00:00"
     },
     "voice.description": {
       "sources": [
-        "file:///tmp/demo-site/index.html"
+        "file:///tmp/demo-site/about.html"
       ],
-      "confidence": 0.75,
+      "confidence": 0.6,
       "extractor_agent": "extractor:website",
-      "extracted_at": "2026-10-01T09:15:24.317466+00:00"
+      "extracted_at": "2026-10-04T05:39:28.079367+00:00"
     },
     "voice.donts": {
       "sources": [
-        "file:///tmp/demo-site/index.html"
+        "file:///tmp/demo-site/policies.html"
       ],
-      "confidence": 0.75,
+      "confidence": 0.55,
       "extractor_agent": "extractor:website",
-      "extracted_at": "2026-10-01T09:15:24.317470+00:00"
+      "extracted_at": "2026-10-04T05:39:28.079367+00:00"
     },
     "voice.personality": {
       "sources": [
-        "file:///tmp/demo-site/index.html"
+        "file:///tmp/demo-site/about.html"
       ],
-      "confidence": 0.75,
+      "confidence": 0.6,
       "extractor_agent": "extractor:website",
-      "extracted_at": "2026-10-01T09:15:24.317461+00:00"
+      "extracted_at": "2026-10-04T05:39:28.079367+00:00"
     },
     "voice.sample_phrases": {
       "sources": [
         "file:///tmp/demo-site/index.html"
       ],
-      "confidence": 0.7,
+      "confidence": 0.6,
       "extractor_agent": "extractor:website",
-      "extracted_at": "2026-10-01T09:15:24.317257+00:00"
+      "extracted_at": "2026-10-04T05:39:28.079367+00:00"
     },
     "voice.sonic": {
       "sources": [
-        "sha256:80c8fb558bdeecf3cb9898ed729a9f2f75896067ccc7cab63f2ade7537d4877a"
+        "sha256:841512d994b3c6535ace7581a473e1ff90b11b8b7c44b83c4f43d8ad4ad61152"
       ],
       "confidence": 0.9,
       "extractor_agent": "skill:sonic_brand",
-      "extracted_at": "2026-10-01T09:15:25.655658+00:00"
+      "extracted_at": "2026-10-04T05:39:35.694510+00:00"
     },
     "voice.tone": {
       "sources": [
         "file:///tmp/demo-site/index.html"
       ],
-      "confidence": 0.8,
+      "confidence": 0.6,
       "extractor_agent": "extractor:website",
-      "extracted_at": "2026-10-01T09:15:24.317456+00:00"
+      "extracted_at": "2026-10-04T05:39:28.079367+00:00"
     }
   },
   "strategy": {
     "swot": {
       "strengths": [
-        "Family-run coffee house",
-        "Small-batch roasts brewed with love"
+        "Family owned and operated since 1970",
+        "Parlin neighborhood staple"
       ],
       "weaknesses": [
-        "Weekday hours end at 3pm",
-        "Weekend hours end at 2pm"
+        "No online ordering yet",
+        "Menu prices not published"
       ]
     },
-    "positioning": "Family-run Seaside coffee house pouring small-batch roasts with cozy harbor warmth.",
+    "positioning": "Family-owned Parlin pizzeria serving hand-tossed pies since 1970.",
     "key_messaging": [
-      "Your cozy corner on the harbor",
-      "Small-batch roasts, brewed with love",
+      "Family owned and operated since 1970",
+      "Classic pizza in Parlin, NJ",
       "Our favorites",
-      "Family-run coffee house",
-      "Warmest welcome in Seaside"
+      "Feed our neighbors like family"
     ]
   },
   "customers": {
     "personas": [
       {
-        "name": "Maya R.",
-        "role": "Morning regular",
+        "name": "Parlin regular",
+        "role": "Friday pizza night family",
         "pain_points": [
-          "Needs cozy atmosphere",
-          "Wants friendliest staff",
-          "Wants best latte in town"
-        ]
-      },
-      {
-        "name": "Daniel K.",
-        "role": "Neighborhood local",
-        "pain_points": [
-          "Needs fresh pastries",
-          "Needs great coffee",
-          "Needs wonderful service"
-        ]
+          "Wants to order online",
+          "Needs large-party trays"
+        ],
+        "source": "category:inference \u2014 confirm with owner"
       }
     ]
   },
   "competitors": [
     {
-      "name": "Starbucks",
-      "positioning": "national coffee chain (inferred from category \u2014 confirm with owner)"
+      "name": "Domino's",
+      "positioning": "national pizza chain (inferred from category \u2014 confirm with owner)"
     },
     {
-      "name": "Dunkin'",
-      "positioning": "national coffee-and-donut chain (inferred from category \u2014 confirm with owner)"
+      "name": "Pizza Hut",
+      "positioning": "national pizza chain (inferred from category \u2014 confirm with owner)"
     },
     {
       "name": "Local independents",
-      "positioning": "other nearby shops in this category \u2014 ask the owner to name them (inferred from category \u2014 confirm with owner)"
+      "positioning": "other nearby pizzerias in this category \u2014 ask the owner to name them (inferred from category \u2014 confirm with owner)"
     }
   ],
   "insights": [
     {
       "title": "Recurring review themes",
-      "detail": "On-site testimonials emphasize: quality, service, atmosphere.",
+      "detail": "Google rating 4.1 across 42 reviews \u2014 a Parlin neighborhood staple.",
       "evidence": [
-        "The friendliest staff and the best latte in town. Cozy atmosphere, I'm here every morning! \u2014 Maya R.",
-        "Fresh pastries, great coffee, wonderful service. A true neighborhood gem. \u2014 Daniel K."
+        "Rated 4.1 stars across 42 Google reviews \u2014 a Parlin neighborhood staple."
       ]
     }
   ]
