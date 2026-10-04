@@ -30,7 +30,10 @@ All work in `dna-foundry/compiler/` (`src/card-md.ts` + `src/card-md-parse.ts`).
 - `voice_dont` via `parse3StateSection` — trivial, same pattern as policy/knowledge
 - Emitter anchor writes for `hours`, `channels`, `identity_value` — emitter must write before parser can enforce
 - Parser 3-state for each of those (same `parse3StateSection`)
-- Inferred → anchored promotion after owner confirmation (inferred items currently queue; nothing promotes them)
+- Inferred → anchored promotion — **two code paths (settled 2026-10-04)**:
+  - Pure promotion (data unchanged): `anchor_confirmation` hold-queue proposal → `dna confirm` CLI → compiler writes anchor inline. Hash-stable, no version bump — anchor lives in HTML comments outside the card hash.
+  - Owner corrects during confirmation (data changed): existing `mutate.py` path, version bump, hash chain. Not an anchor write.
+  - Auto-promotion without confirmation is ruled out — it would silently launder hand-edits into trusted anchors.
 - Spec acceptance tests: `docs/specs/machine-anchor-rule.md` has 8 testable criteria that should exist as tests, not prose
 
 **Exit:** every list section anchored; a hand-edited CARD.md with deleted anchors fails with `anchor_missing: <section>[N]`, never a hash mismatch.
