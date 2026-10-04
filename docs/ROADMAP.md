@@ -8,7 +8,7 @@ The dependency order to first paying client: **1 → 2 → 3 → 5 → 6**, with
 
 | # | Workstream | Repo | Status |
 | --- | --- | --- | --- |
-| 1 | Anchor rollout | `helixmain/dna-foundry/compiler/` | 🟡 80% — voice\_dont + hours/channels/identity\_value remaining |
+| 1 | Anchor rollout | `helixmain/dna-foundry/compiler/` | 🟢 Done — 35/35 tests, all sections anchored (`c500d9f`) |
 | 2 | SparkGatekeeper approval surface | `helixmain/spark-gatekeeper/` | 🔴 Not started |
 | 3 | card-protocol 0.2 conformance | `card-protocol` | 🔴 Pushed but unproven |
 | 4 | OSS adoptions | `helixmain` (phased) | 🔴 Queued by dependency |
@@ -23,20 +23,18 @@ The dependency order to first paying client: **1 → 2 → 3 → 5 → 6**, with
 
 All work in `dna-foundry/compiler/` (`src/card-md.ts` + `src/card-md-parse.ts`).
 
-**Done (pushed `6af8587`):** offering@1, policy@1, knowledge@1 — 27/27 tests. `verifyCardMd` now surfaces `anchor_missing` before hash checks. `parse3StateSection` is generic — any future section is tag + prose-parser function, no copy-paste.
+**Done (pushed `c500d9f`):** All sections anchored — offering@1, policy@1, knowledge@1, voice_dont@1, hour@1, channel@1, identity_value@1. 35/35 tests. `verifyCardMd` surfaces `anchor_missing` before hash checks. `parse3StateSection` is generic. `parseIdentityAnchors` handles the key-value identity section. Tamper detection now targets anchor values (anchors override prose in anchored sections).
+
+**Inferred → anchored promotion — two code paths (settled 2026-10-04):**
+- Pure promotion (data unchanged): `anchor_confirmation` hold-queue proposal → `dna confirm` CLI → compiler writes anchor inline. Hash-stable, no version bump — anchor lives in HTML comments outside the card hash.
+- Owner corrects during confirmation (data changed): existing `mutate.py` path, version bump, hash chain. Not an anchor write.
+- Auto-promotion without confirmation is ruled out — it would silently launder hand-edits into trusted anchors.
 
 **Remaining:**
-
-- `voice_dont` via `parse3StateSection` — trivial, same pattern as policy/knowledge
-- Emitter anchor writes for `hours`, `channels`, `identity_value` — emitter must write before parser can enforce
-- Parser 3-state for each of those (same `parse3StateSection`)
-- Inferred → anchored promotion — **two code paths (settled 2026-10-04)**:
-  - Pure promotion (data unchanged): `anchor_confirmation` hold-queue proposal → `dna confirm` CLI → compiler writes anchor inline. Hash-stable, no version bump — anchor lives in HTML comments outside the card hash.
-  - Owner corrects during confirmation (data changed): existing `mutate.py` path, version bump, hash chain. Not an anchor write.
-  - Auto-promotion without confirmation is ruled out — it would silently launder hand-edits into trusted anchors.
 - Spec acceptance tests: `docs/specs/machine-anchor-rule.md` has 8 testable criteria that should exist as tests, not prose
+- `dna confirm` CLI implementation (anchor promotion path)
 
-**Exit:** every list section anchored; a hand-edited CARD.md with deleted anchors fails with `anchor_missing: <section>[N]`, never a hash mismatch.
+**Exit:** ✅ Every section anchored; hand-edited CARD.md with deleted anchors fails with `anchor_missing`.
 
 ## 2. SparkGatekeeper approval surface — `cryptonomicsed-byte/helixmain`
 
