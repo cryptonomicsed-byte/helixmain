@@ -166,10 +166,6 @@ export function emitCardMd(card: any, changelog: string[]): string {
     id.email ? bl("**Email:** " + id.email) : null,
     id.timezone ? bl("**Timezone:** " + id.timezone) : null,
     (id.source_url || id.website) ? bl("**Source:** " + (id.source_url || id.website)) : null,
-    id.phone ? bl("**Phone:** " + id.phone) : null,
-    id.email ? bl("**Email:** " + id.email) : null,
-    id.timezone ? bl("**Timezone:** " + id.timezone) : null,
-    id.website || id.source_url ? bl("**Source:** " + (id.website || id.source_url)) : null,
   ]));
   L.push("");
 
