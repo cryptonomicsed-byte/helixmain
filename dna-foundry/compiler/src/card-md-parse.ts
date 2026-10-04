@@ -24,7 +24,7 @@ export interface ParsedCardMd {
 }
 
 /** Current known anchor versions per section type. */
-const ANCHOR_VERSIONS: Record<string, number> = { offering: 1, policy: 1, knowledge: 1 };
+const ANCHOR_VERSIONS: Record<string, number> = { offering: 1, policy: 1, knowledge: 1, voice_dont: 1 };
 
 interface SectionAnchor { version: number; data: any; implicit: boolean; }
 
@@ -115,6 +115,12 @@ function parse3StateSection<T = any>(
     cardProvenance[`${itemKey}[${i}]`] = { state: "inferred", queued_for_confirmation: true };
   });
   return { items: inferred, anchorProvenance: {}, cardProvenance, errors: [] };
+}
+
+function parseDontProse(lines: string[]): any[] {
+  return bullets(lines)
+    .map(b => { const t = kv(b, "Don't"); return t !== null ? { text: t } : null; })
+    .filter(Boolean);
 }
 
 function parsePolicyProse(lines: string[]): any[] {
@@ -384,7 +390,11 @@ export function parseCardMd(
     if (Object.keys(id).length) card.identity = id;
   }
 
-  // 2. Voice
+  // 2. Voice — donts use 3-state anchor pattern; other voice fields are scalar
+  const dontsResult = parse3StateSection(
+    sec["Voice"] || [], "voice_dont", "voice.donts",
+    parseDontProse, opts?.prevProvenance,
+  );
   {
     const v: any = {};
     for (const b of bullets(sec["Voice"] || [])) {
@@ -392,10 +402,11 @@ export function parseCardMd(
       const p = kv(b, "Personality"); if (p !== null) v.personality = p;
       const d = kv(b, "Description"); if (d !== null) v.description = d;
       const s = kv(b, "Samples"); if (s !== null) v.sample_phrases = quotedSegments(s);
-      const dt = kv(b, "Don't"); if (dt !== null) v.donts = listVal(dt, ";");
       const u = kv(b, "Use"); if (u !== null) v.lexicon_use = listVal(u, ",");
       const n = kv(b, "Never"); if (n !== null) v.lexicon_never = listVal(n, ",");
     }
+    // anchor data is {text: "..."}, card field is string[]
+    if (dontsResult.items.length) v.donts = dontsResult.items.map((d: any) => d.text);
     const sonic = parseSoundYaml(sec["Sound"] || []);
     if (sonic) v.sonic = sonic;
     if (Object.keys(v).length) card.voice = v;
@@ -451,9 +462,10 @@ export function parseCardMd(
   );
   if (knowledgeResult.items.length) card.knowledge = knowledgeResult.items;
 
-  // Combined anchor_missing check — all three 3-state sections
+  // Combined anchor_missing check — all 3-state sections
   const allAnchorErrors = [
-    ...offerResult.errors, ...policyResult.errors, ...knowledgeResult.errors,
+    ...dontsResult.errors, ...offerResult.errors,
+    ...policyResult.errors, ...knowledgeResult.errors,
   ];
   if (allAnchorErrors.length > 0) {
     return { card, changelog: [], frontmatter: fm, anchorErrors: allAnchorErrors };
@@ -474,6 +486,7 @@ export function parseCardMd(
     // Inferred provenance from all 3-state sections belongs in the card.
     const merged = {
       ...prov,
+      ...dontsResult.cardProvenance,
       ...offerResult.cardProvenance,
       ...policyResult.cardProvenance,
       ...knowledgeResult.cardProvenance,
@@ -591,6 +604,7 @@ export function parseCardMd(
   }
 
   const allAnchorProv = {
+    ...dontsResult.anchorProvenance,
     ...offerResult.anchorProvenance,
     ...policyResult.anchorProvenance,
     ...knowledgeResult.anchorProvenance,

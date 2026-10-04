@@ -267,6 +267,27 @@ test("anchor state: prose-only offering is inferred with queued_for_confirmation
   assert.equal(p.card.field_provenance?.["offerings[0]"]?.queued_for_confirmation, true);
 });
 
+// ── voice_dont 3-state tests ─────────────────────────────────────────────────
+
+test("anchor state: voice_dont@1 is accepted and trusted over prose", () => {
+  const md = emitCardMd(CARD, CHANGELOG);
+  assert.match(md, /<!-- machine:voice_dont@1 \{/);
+  const p = parseCardMd(md);
+  assert.equal(p.card.voice.donts[0], "No corporate speak");
+  assert.equal(p.anchorProvenance?.["voice.donts[0]"]?.state, "anchored");
+  assert.equal(p.anchorProvenance?.["voice.donts[0]"]?.anchor_version, 1);
+  assert.equal(p.anchorErrors, undefined);
+});
+
+test("anchor state: unknown voice_dont version is a hard error", () => {
+  const md = emitCardMd(CARD, CHANGELOG);
+  const future = md.replace(/machine:voice_dont@1/g, "machine:voice_dont@99");
+  assert.throws(
+    () => parseCardMd(future),
+    /voice_dont anchor version 99 is unknown/,
+  );
+});
+
 // ── Policy 3-state tests ──────────────────────────────────────────────────────
 
 test("anchor state: policy@1 is accepted and trusted over prose", () => {

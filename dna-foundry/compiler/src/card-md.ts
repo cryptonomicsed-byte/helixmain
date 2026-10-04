@@ -183,7 +183,12 @@ export function emitCardMd(card: any, changelog: string[]): string {
     voice.sample_phrases && voice.sample_phrases.length
       ? bl("**Samples:** " + voice.sample_phrases.map((p: string) => '"' + esc(p) + '"').join(" " + MID + " "))
       : null,
-    voice.donts && voice.donts.length ? bl("**Don't:** " + joinList(voice.donts, "; ")) : null,
+  ]));
+  for (const d of voice.donts || []) {
+    L.push(bl("**Don't:** " + d));
+    L.push(machineV("voice_dont", 1, { text: d }));
+  }
+  L.push.apply(L, present([
     voice.lexicon_use && voice.lexicon_use.length ? bl("**Use:** " + joinList(voice.lexicon_use, ", ")) : null,
     voice.lexicon_never && voice.lexicon_never.length ? bl("**Never:** " + joinList(voice.lexicon_never, ", ")) : null,
   ]));
