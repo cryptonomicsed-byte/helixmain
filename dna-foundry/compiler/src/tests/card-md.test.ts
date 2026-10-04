@@ -118,7 +118,11 @@ test("appendix is present but excluded from acting_hash", () => {
 
 test("tampering with the body is detected", () => {
   const md = emitCardMd(CARD, CHANGELOG);
-  const tampered = md.replace("**Name:** Santino's Pizza", "**Name:** Santino's Pizzas");
+  // Tamper with the anchor value (not prose — anchors override prose in anchored sections)
+  const tampered = md.replace(
+    /<!-- machine:identity_value@1 \{"key":"name","text":"Santino's Pizza"\} -->/,
+    '<!-- machine:identity_value@1 {"key":"name","text":"Santino\'s Pizzas"} -->',
+  );
   assert.notEqual(tampered, md);
   const v = verifyCardMd(tampered);
   assert.equal(v.ok, false);
@@ -361,4 +365,27 @@ test("anchor state: knowledge@1 is accepted and trusted over prose", () => {
   assert.equal(p.anchorProvenance?.["knowledge[0]"]?.state, "anchored");
   assert.equal(p.anchorProvenance?.["knowledge[0]"]?.anchor_version, 1);
   assert.equal(p.anchorErrors, undefined);
+});
+
+// ── identity_value 3-state tests ──────────────────────────────────────────────
+
+test("anchor state: identity_value@1 is accepted and trusted over prose", () => {
+  const md = emitCardMd(CARD, CHANGELOG);
+  assert.match(md, /<!-- machine:identity_value@1 \{/);
+  const p = parseCardMd(md);
+  assert.equal(p.card.identity.name, "Santino's Pizza");
+  assert.equal(p.card.identity.phone, "(732) 721-3163");
+  assert.equal(p.anchorProvenance?.["identity.name"]?.state, "anchored");
+  assert.equal(p.anchorProvenance?.["identity.name"]?.anchor_version, 1);
+  assert.equal(p.anchorProvenance?.["identity.phone"]?.state, "anchored");
+  assert.equal(p.anchorErrors, undefined);
+});
+
+test("anchor state: unknown identity_value version is a hard error", () => {
+  const md = emitCardMd(CARD, CHANGELOG);
+  const future = md.replace(/machine:identity_value@1/g, "machine:identity_value@99");
+  assert.throws(
+    () => parseCardMd(future),
+    /identity_value anchor version 99 is unknown/,
+  );
 });

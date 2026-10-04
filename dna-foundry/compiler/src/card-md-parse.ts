@@ -25,7 +25,7 @@ export interface ParsedCardMd {
 
 /** Current known anchor versions per section type. */
 const ANCHOR_VERSIONS: Record<string, number> = {
-  offering: 1, policy: 1, knowledge: 1, voice_dont: 1, hour: 1, channel: 1,
+  offering: 1, policy: 1, knowledge: 1, voice_dont: 1, hour: 1, channel: 1, identity_value: 1,
 };
 
 interface SectionAnchor { version: number; data: any; implicit: boolean; }
@@ -155,6 +155,48 @@ function parseKnowledgeProse(lines: string[]): any[] {
       return m ? { title: m[1], ref: m[2], kind: m[3], chunks: parseInt(m[4], 10) } : null;
     })
     .filter(Boolean);
+}
+
+const IDENTITY_ARRAY_FIELDS = new Set(["values"]);
+
+interface IdentityAnchorResult {
+  identity: Record<string, any> | null;
+  anchorProvenance: Record<string, any>;
+  errors: string[];
+}
+
+function parseIdentityAnchors(
+  lines: string[],
+  prevProvenance?: Record<string, any>,
+): IdentityAnchorResult {
+  const anchors = parseSectionAnchors(lines, "identity_value");
+  if (anchors.length > 0) {
+    const identity: Record<string, any> = {};
+    const anchorProvenance: Record<string, any> = {};
+    for (const a of anchors) {
+      if (!a.data.key || a.data.text === undefined) continue;
+      identity[a.data.key] = IDENTITY_ARRAY_FIELDS.has(a.data.key)
+        ? listVal(a.data.text, ";")
+        : a.data.text;
+      anchorProvenance[`identity.${a.data.key}`] = {
+        state: "anchored",
+        anchor_version: a.version,
+        ...(a.implicit ? { anchor_implicit: true } : {}),
+      };
+    }
+    return { identity, anchorProvenance, errors: [] };
+  }
+  if (prevProvenance) {
+    const prevAnchored = Object.entries(prevProvenance)
+      .filter(([k, v]) => k.startsWith("identity.") && (v as any).state === "anchored");
+    if (prevAnchored.length > 0) {
+      const errors = prevAnchored.map(
+        ([k]) => `anchor_missing: ${k} — anchor present in previous version but absent now`,
+      );
+      return { identity: null, anchorProvenance: {}, errors };
+    }
+  }
+  return { identity: null, anchorProvenance: {}, errors: [] };
 }
 
 function parseFrontmatter(md: string): { fm: Record<string, string>; rest: string } {
@@ -383,27 +425,30 @@ export function parseCardMd(
   card.status = fm.status || "draft";
   card.created_at = fm.updated;
 
-  // 1. Identity
+  // 1. Identity — identity_value anchors are authoritative; fall back to prose
+  const identityResult = parseIdentityAnchors(sec["Identity"] || [], opts?.prevProvenance);
   {
-    const id: any = {};
-    const set = (b: string, key: string, jk: string, fn?: (s: string) => any) => {
-      const v = kv(b, key);
-      if (v !== null) id[jk] = fn ? fn(v) : v;
-    };
-    for (const b of bullets(sec["Identity"] || [])) {
-      set(b, "Name", "name");
-      set(b, "Pitch", "elevator_pitch");
-      set(b, "Tagline", "tagline");
-      set(b, "Mission", "mission");
-      set(b, "Values", "values", (s) => listVal(s, ";"));
-      set(b, "Founded", "founded");
-      set(b, "Address", "location");
-      set(b, "Phone", "phone");
-      set(b, "Email", "email");
-      set(b, "Timezone", "timezone");
-      set(b, "Source", "website");
+    const id: any = identityResult.identity ? { ...identityResult.identity } : {};
+    if (!identityResult.identity) {
+      const set = (b: string, key: string, jk: string, fn?: (s: string) => any) => {
+        const v = kv(b, key);
+        if (v !== null) id[jk] = fn ? fn(v) : v;
+      };
+      for (const b of bullets(sec["Identity"] || [])) {
+        set(b, "Name", "name");
+        set(b, "Pitch", "elevator_pitch");
+        set(b, "Tagline", "tagline");
+        set(b, "Mission", "mission");
+        set(b, "Values", "values", (s) => listVal(s, ";"));
+        set(b, "Founded", "founded");
+        set(b, "Address", "location");
+        set(b, "Phone", "phone");
+        set(b, "Email", "email");
+        set(b, "Timezone", "timezone");
+        set(b, "Source", "website");
+      }
     }
-    // tagline blockquote under the H1
+    // tagline lives in the H1 blockquote, not an Identity bullet — always from prose
     const qm = rest.match(/^# .+\n\n> (.+)\n/m);
     if (qm && !id.tagline) id.tagline = qm[1];
     if (Object.keys(id).length) card.identity = id;
@@ -492,8 +537,9 @@ export function parseCardMd(
 
   // Combined anchor_missing check — all 3-state sections
   const allAnchorErrors = [
-    ...dontsResult.errors, ...offerResult.errors, ...policyResult.errors,
-    ...hourResult.errors, ...channelResult.errors, ...knowledgeResult.errors,
+    ...identityResult.errors, ...dontsResult.errors, ...offerResult.errors,
+    ...policyResult.errors, ...hourResult.errors, ...channelResult.errors,
+    ...knowledgeResult.errors,
   ];
   if (allAnchorErrors.length > 0) {
     return { card, changelog: [], frontmatter: fm, anchorErrors: allAnchorErrors };
@@ -634,6 +680,7 @@ export function parseCardMd(
   }
 
   const allAnchorProv = {
+    ...identityResult.anchorProvenance,
     ...dontsResult.anchorProvenance,
     ...offerResult.anchorProvenance,
     ...policyResult.anchorProvenance,

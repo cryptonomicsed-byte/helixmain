@@ -160,18 +160,24 @@ export function emitCardMd(card: any, changelog: string[]): string {
 
   // 1. Identity
   L.push("## Identity");
-  L.push.apply(L, present([
-    id.name ? bl("**Name:** " + id.name) : null,
-    id.elevator_pitch ? bl("**Pitch:** " + id.elevator_pitch) : null,
-    id.mission ? bl("**Mission:** " + id.mission) : null,
-    id.founded ? bl("**Founded:** " + id.founded) : null,
-    id.values && id.values.length ? bl("**Values:** " + joinList(id.values, "; ")) : null,
-    (id.address || id.location) ? bl("**Address:** " + (id.address || id.location)) : null,
-    id.phone ? bl("**Phone:** " + id.phone) : null,
-    id.email ? bl("**Email:** " + id.email) : null,
-    id.timezone ? bl("**Timezone:** " + id.timezone) : null,
-    (id.source_url || id.website) ? bl("**Source:** " + (id.source_url || id.website)) : null,
-  ]));
+  const idEntries: Array<[string, string, string | null | undefined]> = [
+    ["name", "Name", id.name],
+    ["elevator_pitch", "Pitch", id.elevator_pitch],
+    ["mission", "Mission", id.mission],
+    ["founded", "Founded", id.founded],
+    ["values", "Values", id.values && id.values.length ? joinList(id.values, "; ") : null],
+    ["location", "Address", id.address || id.location],
+    ["phone", "Phone", id.phone],
+    ["email", "Email", id.email],
+    ["timezone", "Timezone", id.timezone],
+    ["website", "Source", id.source_url || id.website],
+  ];
+  for (const [key, label, val] of idEntries) {
+    if (val) {
+      L.push(bl("**" + label + ":** " + val));
+      L.push(machineV("identity_value", 1, { key, text: val }));
+    }
+  }
   L.push("");
 
   // 2. Voice
