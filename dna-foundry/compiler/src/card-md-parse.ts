@@ -24,99 +24,112 @@ export interface ParsedCardMd {
 }
 
 /** Current known anchor versions per section type. */
-const ANCHOR_VERSIONS: Record<string, number> = { offering: 1 };
+const ANCHOR_VERSIONS: Record<string, number> = { offering: 1, policy: 1, knowledge: 1 };
 
-interface OfferingAnchor { version: number; data: any; implicit: boolean; }
+interface SectionAnchor { version: number; data: any; implicit: boolean; }
 
 /**
- * Parse all offering anchors from a section's lines.
- * Accepts both versioned `<!-- machine:offering@N {...} -->` and legacy
- * unversioned `<!-- machine:offering {...} -->` (treated as implicit v1).
- * Throws on unknown versions — version numbers must not be silently skipped.
+ * Parse all versioned (and legacy unversioned) machine anchors for a given
+ * section tag from a block of lines. Throws hard on unknown versions.
  */
-function parseOfferingAnchors(lines: string[]): OfferingAnchor[] {
-  const out: OfferingAnchor[] = [];
-  const known = ANCHOR_VERSIONS.offering;
+function parseSectionAnchors(lines: string[], tag: string): SectionAnchor[] {
+  const out: SectionAnchor[] = [];
+  const known = ANCHOR_VERSIONS[tag] ?? 0;
   for (const line of lines) {
-    const versioned = line.match(/^<!-- machine:offering@(\d+) (\{.*\}) -->$/);
-    if (versioned) {
-      const v = parseInt(versioned[1], 10);
+    const ver = line.match(new RegExp(`^<!-- machine:${tag}@(\\d+) (\\{.*\\}) -->$`));
+    if (ver) {
+      const v = parseInt(ver[1], 10);
       if (v > known)
-        throw new Error(`offering anchor version ${v} is unknown; upgrade parser (known: ${known})`);
-      try { out.push({ version: v, data: JSON.parse(versioned[2]), implicit: false }); } catch { /* malformed JSON → skip */ }
+        throw new Error(`${tag} anchor version ${v} is unknown; upgrade parser (known: ${known})`);
+      try { out.push({ version: v, data: JSON.parse(ver[2]), implicit: false }); } catch { /* malformed JSON → skip */ }
       continue;
     }
-    const legacy = line.match(/^<!-- machine:offering (\{.*\}) -->$/);
-    if (legacy) {
-      try { out.push({ version: 1, data: JSON.parse(legacy[1]), implicit: true }); } catch { /* skip */ }
+    const leg = line.match(new RegExp(`^<!-- machine:${tag} (\\{.*\\}) -->$`));
+    if (leg) {
+      try { out.push({ version: 1, data: JSON.parse(leg[1]), implicit: true }); } catch { /* skip */ }
     }
   }
   return out;
 }
 
-interface OfferingParseResult {
-  offerings: any[];
+interface SectionParseResult<T = any> {
+  items: T[];
   /**
    * Anchor parse state for anchored items — parser metadata only.
    * Must NOT be merged into card.field_provenance (would change the hash).
    */
   anchorProvenance: Record<string, any>;
   /**
-   * Provenance for inferred items — goes into card.field_provenance
-   * because the card is not yet anchored and the state IS part of the data.
+   * Provenance for inferred items — goes into card.field_provenance because
+   * an un-anchored item IS new card content that should affect the hash.
    */
   cardProvenance: Record<string, any>;
-  /** anchor_missing errors — caller should throw if non-empty. */
   errors: string[];
 }
 
 /**
- * 3-state offering parse per the machine-anchor-rule spec:
- *   anchored   — versioned (or legacy) anchor present → trust it
- *   anchor_missing — previous version had anchored offerings, current file
- *                    has none → hard error, do not silently re-extract
- *   inferred   — no anchor ever; parse from prose → queued_for_confirmation
+ * 3-state section parse per the machine-anchor-rule spec:
+ *   anchored       — versioned (or legacy) anchor present → trust it, ignore prose
+ *   anchor_missing — previous version had anchored items, current file has none
+ *                    → hard error, never silently re-extract
+ *   inferred       — no anchor ever; parse from prose → queued_for_confirmation
  */
-function parseOfferingsSection(
+function parse3StateSection<T = any>(
   lines: string[],
+  tag: string,
+  itemKey: string,
+  parseProse: (lines: string[]) => T[],
   prevProvenance?: Record<string, any>,
-): OfferingParseResult {
-  const anchors = parseOfferingAnchors(lines);
+): SectionParseResult<T> {
+  const anchors = parseSectionAnchors(lines, tag);
 
   if (anchors.length > 0) {
-    const offerings = anchors.map(a => a.data);
+    const items = anchors.map(a => a.data as T);
     const anchorProvenance: Record<string, any> = {};
     anchors.forEach((a, i) => {
-      anchorProvenance[`offerings[${i}]`] = {
+      anchorProvenance[`${itemKey}[${i}]`] = {
         state: "anchored",
         anchor_version: a.version,
         ...(a.implicit ? { anchor_implicit: true } : {}),
       };
     });
-    return { offerings, anchorProvenance, cardProvenance: {}, errors: [] };
+    return { items, anchorProvenance, cardProvenance: {}, errors: [] };
   }
 
-  // No anchors in the current file.
-  // Check if a previous version had anchored offerings.
   if (prevProvenance) {
     const prevAnchored = Object.entries(prevProvenance)
-      .filter(([k, v]) => k.startsWith("offerings[") && (v as any).state === "anchored");
+      .filter(([k, v]) => k.startsWith(`${itemKey}[`) && (v as any).state === "anchored");
     if (prevAnchored.length > 0) {
       const errors = prevAnchored.map(
         ([k]) => `anchor_missing: ${k} — anchor present in previous version but absent now`
       );
-      return { offerings: [], anchorProvenance: {}, cardProvenance: {}, errors };
+      return { items: [], anchorProvenance: {}, cardProvenance: {}, errors };
     }
   }
 
-  // Inferred: parse from prose bullets. Provenance goes into the card itself
-  // so the compiler knows to queue these items for owner confirmation.
-  const inferred = bullets(lines).map(parseOffer).filter(Boolean);
+  // Inferred: parse from prose. Provenance goes into the card so the compiler
+  // knows to queue these items for owner confirmation on the next compile.
+  const inferred = parseProse(lines);
   const cardProvenance: Record<string, any> = {};
-  inferred.forEach((_: any, i: number) => {
-    cardProvenance[`offerings[${i}]`] = { state: "inferred", queued_for_confirmation: true };
+  (inferred as any[]).forEach((_: any, i: number) => {
+    cardProvenance[`${itemKey}[${i}]`] = { state: "inferred", queued_for_confirmation: true };
   });
-  return { offerings: inferred, anchorProvenance: {}, cardProvenance, errors: [] };
+  return { items: inferred, anchorProvenance: {}, cardProvenance, errors: [] };
+}
+
+function parsePolicyProse(lines: string[]): any[] {
+  return bullets(lines)
+    .map(b => { const m = b.match(/^\*\*(.+?):\*\*\s*(.+)$/); return m ? { topic: m[1], rule: m[2] } : null; })
+    .filter(Boolean);
+}
+
+function parseKnowledgeProse(lines: string[]): any[] {
+  return bullets(lines)
+    .map(b => {
+      const m = b.match(/^\[(.+?)\]\((.+?)\)\s*·\s*(.+?)\s*·\s*(\d+)\s+chunks$/);
+      return m ? { title: m[1], ref: m[2], kind: m[3], chunks: parseInt(m[4], 10) } : null;
+    })
+    .filter(Boolean);
 }
 
 function parseFrontmatter(md: string): { fm: Record<string, string>; rest: string } {
@@ -388,13 +401,13 @@ export function parseCardMd(
     if (Object.keys(v).length) card.voice = v;
   }
 
-  // 4. Offer — 3-state: anchored / anchor_missing (hard error) / inferred
-  const offerResult = parseOfferingsSection(sec["Offer"] || [], opts?.prevProvenance);
-  if (offerResult.errors.length > 0) {
-    return { card, changelog: [], frontmatter: fm, anchorErrors: offerResult.errors };
-  }
-  if (offerResult.offerings.length) card.offerings = offerResult.offerings;
-  // itemProvenance is merged into field_provenance after the Provenance section.
+  // 4. Offer — 3-state (errors collected; checked collectively after section 8)
+  const offerResult = parse3StateSection(
+    sec["Offer"] || [], "offering", "offerings",
+    lines => bullets(lines).map(parseOffer).filter(Boolean),
+    opts?.prevProvenance,
+  );
+  if (offerResult.items.length) card.offerings = offerResult.items;
 
   // 5. Operations
   {
@@ -411,20 +424,12 @@ export function parseCardMd(
     if (Object.keys(o).length) card.operations = o;
   }
 
-  // 6. Policy
-  {
-    const anchored = machineAnchors(sec["Policy"] || [], "policy");
-    if (anchored.length) {
-      card.policies = anchored;
-    } else {
-      const pls = [];
-      for (const b of bullets(sec["Policy"] || [])) {
-        const m = b.match(/^\*\*(.+?):\*\*\s*(.+)$/);
-        if (m) pls.push({ topic: m[1], rule: m[2] });
-      }
-      if (pls.length) card.policies = pls;
-    }
-  }
+  // 6. Policy — 3-state
+  const policyResult = parse3StateSection(
+    sec["Policy"] || [], "policy", "policies",
+    parsePolicyProse, opts?.prevProvenance,
+  );
+  if (policyResult.items.length) card.policies = policyResult.items;
 
   // 7. Handoff
   {
@@ -439,19 +444,19 @@ export function parseCardMd(
     if (Object.keys(h).length) card.handoff = h;
   }
 
-  // 8. Knowledge
-  {
-    const anchored = machineAnchors(sec["Knowledge"] || [], "knowledge");
-    if (anchored.length) {
-      card.knowledge = anchored;
-    } else {
-      const kn = [];
-      for (const b of bullets(sec["Knowledge"] || [])) {
-        const m = b.match(/^\[(.+?)\]\((.+?)\)\s*·\s*(.+?)\s*·\s*(\d+)\s+chunks$/);
-        if (m) kn.push({ title: m[1], ref: m[2], kind: m[3], chunks: parseInt(m[4], 10) });
-      }
-      if (kn.length) card.knowledge = kn;
-    }
+  // 8. Knowledge — 3-state
+  const knowledgeResult = parse3StateSection(
+    sec["Knowledge"] || [], "knowledge", "knowledge",
+    parseKnowledgeProse, opts?.prevProvenance,
+  );
+  if (knowledgeResult.items.length) card.knowledge = knowledgeResult.items;
+
+  // Combined anchor_missing check — all three 3-state sections
+  const allAnchorErrors = [
+    ...offerResult.errors, ...policyResult.errors, ...knowledgeResult.errors,
+  ];
+  if (allAnchorErrors.length > 0) {
+    return { card, changelog: [], frontmatter: fm, anchorErrors: allAnchorErrors };
   }
 
   // 9. Provenance
@@ -466,8 +471,13 @@ export function parseCardMd(
         extracted_at: m[5],
       };
     }
-    // Inferred offering provenance belongs in the card (not anchored yet).
-    const merged = { ...prov, ...offerResult.cardProvenance };
+    // Inferred provenance from all 3-state sections belongs in the card.
+    const merged = {
+      ...prov,
+      ...offerResult.cardProvenance,
+      ...policyResult.cardProvenance,
+      ...knowledgeResult.cardProvenance,
+    };
     if (Object.keys(merged).length) card.field_provenance = merged;
   }
 
@@ -580,13 +590,16 @@ export function parseCardMd(
     }
   }
 
+  const allAnchorProv = {
+    ...offerResult.anchorProvenance,
+    ...policyResult.anchorProvenance,
+    ...knowledgeResult.anchorProvenance,
+  };
   return {
     card,
     changelog,
     frontmatter: fm,
-    anchorProvenance: Object.keys(offerResult.anchorProvenance).length
-      ? offerResult.anchorProvenance
-      : undefined,
+    anchorProvenance: Object.keys(allAnchorProv).length ? allAnchorProv : undefined,
   };
 }
 
@@ -597,6 +610,10 @@ export function verifyCardMd(md: string): { ok: boolean; reason: string; card?: 
   } catch (e: any) {
     return { ok: false, reason: "parse error: " + e.message };
   }
+  // anchor_missing must be diagnosed before hash checks — the card is
+  // structurally incomplete, not tampered; the operator needs the right message.
+  if (parsed.anchorErrors && parsed.anchorErrors.length > 0)
+    return { ok: false, reason: parsed.anchorErrors[0] };
   const { card, frontmatter: fm } = parsed;
   // acting_hash first: it is covered by the full hash, so a tampered
   // acting_hash would otherwise surface as a generic hash mismatch

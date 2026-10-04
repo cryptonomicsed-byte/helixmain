@@ -266,3 +266,38 @@ test("anchor state: prose-only offering is inferred with queued_for_confirmation
   assert.equal(p.card.field_provenance?.["offerings[0]"]?.state, "inferred");
   assert.equal(p.card.field_provenance?.["offerings[0]"]?.queued_for_confirmation, true);
 });
+
+// ── Policy 3-state tests ──────────────────────────────────────────────────────
+
+test("anchor state: policy@1 is accepted and trusted over prose", () => {
+  const md = emitCardMd(CARD, CHANGELOG);
+  assert.match(md, /<!-- machine:policy@1 \{/);
+  const p = parseCardMd(md);
+  assert.equal(p.card.policies[0].topic, "Refunds");
+  assert.equal(p.card.policies[0].rule, "ask-human");
+  assert.equal(p.anchorProvenance?.["policies[0]"]?.state, "anchored");
+  assert.equal(p.anchorProvenance?.["policies[0]"]?.anchor_version, 1);
+  assert.equal(p.anchorErrors, undefined);
+});
+
+test("anchor state: unknown policy version is a hard error", () => {
+  const md = emitCardMd(CARD, CHANGELOG);
+  const future = md.replace(/machine:policy@1/g, "machine:policy@99");
+  assert.throws(
+    () => parseCardMd(future),
+    /policy anchor version 99 is unknown/,
+  );
+});
+
+// ── Knowledge 3-state tests ───────────────────────────────────────────────────
+
+test("anchor state: knowledge@1 is accepted and trusted over prose", () => {
+  const md = emitCardMd(CARD, CHANGELOG);
+  assert.match(md, /<!-- machine:knowledge@1 \{/);
+  const p = parseCardMd(md);
+  assert.equal(p.card.knowledge[0].title, "Menu");
+  assert.equal(p.card.knowledge[0].ref, "https://santinospizzanj.com/menu");
+  assert.equal(p.anchorProvenance?.["knowledge[0]"]?.state, "anchored");
+  assert.equal(p.anchorProvenance?.["knowledge[0]"]?.anchor_version, 1);
+  assert.equal(p.anchorErrors, undefined);
+});

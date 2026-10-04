@@ -61,6 +61,11 @@ function machine(tag: string, obj: any): string {
   return `<!-- machine:${tag} ${JSON.stringify(obj)} -->`;
 }
 
+/** Versioned machine anchor: <!-- machine:tag@version {...} --> */
+function machineV(tag: string, version: number, obj: any): string {
+  return `<!-- machine:${tag}@${version} ${JSON.stringify(obj)} -->`;
+}
+
 function present(parts: (string | null | undefined)[]): string[] {
   const out: string[] = [];
   for (const p of parts) if (p) out.push(p);
@@ -207,7 +212,7 @@ export function emitCardMd(card: any, changelog: string[]): string {
       pairs.push("price: " + (o.price === undefined || o.price === null ? "null" : String(o.price)));
       if (o.confidence !== undefined && o.confidence !== null) pairs.push("confidence: " + String(o.confidence));
       L.push(bl("**" + o.name + "**" + (pairs.length ? " " + MID + " " + pairs.join(" " + MID + " ") : "")));
-      L.push(machine("offering", o));
+      L.push(machineV("offering", 1, o));
     }
   } else {
     L.push(ownerPrompt("the offer list lives here — name, price or null, confidence."));
@@ -233,7 +238,7 @@ export function emitCardMd(card: any, changelog: string[]): string {
   if ((card.policies || []).length) {
     for (const pl of card.policies || []) {
       L.push(bl("**" + pl.topic + ":** " + pl.rule));
-      L.push(machine("policy", pl));
+      L.push(machineV("policy", 1, pl));
     }
   } else {
     L.push(ownerPrompt("refunds, cancellations, allergens, house rules — the agent hands off what isn't written here."));
@@ -261,7 +266,7 @@ export function emitCardMd(card: any, changelog: string[]): string {
   if ((card.knowledge || []).length) {
     for (const k of card.knowledge || []) {
       L.push(bl("[" + k.title + "](" + k.ref + ") " + MID + " " + k.kind + " " + MID + " " + (k.chunks || 0) + " chunks"));
-      L.push(machine("knowledge", k));
+      L.push(machineV("knowledge", 1, k));
     }
   } else {
     L.push(ownerPrompt("menus, price lists, FAQs, documents the agent should be grounded in."));
