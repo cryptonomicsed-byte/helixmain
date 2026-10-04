@@ -13,6 +13,110 @@ export interface ParsedCardMd {
   card: any;
   changelog: string[];
   frontmatter: Record<string, string>;
+  /**
+   * Per-item anchor parse state, keyed by `offerings[N]`.
+   * Parser metadata — NOT merged into card.field_provenance (would change the hash).
+   * Compilers use this to populate field_provenance when writing a new card version.
+   */
+  anchorProvenance?: Record<string, any>;
+  /** Populated only when anchor_missing errors were detected (caller may re-throw). */
+  anchorErrors?: string[];
+}
+
+/** Current known anchor versions per section type. */
+const ANCHOR_VERSIONS: Record<string, number> = { offering: 1 };
+
+interface OfferingAnchor { version: number; data: any; implicit: boolean; }
+
+/**
+ * Parse all offering anchors from a section's lines.
+ * Accepts both versioned `<!-- machine:offering@N {...} -->` and legacy
+ * unversioned `<!-- machine:offering {...} -->` (treated as implicit v1).
+ * Throws on unknown versions — version numbers must not be silently skipped.
+ */
+function parseOfferingAnchors(lines: string[]): OfferingAnchor[] {
+  const out: OfferingAnchor[] = [];
+  const known = ANCHOR_VERSIONS.offering;
+  for (const line of lines) {
+    const versioned = line.match(/^<!-- machine:offering@(\d+) (\{.*\}) -->$/);
+    if (versioned) {
+      const v = parseInt(versioned[1], 10);
+      if (v > known)
+        throw new Error(`offering anchor version ${v} is unknown; upgrade parser (known: ${known})`);
+      try { out.push({ version: v, data: JSON.parse(versioned[2]), implicit: false }); } catch { /* malformed JSON → skip */ }
+      continue;
+    }
+    const legacy = line.match(/^<!-- machine:offering (\{.*\}) -->$/);
+    if (legacy) {
+      try { out.push({ version: 1, data: JSON.parse(legacy[1]), implicit: true }); } catch { /* skip */ }
+    }
+  }
+  return out;
+}
+
+interface OfferingParseResult {
+  offerings: any[];
+  /**
+   * Anchor parse state for anchored items — parser metadata only.
+   * Must NOT be merged into card.field_provenance (would change the hash).
+   */
+  anchorProvenance: Record<string, any>;
+  /**
+   * Provenance for inferred items — goes into card.field_provenance
+   * because the card is not yet anchored and the state IS part of the data.
+   */
+  cardProvenance: Record<string, any>;
+  /** anchor_missing errors — caller should throw if non-empty. */
+  errors: string[];
+}
+
+/**
+ * 3-state offering parse per the machine-anchor-rule spec:
+ *   anchored   — versioned (or legacy) anchor present → trust it
+ *   anchor_missing — previous version had anchored offerings, current file
+ *                    has none → hard error, do not silently re-extract
+ *   inferred   — no anchor ever; parse from prose → queued_for_confirmation
+ */
+function parseOfferingsSection(
+  lines: string[],
+  prevProvenance?: Record<string, any>,
+): OfferingParseResult {
+  const anchors = parseOfferingAnchors(lines);
+
+  if (anchors.length > 0) {
+    const offerings = anchors.map(a => a.data);
+    const anchorProvenance: Record<string, any> = {};
+    anchors.forEach((a, i) => {
+      anchorProvenance[`offerings[${i}]`] = {
+        state: "anchored",
+        anchor_version: a.version,
+        ...(a.implicit ? { anchor_implicit: true } : {}),
+      };
+    });
+    return { offerings, anchorProvenance, cardProvenance: {}, errors: [] };
+  }
+
+  // No anchors in the current file.
+  // Check if a previous version had anchored offerings.
+  if (prevProvenance) {
+    const prevAnchored = Object.entries(prevProvenance)
+      .filter(([k, v]) => k.startsWith("offerings[") && (v as any).state === "anchored");
+    if (prevAnchored.length > 0) {
+      const errors = prevAnchored.map(
+        ([k]) => `anchor_missing: ${k} — anchor present in previous version but absent now`
+      );
+      return { offerings: [], anchorProvenance: {}, cardProvenance: {}, errors };
+    }
+  }
+
+  // Inferred: parse from prose bullets. Provenance goes into the card itself
+  // so the compiler knows to queue these items for owner confirmation.
+  const inferred = bullets(lines).map(parseOffer).filter(Boolean);
+  const cardProvenance: Record<string, any> = {};
+  inferred.forEach((_: any, i: number) => {
+    cardProvenance[`offerings[${i}]`] = { state: "inferred", queued_for_confirmation: true };
+  });
+  return { offerings: inferred, anchorProvenance: {}, cardProvenance, errors: [] };
 }
 
 function parseFrontmatter(md: string): { fm: Record<string, string>; rest: string } {
@@ -211,7 +315,10 @@ function parseOffer(b: string): any {
   return o;
 }
 
-export function parseCardMd(md: string): ParsedCardMd {
+export function parseCardMd(
+  md: string,
+  opts?: { prevProvenance?: Record<string, any> },
+): ParsedCardMd {
   const { fm, rest } = parseFrontmatter(md);
   if (fm.format !== "business-card/0.1")
     throw new Error(`CARD.md: unsupported format '${fm.format}'`);
@@ -281,14 +388,13 @@ export function parseCardMd(md: string): ParsedCardMd {
     if (Object.keys(v).length) card.voice = v;
   }
 
-  // 4. Offer
-  {
-    const anchored = machineAnchors(sec["Offer"] || [], "offering");
-    const offs = anchored.length
-      ? anchored
-      : bullets(sec["Offer"] || []).map(parseOffer).filter(Boolean);
-    if (offs.length) card.offerings = offs;
+  // 4. Offer — 3-state: anchored / anchor_missing (hard error) / inferred
+  const offerResult = parseOfferingsSection(sec["Offer"] || [], opts?.prevProvenance);
+  if (offerResult.errors.length > 0) {
+    return { card, changelog: [], frontmatter: fm, anchorErrors: offerResult.errors };
   }
+  if (offerResult.offerings.length) card.offerings = offerResult.offerings;
+  // itemProvenance is merged into field_provenance after the Provenance section.
 
   // 5. Operations
   {
@@ -360,7 +466,9 @@ export function parseCardMd(md: string): ParsedCardMd {
         extracted_at: m[5],
       };
     }
-    if (Object.keys(prov).length) card.field_provenance = prov;
+    // Inferred offering provenance belongs in the card (not anchored yet).
+    const merged = { ...prov, ...offerResult.cardProvenance };
+    if (Object.keys(merged).length) card.field_provenance = merged;
   }
 
   // 10. Changelog
@@ -472,7 +580,14 @@ export function parseCardMd(md: string): ParsedCardMd {
     }
   }
 
-  return { card, changelog, frontmatter: fm };
+  return {
+    card,
+    changelog,
+    frontmatter: fm,
+    anchorProvenance: Object.keys(offerResult.anchorProvenance).length
+      ? offerResult.anchorProvenance
+      : undefined,
+  };
 }
 
 export function verifyCardMd(md: string): { ok: boolean; reason: string; card?: any } {

@@ -198,3 +198,71 @@ test("sound states follow asset existence", () => {
   assert.match(md, /voice_logo: \{state: ready/);
   assert.match(md, /logo: \{state: staged\}/);
 });
+
+// ── Anchor 3-state tests ──────────────────────────────────────────────────────
+
+test("anchor state: offering@1 is accepted and trusted over prose", () => {
+  const md = emitCardMd(CARD, CHANGELOG);
+  // Emitter must write versioned anchors.
+  assert.match(md, /<!-- machine:offering@1 \{/);
+  // Parser must read them back into the correct fields.
+  const p = parseCardMd(md);
+  assert.equal(p.card.offerings[0].name, "Classic Cheese Pizza");
+  assert.equal(p.card.offerings[0].price, null);
+  // Anchor parse state lives on anchorProvenance, NOT card.field_provenance (would change hash).
+  assert.equal(p.anchorProvenance?.["offerings[0]"]?.state, "anchored");
+  assert.equal(p.anchorProvenance?.["offerings[0]"]?.anchor_version, 1);
+  assert.equal(p.anchorErrors, undefined);
+});
+
+test("anchor state: unknown offering version is a hard error", () => {
+  const md = emitCardMd(CARD, CHANGELOG);
+  const future = md.replace(/machine:offering@1/g, "machine:offering@99");
+  assert.throws(
+    () => parseCardMd(future),
+    /offering anchor version 99 is unknown/,
+    "unknown version must throw, not silently degrade"
+  );
+});
+
+test("anchor state: anchor_missing triggers hard error when prev version had anchors", () => {
+  // Simulate a file where all offering anchors have been deleted.
+  const md = emitCardMd(CARD, CHANGELOG);
+  const stripped = md.replace(/^<!-- machine:offering@\d+ .*-->$/gm, "");
+  // Previous provenance records anchored offerings.
+  const prevProvenance: Record<string, any> = {
+    "offerings[0]": { state: "anchored", anchor_version: 1 },
+    "offerings[1]": { state: "anchored", anchor_version: 1 },
+  };
+  const result = parseCardMd(stripped, { prevProvenance });
+  assert.ok(result.anchorErrors && result.anchorErrors.length > 0,
+    "anchor_missing must surface as anchorErrors");
+  assert.match(result.anchorErrors![0], /anchor_missing: offerings\[0\]/);
+});
+
+test("anchor state: prose-only offering is inferred with queued_for_confirmation", () => {
+  // A hand-written card with no anchors and no previous provenance.
+  const bare = [
+    "---",
+    "format: business-card/0.1",
+    "id: dna_hand001",
+    "version: 1",
+    "previous_hash: none",
+    "hash: sha256:" + "0".repeat(64),
+    "acting_hash: sha256:" + "0".repeat(64),
+    "organization_id: org_x",
+    "status: draft",
+    "updated: 2026-10-04T00:00:00Z",
+    "---",
+    "",
+    "# Hand Written",
+    "",
+    "## Offer",
+    "- **Wood-Fired Margherita** · kind: pizza · price: null · confidence: 0.5",
+    "",
+  ].join("\n");
+  const p = parseCardMd(bare);
+  assert.equal(p.card.offerings?.[0]?.name, "Wood-Fired Margherita");
+  assert.equal(p.card.field_provenance?.["offerings[0]"]?.state, "inferred");
+  assert.equal(p.card.field_provenance?.["offerings[0]"]?.queued_for_confirmation, true);
+});
