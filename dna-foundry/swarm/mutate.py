@@ -24,6 +24,8 @@ import sys
 import uuid
 from pathlib import Path
 
+import jsonpatch
+
 SWARM = Path(__file__).parent
 FOUNDRY = SWARM.parent
 CARDS_DIR = FOUNDRY / "cards"
@@ -249,6 +251,14 @@ def propose_change(card_id: str, field: str, old, new, evidence: str,
             verdict = "approval"
             reason += f"; Jev verification: support score {v.decision:.2f} < 0.4"
 
+    # RFC 6902 diff — what the card would look like after this proposal applies.
+    # Strips hash fields so the diff targets quotable content only.
+    _strip = {"hash", "acting_hash", "previous_hash"}
+    _before = {k: v for k, v in card.items() if k not in _strip and not k.startswith("_")}
+    _after = copy.deepcopy(_before)
+    set_path(_after, field, new)
+    _diff = jsonpatch.make_patch(_before, _after).patch
+
     proposal = {
         "id": f"prop_{uuid.uuid4().hex[:8]}",
         "card_id": card["id"],
@@ -260,6 +270,7 @@ def propose_change(card_id: str, field: str, old, new, evidence: str,
         "confidence": confidence,
         "verdict": verdict,
         "gate_reason": reason,
+        "diff": _diff,
         "decision_trail": trail,
         "verification": verification,
         "status": "pending",
