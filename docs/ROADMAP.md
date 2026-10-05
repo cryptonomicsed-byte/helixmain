@@ -1,6 +1,6 @@
 # HelixMain Roadmap
 
-Updated: 2026-10-04
+Updated: 2026-10-05
 
 ## Critical Path
 
@@ -9,7 +9,7 @@ The dependency order to first paying client: **1 → 2 → 3 → 5 → 6**, with
 | # | Workstream | Repo | Status |
 | --- | --- | --- | --- |
 | 1 | Anchor rollout | `helixmain/dna-foundry/compiler/` | 🟢 Done — 35/35 tests, all sections anchored (`c500d9f`) |
-| 2 | SparkGatekeeper approval surface | `helixmain/spark-gatekeeper/` | 🟡 60% — Rust API + GovernanceReceipt done; TS browser UI done; VPS test pending |
+| 2 | SparkGatekeeper approval surface | `helixmain/spark-gatekeeper/` | 🟢 Static leg done — 51/51 VPS confirmed (`c2a170a`); Paperclip adapter queued |
 | 3 | card-protocol 0.2 conformance | `card-protocol` | 🔴 Pushed but unproven |
 | 4 | OSS adoptions | `helixmain` (phased) | 🔴 Queued by dependency |
 | 5 | Runtime exit proof | `helixmain` + `mesh-voice` + VPS | 🔴 Blocked on external gates |
@@ -31,26 +31,24 @@ All work in `dna-foundry/compiler/` (`src/card-md.ts` + `src/card-md-parse.ts`).
 - Auto-promotion without confirmation is ruled out — it would silently launder hand-edits into trusted anchors.
 
 **Remaining:**
-- Spec acceptance tests: `docs/specs/machine-anchor-rule.md` has 8 testable criteria that should exist as tests, not prose
-- `dna confirm` CLI implementation (anchor promotion path)
+- `dna confirm` CLI (AC-5 `test.todo`) — inferred→anchored promotion path. Pure promotion writes anchor inline, hash-stable, no version bump.
 
 **Exit:** ✅ Every section anchored; hand-edited CARD.md with deleted anchors fails with `anchor_missing`.
 
 ## 2. SparkGatekeeper approval surface — `cryptonomicsed-byte/helixmain`
 
-**Done:**
-- 35/35 Rust gate tests. Canonicalization byte-identical to Python swarm.
+**Done (VPS confirmed `c2a170a`, 51/51 green, zero warnings):**
+- 35 gate unit tests (7 gates + hold queue + sidecar). Canonicalization byte-identical to Python swarm.
 - Hold queue (SQLite, WebAuthn passkey table).
 - Rust HTTP API (8/8 axum oneshot tests): `GET /held`, `GET /held/:id`, `POST /held/:id/challenge`, `POST /held/:id/approve`, `POST /held/:id/deny`, `/setup/challenge`, `/setup/finish`. No-bypass invariant: WebAuthn verification in Rust before `approve()`.
-- GovernanceReceipt: Ed25519/JCS-canonical/hash-chained. `receipt_signer.rs` with roundtrip + tamper + chain + deny tests. `GATEKEEPER_SIGNING_KEY` env → persistent key.
-- `spark-approval/` browser UI: Vite+TS, `@simplewebauthn/browser`, renders gate trail per hold, approve/deny buttons, setup passkey form, auto-refreshes every 10s.
+- GovernanceReceipt (4/4 unit tests): Ed25519/JCS-canonical/hash-chained. `GATEKEEPER_SIGNING_KEY` env → persistent key. Offline-verifiable.
+- End-to-end integration (4/4): draft deploy denied, null-price refused (vibration gate, correct layer), refund escalates → approve → receipt, verdicts from real Santino's v4 policy seed.
+- `spark-approval/` browser UI: Vite+TS, `@simplewebauthn/browser`, gate trail per hold, approve/deny, setup passkey form, 10s auto-refresh. Proxy → `:9100`.
 
-**Remaining:**
-- VPS `cargo test` confirmation (35 gate + 8 API + 4 receipt_signer = 47 tests claimed, not yet independently run)
-- `dna confirm` CLI — AC-5 `test.todo` in workstream 1, but it's the inferred→anchored promotion path, which is a gatekeeper concern
-- **Paperclip adapter** — Paperclip has real governance (tool-action-review, per-principal grants). SparkGatekeeper becomes policy *content* inside that engine (acting\_hash binding, draft-can't-ship, receipts), not a parallel queue. Adapter code in `helixmain`; Paperclip itself is external OSS (`paperclipai/paperclip`)
+**Remaining (non-blocking):**
+- **Paperclip adapter** — SparkGatekeeper becomes policy *content* inside Paperclip's governance engine (acting\_hash binding, draft-can't-ship, receipts), not a parallel queue. Adapter code in `helixmain`; Paperclip itself is external OSS (`paperclipai/paperclip`). Queued after first client.
 
-**Exit:** one hold queue for publish, deploy, send, and card mutation; verifiable receipts; no approval bypass.
+**Exit:** ✅ One hold queue for publish, deploy, send, and card mutation; verifiable receipts; no approval bypass; 51 tests confirmed on VPS.
 
 ## 3. card-protocol 0.2 conformance debt — `cryptonomicsed-byte/card-protocol`
 
