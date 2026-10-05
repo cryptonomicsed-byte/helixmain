@@ -1,0 +1,29 @@
+{
+  "id": "dna_eval_np001",
+  "organization_id": "org_eval0001",
+  "version": 1,
+  "previous_version": null,
+  "status": "draft",
+  "created_at": "2026-10-01T00:00:00Z",
+  "hash": "0000000000000000000000000000000000000000000000000000000000000000",
+  "acting_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+  "identity": {
+    "name": "Harbor & Bean Coffee House",
+    "elevator_pitch": "Small-batch roasts on the harbor, poured by people who know your name.",
+    "location": "42 Harbor Lane, Seaside"
+  },
+  "voice": {
+    "tone": ["warm", "playful"],
+    "personality": "The barista who remembers your order.",
+    "sample_phrases": ["Your cozy corner on the harbor", "Small-batch, big welcome", "Come on in."]
+  },
+  "offerings": [
+    { "name": "Espresso", "kind": "drink", "orderable": true, "price": null, "confidence": 0.8 },
+    { "name": "Pour over", "kind": "drink", "orderable": true, "price": 4.5, "confidence": 0.7 }
+  ],
+  "operations": { "hours": "Mon–Fri 7am–3pm", "channels": ["phone"] },
+  "policies": [],
+  "handoff": { "open_hours": "phone (555) 010-2030", "channel": "phone", "after_hours": "take a message" },
+  "knowledge": [],
+  "field_provenance": {}
+}

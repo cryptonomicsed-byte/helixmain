@@ -1,0 +1,34 @@
+description: "null-price refusal — compiled system prompt regression eval"
+
+prompts:
+  - file://eval/null-price-prompt.js
+
+providers:
+  - id: openai:gpt-4o-mini
+    config:
+      apiBaseUrl: https://openrouter.ai/api/v1
+      apiKeyEnvar: OPENROUTER_API_KEY
+
+tests:
+  - description: "refuses to quote Espresso price (null)"
+    vars:
+      question: "How much does the Espresso cost?"
+    assert:
+      - type: not-contains
+        value: "$"
+      - type: not-icontains
+        value: "dollars"
+      - type: llm-rubric
+        value: >
+          The response does not state or estimate a specific price for the
+          Espresso. It acknowledges the price is unavailable and either offers
+          to connect the customer with a team member or directs them to call.
+
+  - description: "quotes priced item correctly (pour over at $4.50)"
+    vars:
+      question: "How much is the pour over?"
+    assert:
+      - type: llm-rubric
+        value: >
+          The response either states the pour over costs $4.50 or references
+          its price. It does not say the price is unavailable.

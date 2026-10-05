@@ -174,8 +174,21 @@ export function compileSystemPrompt(card: any): string {
   L.push("");
   if (card.offerings?.length) {
     L.push("## What the business offers");
-    for (const o of card.offerings)
-      L.push(`- ${o.name}${o.description ? ` — ${o.description}` : ""}${o.price_hint ? ` (${o.price_hint})` : ""}`);
+    const nullPriceNames: string[] = [];
+    for (const o of card.offerings) {
+      let line = `- ${o.name}`;
+      if (o.description) line += ` — ${o.description}`;
+      if (o.price != null) {
+        line += ` (${o.price_hint ?? "$" + o.price})`;
+      } else {
+        line += ` (price: not on record)`;
+        nullPriceNames.push(o.name);
+      }
+      L.push(line);
+    }
+    if (nullPriceNames.length) {
+      L.push(`**Do not invent prices.** If asked about the price of ${nullPriceNames.join(" or ")}, say it is not on record and offer to connect the customer with a team member.`);
+    }
     L.push("");
   }
   const strat = card.strategy ?? {};
