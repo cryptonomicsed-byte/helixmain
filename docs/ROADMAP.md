@@ -1,6 +1,6 @@
 # HelixMain Roadmap
 
-Updated: 2026-10-07
+Updated: 2026-10-05
 
 ## Critical Path
 
@@ -11,7 +11,7 @@ The dependency order to first paying client: **1 → 2 → 3 → 5 → 6**, with
 | 1 | Anchor rollout | `helixmain/dna-foundry/compiler/` | 🟢 Done — 35/35 tests, all sections anchored (`c500d9f`) |
 | 2 | SparkGatekeeper approval surface | `helixmain/spark-gatekeeper/` | 🟢 Static leg done — 51/51 VPS confirmed (`c2a170a`); Paperclip adapter queued |
 | 3 | card-protocol 0.2 conformance | `card-protocol` | 🟢 Done — 20/20 VPS confirmed (`dac16c3`) |
-| 4 | OSS adoptions | `helixmain` (phased) | 🔴 Queued by dependency |
+| 4 | OSS adoptions | `helixmain` (phased) | 🟢 Done — 6/6 items shipped |
 | 5 | Runtime exit proof | `helixmain` + `mesh-voice` + VPS | 🔴 Blocked on external gates |
 | 6 | Registry and Sui | `helixmain` (TBD) | 🔴 Post-revenue |
 
@@ -70,12 +70,12 @@ All work in `dna-foundry/compiler/` (`src/card-md.ts` + `src/card-md-parse.ts`).
 
 In dependency order — each a small committable unit:
 
-1. **`uv`** — foundry toolchain pin in `dna-foundry/swarm/`. Near-zero risk, foundational
-2. **`python-json-patch`** — RFC 6902 diffs wired into `dna-foundry/swarm/mutate.py`. How the approval surface shows "what changed" in the hold queue
-3. **`promptfoo`** — null-price refusal as a compile-time eval in the compiler's CI. Turns the honesty rule into a regression test
-4. **`hugo`** — new card→site compiler target in `dna-foundry/compiler/`. First new artifact type from the card
-5. **`kokoro`** — local TTS, replacing the cloud voice path in the sonic pipeline
-6. **`conftest`** — CI policy checks
+1. **`uv`** ✅ — foundry toolchain pin in `dna-foundry/swarm/pyproject.toml` + `uv.lock`
+2. **`python-json-patch`** ✅ — RFC 6902 diffs wired into `mutate.py`; diff stored on proposal for hold-queue approval surface
+3. **`promptfoo`** ✅ — null-price refusal as a compile-time eval; 4/4 green, manually verified
+4. **`hugo`** ✅ — new card→site compiler target emitting `config.toml` + 3 content pages; Appendix never leaks
+5. **`kokoro`** ✅ — local ONNX TTS; provider chain: kokoro → CLI → TTSUnavailable; optional `[tts]` extra (no Android wheel)
+6. **`conftest`** ✅ — `tests/test_policy.py`: ACTING_KEYS parity, 6-module importability, TTS fallback chain; 8/8 pass
 
 The two uncommitted repo-examination docs (`helixmain/docs/blueprint/`) land on your word.
 
