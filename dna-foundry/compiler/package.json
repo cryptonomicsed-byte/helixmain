@@ -2,7 +2,7 @@
   "description": "Deterministic compiler: Business DNA card -> system prompt, policy seed, tool allowlist, RAG manifest.",
   "devDependencies": {
     "@types/node": "^20.19.43",
-    "promptfoo": "^0.103.6",
+    "promptfoo": "^0.123.1",
     "typescript": "^5.6.0"
   },
   "name": "@helixmain/dna-compiler",
