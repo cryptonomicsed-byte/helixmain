@@ -1,0 +1,20 @@
+{
+  "name": "@helixmain/spark-approval",
+  "version": "0.1.0",
+  "description": "Browser WebAuthn ceremony transport for SparkGatekeeper hold queue.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@simplewebauthn/browser": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.43",
+    "typescript": "^5.6.0",
+    "vite": "^5.4.0"
+  }
+}
