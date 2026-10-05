@@ -136,6 +136,11 @@ if (outDir) {
   fs.writeFileSync(path.join(outDir, "dna-fields-used.json"), JSON.stringify(compiled.dnaFieldsUsed, null, 2));
   fs.writeFileSync(path.join(outDir, "CARD.md"), compiled.cardMd);
   fs.writeFileSync(path.join(outDir, "CHANGELOG.json"), JSON.stringify(cl, null, 2));
+  for (const [rel, content] of Object.entries(compiled.hugoSite)) {
+    const full = path.join(outDir, "hugo", rel);
+    fs.mkdirSync(path.dirname(full), { recursive: true });
+    fs.writeFileSync(full, content);
+  }
   console.log(`compiled ${card.id} v${card.version} -> ${outDir}`);
 } else {
   console.log(compiled.systemPrompt);

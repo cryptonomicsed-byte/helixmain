@@ -58,6 +58,7 @@ export interface CompiledOutputs {
   toolAllowlist: ToolAllowlist;
   ragManifest: RagManifest;
   dnaFieldsUsed: string[];
+  hugoSite: Record<string, string>;
 }
 
 /** Map a card policy topic onto the risk/verdict taxonomy. */
@@ -241,6 +242,71 @@ export function compileSystemPrompt(card: any): string {
   return L.join("\n");
 }
 
+function hugoEsc(s: string): string {
+  return s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
+
+/** Compile a card into Hugo content files. Returns a map of relative path → content.
+ *  Reads from the Acting layer only — Appendix data (SWOT, personas, competitors)
+ *  never appears on the public site. */
+export function compileHugoSite(card: any): Record<string, string> {
+  const id = card.identity ?? {};
+  const ops = card.operations ?? {};
+  const files: Record<string, string> = {};
+
+  // config.toml — site-level metadata
+  const cfg: string[] = [
+    `baseURL = "${hugoEsc(id.website ?? "/")}"`,
+    `languageCode = "en-us"`,
+    `title = "${hugoEsc(id.name ?? "Business")}"`,
+    "",
+    "[params]",
+    `  card_id = "${card.id}"`,
+    `  card_version = ${card.version}`,
+  ];
+  if (id.tagline) cfg.push(`  tagline = "${hugoEsc(id.tagline)}"`);
+  if (id.elevator_pitch) cfg.push(`  description = "${hugoEsc(id.elevator_pitch)}"`);
+  if (id.phone) cfg.push(`  phone = "${hugoEsc(id.phone)}"`);
+  if (id.email) cfg.push(`  email = "${hugoEsc(id.email)}"`);
+  if (id.location) cfg.push(`  location = "${hugoEsc(id.location)}"`);
+  if (ops.hours) cfg.push(`  hours = "${hugoEsc(ops.hours)}"`);
+  files["config.toml"] = cfg.join("\n") + "\n";
+
+  // content/_index.md — homepage
+  const home: string[] = ["---", `title: "${hugoEsc(id.name ?? "Home")}"`];
+  if (id.tagline) home.push(`tagline: "${hugoEsc(id.tagline)}"`);
+  if (id.elevator_pitch) home.push(`description: "${hugoEsc(id.elevator_pitch)}"`);
+  home.push("---", "");
+  if (id.elevator_pitch) home.push(id.elevator_pitch, "");
+  else if (id.tagline) home.push(id.tagline, "");
+  files["content/_index.md"] = home.join("\n");
+
+  // content/menu.md — offerings (only quotable prices shown; null omitted)
+  if (card.offerings?.length) {
+    const menu: string[] = ["---", `title: "Menu"`, "---", ""];
+    for (const o of card.offerings) {
+      let line = `- **${o.name}**`;
+      if (o.description) line += ` — ${o.description}`;
+      if (o.price != null) line += ` ($${o.price})`;
+      menu.push(line);
+    }
+    files["content/menu.md"] = menu.join("\n") + "\n";
+  }
+
+  // content/contact.md — hours, channels, location
+  const contact: string[] = ["---", `title: "Contact"`, "---", ""];
+  if (ops.hours) contact.push(`**Hours:** ${ops.hours}`, "");
+  if (id.phone) contact.push(`**Phone:** ${id.phone}`, "");
+  if (id.email) contact.push(`**Email:** ${id.email}`, "");
+  if (id.location) contact.push(`**Location:** ${id.location}`, "");
+  if (id.website) contact.push(`**Website:** ${id.website}`, "");
+  const channels = (ops.channels ?? []).filter((c: string) => c !== "in_person");
+  if (channels.length) contact.push(`**Reach us:** ${channels.join(", ")}`, "");
+  files["content/contact.md"] = contact.join("\n");
+
+  return files;
+}
+
 export function compileCard(card: any, now = new Date().toISOString(), changelog: string[] = []): CompiledOutputs {
   return {
     cardMd: emitCardMd(card, changelog),
@@ -249,6 +315,7 @@ export function compileCard(card: any, now = new Date().toISOString(), changelog
     toolAllowlist: compileToolAllowlist(card),
     ragManifest: compileRagManifest(card),
     dnaFieldsUsed: dnaFieldsUsed(card),
+    hugoSite: compileHugoSite(card),
   };
 }
 

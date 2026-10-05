@@ -74,5 +74,11 @@
   "dnaFieldsUsed": [
     "identity.name",
     "policies"
-  ]
+  ],
+  "hugoSite": {
+    "config.toml": "baseURL = \"/\"\nlanguageCode = \"en-us\"\ntitle = \"Santino's Pizza\"\n\n[params]\n  card_id = \"dna_test0001\"\n  card_version = 1\n  tagline = \"Family owned and operated since 1970.\"\n  phone = \"(732) 721-3163\"\n  location = \"499 Ernston Rd, Parlin, NJ 08859\"\n  hours = \"Mon–Fri 11am–9pm\"\n",
+    "content/_index.md": "---\ntitle: \"Santino's Pizza\"\ntagline: \"Family owned and operated since 1970.\"\n---\n\nFamily owned and operated since 1970.\n",
+    "content/menu.md": "---\ntitle: \"Menu\"\n---\n\n- **Classic Cheese Pizza**\n- **Pepperoni Pizza**\n",
+    "content/contact.md": "---\ntitle: \"Contact\"\n---\n\n**Hours:** Mon–Fri 11am–9pm\n\n**Phone:** (732) 721-3163\n\n**Location:** 499 Ernston Rd, Parlin, NJ 08859\n\n**Reach us:** phone\n"
+  }
 }
