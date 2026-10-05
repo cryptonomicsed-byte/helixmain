@@ -11,7 +11,7 @@
 ///
 /// To generate a persistent key for production:
 ///   openssl rand -hex 32  →  set GATEKEEPER_SIGNING_KEY=<output>
-use crate::types::{GovernanceReceipt, GateTrail, Receipt, Verdict};
+use crate::types::{GovernanceReceipt, Receipt, Verdict};
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 use rand::rngs::OsRng;
 use sha2::{Digest, Sha256};
