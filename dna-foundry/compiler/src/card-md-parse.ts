@@ -696,10 +696,13 @@ export function parseCardMd(
   };
 }
 
-export function verifyCardMd(md: string): { ok: boolean; reason: string; card?: any } {
+export function verifyCardMd(
+  md: string,
+  opts?: { prevProvenance?: Record<string, any> },
+): { ok: boolean; reason: string; card?: any } {
   let parsed: ParsedCardMd;
   try {
-    parsed = parseCardMd(md);
+    parsed = parseCardMd(md, opts);
   } catch (e: any) {
     return { ok: false, reason: "parse error: " + e.message };
   }
