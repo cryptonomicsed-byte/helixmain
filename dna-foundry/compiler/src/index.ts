@@ -319,6 +319,55 @@ export function compileCard(card: any, now = new Date().toISOString(), changelog
   };
 }
 
+/** Result of confirming inferred fields — promotes them to anchored state. */
+export interface ConfirmAnchorsResult {
+  md: string;
+  promoted: string[];
+  oldHash: string;
+  newHash: string;
+}
+
+/**
+ * Promote inferred fields to anchored state by writing machine anchor comments.
+ *
+ * Algorithm:
+ *   1. Parse the CARD.md (does not require a valid hash — draft cards accepted).
+ *   2. Collect all inferred fields (queued_for_confirmation: true).
+ *   3. Strip those inferred entries from card.field_provenance so the re-emitted
+ *      hash reflects the card *without* the inferred provenance flag.
+ *   4. Re-emit with emitCardMd — anchors are written for all fields, hash is
+ *      recomputed from the clean card object.
+ *
+ * Hash stability: for a card that was already compiler-created (no inferred
+ * provenance), this is a no-op — the hash is unchanged (AC-8 property).
+ * For a draft/hand-written card, the hash changes from the draft value to the
+ * canonical hash; no version bump is issued because no data changed.
+ *
+ * Refuses if the card has anchor_missing errors (anchors were deleted).
+ */
+export function confirmAnchors(raw: string): ConfirmAnchorsResult {
+  const parsed = parseCardMd(raw);
+  if (parsed.anchorErrors && parsed.anchorErrors.length > 0)
+    throw new Error("refusing to confirm: " + parsed.anchorErrors[0]);
+
+  const { card, changelog, frontmatter: fm } = parsed;
+  const oldHash = fm.hash || "none";
+
+  const promoted: string[] = [];
+  if (card.field_provenance) {
+    for (const [key, val] of Object.entries(card.field_provenance as Record<string, any>)) {
+      if (val && val.queued_for_confirmation) promoted.push(key);
+    }
+    for (const key of promoted) delete (card.field_provenance as any)[key];
+    if (Object.keys(card.field_provenance).length === 0) delete card.field_provenance;
+  }
+
+  const md = emitCardMd(card, changelog);
+  const newHashMatch = md.match(/^hash: (sha256:[0-9a-f]+)$/m);
+  const newHash = newHashMatch ? newHashMatch[1] : "unknown";
+  return { md, promoted, oldHash, newHash };
+}
+
 /** Field-level diff between two card versions. Paths use dotted notation. */
 export interface CardDiff {
   from_version: number;

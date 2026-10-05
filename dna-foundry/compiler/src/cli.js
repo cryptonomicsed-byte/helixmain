@@ -2,7 +2,7 @@
 /** CLI: compile a DNA card JSON into artifacts, verify/parse CARD.md, patch sound. */
 const fs = require("fs");
 const path = require("path");
-const { compileCard, diffCards, emitCardMd, parseCardMd, verifyCardMd, canonicalJson } = require("./index");
+const { compileCard, diffCards, emitCardMd, parseCardMd, verifyCardMd, canonicalJson, confirmAnchors } = require("./index");
 
 function arg(name) {
   const i = process.argv.indexOf(name);
@@ -107,12 +107,44 @@ if (process.argv.includes("--patch-sound")) {
   process.exit(0);
 }
 
+/**
+ * confirm-anchors: promote all inferred fields to anchored state.
+ * Writes anchor comments inline; recomputes hash from the clean card object.
+ * No version bump — data is unchanged, only the anchor provenance changes.
+ * Refuses if anchor_missing errors are present (anchors were deleted).
+ */
+if (process.argv.includes("--confirm-anchors")) {
+  if (!mdPath) {
+    console.error("usage: compile --confirm-anchors --md <CARD.md>");
+    process.exit(1);
+  }
+  const raw = fs.readFileSync(mdPath, "utf8");
+  let result;
+  try {
+    result = confirmAnchors(raw);
+  } catch (e) {
+    console.error(e.message);
+    process.exit(2);
+  }
+  const v = verifyCardMd(result.md);
+  if (!v.ok) { console.error("confirm produced invalid card: " + v.reason); process.exit(2); }
+  fs.writeFileSync(mdPath, result.md);
+  if (result.promoted.length === 0) {
+    console.log("no inferred fields found — card already fully anchored");
+  } else {
+    console.log(`confirmed ${result.promoted.length} field(s): ${result.promoted.join(", ")}`);
+    console.log(`hash: ${result.oldHash.slice(7, 19)}... -> ${result.newHash.slice(7, 19)}...`);
+  }
+  process.exit(0);
+}
+
 if (!cardPath) {
   console.error("usage: compile --card <card.json> --out <dir> [--diff <other-card.json>] [--changelog <cl.json>]");
   console.error("       compile --verify-md --md <CARD.md>");
   console.error("       compile --parse-md --md <CARD.md>");
   console.error("       compile --roundtrip --card <card.json> [--changelog <cl.json>]");
   console.error("       compile --patch-sound --md <CARD.md> --patch <sound-patch.json> [--changelog-line <text>]");
+  console.error("       compile --confirm-anchors --md <CARD.md>");
   process.exit(1);
 }
 

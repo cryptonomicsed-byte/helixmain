@@ -120,9 +120,62 @@ test("[AC-4] prose-only item: state=inferred, queued_for_confirmation=true", () 
 
 // ── AC-5 ──────────────────────────────────────────────────────────────────────
 // Compiler writes anchors inline after confirmation; resulting card parses as anchored.
-// (dna confirm CLI — promotion path not yet implemented)
 
-test.todo("[AC-5] anchor write-out after confirmation: card parses as anchored");
+const { confirmAnchors } = require("../index");
+
+test("[AC-5] anchor write-out after confirmation: card parses as anchored", () => {
+  // Start from a hand-written card with prose-only offering (like AC-4 — no anchors).
+  const bare = [
+    "---",
+    "format: business-card/0.1",
+    "id: dna_spec_ac05",
+    "version: 1",
+    "previous_hash: none",
+    "hash: sha256:" + "0".repeat(64),
+    "acting_hash: sha256:" + "0".repeat(64),
+    "organization_id: org_spec",
+    "status: draft",
+    "updated: 2026-10-01T00:00:00Z",
+    "---",
+    "",
+    "# Confirm Business",
+    "",
+    "## Offer",
+    "- **Hand-Written Item** · kind: service · price: null · confidence: 0.5",
+    "",
+  ].join("\n");
+
+  // Verify it starts as inferred (AC-4 invariant)
+  const before = parseCardMd(bare);
+  assert.equal(before.card.field_provenance?.["offerings[0]"]?.queued_for_confirmation, true);
+
+  // Confirm anchors — promotes inferred → anchored
+  const result = confirmAnchors(bare);
+  assert.equal(result.promoted.length, 1, "one inferred field promoted");
+  assert.equal(result.promoted[0], "offerings[0]");
+
+  // Re-parse the confirmed CARD.md
+  const after = parseCardMd(result.md);
+  assert.equal(
+    after.anchorProvenance?.["offerings[0]"]?.state,
+    "anchored",
+    "offering must be anchored after confirmation",
+  );
+  assert.equal(
+    after.card.field_provenance?.["offerings[0]"],
+    undefined,
+    "inferred provenance cleared after confirmation",
+  );
+
+  // The resulting card must pass verification (real hash, valid anchors)
+  const v = verifyCardMd(result.md);
+  assert.ok(v.ok, "confirmed card must pass verifyCardMd: " + v.reason);
+
+  // Hash stability: confirming an already-anchored card is a no-op on the hash
+  const result2 = confirmAnchors(result.md);
+  assert.equal(result2.promoted.length, 0, "no-op on already-anchored card");
+  assert.equal(result2.newHash, result2.oldHash, "hash unchanged when nothing to promote");
+});
 
 // ── AC-6 ──────────────────────────────────────────────────────────────────────
 // Compiler detects anchor deletion and blocks hash computation until resolved.
