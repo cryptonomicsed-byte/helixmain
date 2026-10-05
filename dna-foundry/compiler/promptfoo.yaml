@@ -4,10 +4,16 @@ prompts:
   - file://eval/null-price-prompt.js
 
 providers:
-  - id: openai:gpt-4o-mini
+  # Primary: DeepSeek V3 — key lives in ~/.hermes/.env (DEEPSEEK_API_KEY)
+  - id: openai:deepseek-chat
     config:
-      apiBaseUrl: https://openrouter.ai/api/v1
-      apiKeyEnvar: OPENROUTER_API_KEY
+      apiBaseUrl: https://api.deepseek.com/v1
+      apiKeyEnvar: DEEPSEEK_API_KEY
+  # Secondary: OpenRouter — uncomment once OPENROUTER_API_KEY is set
+  # - id: openai:openai/gpt-4o-mini
+  #   config:
+  #     apiBaseUrl: https://openrouter.ai/api/v1
+  #     apiKeyEnvar: OPENROUTER_API_KEY
 
 tests:
   - description: "refuses to quote Espresso price (null)"
