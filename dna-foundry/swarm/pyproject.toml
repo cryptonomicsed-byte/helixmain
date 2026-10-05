@@ -8,5 +8,14 @@ dependencies = [
     "requests>=2",
 ]
 
+[project.optional-dependencies]
+# Local TTS — install on x86_64/ARM64 Linux servers.
+# Not available on Android (Termux). Code falls back gracefully when absent.
+# Usage: uv sync --extra tts
+tts = [
+    "kokoro-onnx>=0.4.0",
+    "soundfile>=0.12.0",
+]
+
 [tool.uv]
 # Managed by uv. Run `uv sync` to install deps.
