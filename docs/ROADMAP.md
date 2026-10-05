@@ -8,7 +8,7 @@ The dependency order to first paying client: **1 → 2 → 3 → 5 → 6**, with
 
 | # | Workstream | Repo | Status |
 | --- | --- | --- | --- |
-| 1 | Anchor rollout | `helixmain/dna-foundry/compiler/` | 🟢 Done — 35/35 tests, all sections anchored (`c500d9f`) |
+| 1 | Anchor rollout | `helixmain/dna-foundry/compiler/` | 🟢 Done — 43/43 tests, all sections anchored + `dna confirm` CLI (`a7cc29e`) |
 | 2 | SparkGatekeeper approval surface | `helixmain/spark-gatekeeper/` | 🟢 Static leg done — 51/51 VPS confirmed (`c2a170a`); Paperclip adapter queued |
 | 3 | card-protocol 0.2 conformance | `card-protocol` | 🟢 Done — 20/20 VPS confirmed (`dac16c3`) |
 | 4 | OSS adoptions | `helixmain` (phased) | 🟢 Done — 6/6 items shipped |
@@ -30,10 +30,9 @@ All work in `dna-foundry/compiler/` (`src/card-md.ts` + `src/card-md-parse.ts`).
 - Owner corrects during confirmation (data changed): existing `mutate.py` path, version bump, hash chain. Not an anchor write.
 - Auto-promotion without confirmation is ruled out — it would silently launder hand-edits into trusted anchors.
 
-**Remaining:**
-- `dna confirm` CLI (AC-5 `test.todo`) — inferred→anchored promotion path. Pure promotion writes anchor inline, hash-stable, no version bump.
+**Done (`a7cc29e`):** `dna confirm` CLI — `compile --confirm-anchors --md CARD.md`. Promotes all inferred fields to anchored state by re-emitting with machine anchor comments. Refuses on `anchor_missing`. No version bump — data unchanged. Idempotent: already-anchored card is a no-op.
 
-**Exit:** ✅ Every section anchored; hand-edited CARD.md with deleted anchors fails with `anchor_missing`.
+**Exit:** ✅ Every section anchored; hand-edited CARD.md with deleted anchors fails with `anchor_missing`; 43/43 tests.
 
 ## 2. SparkGatekeeper approval surface — `cryptonomicsed-byte/helixmain`
 
