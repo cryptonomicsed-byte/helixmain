@@ -1,7 +1,28 @@
+pub mod api;
 pub mod gates;
 pub mod hold_queue;
 pub mod sidecar;
 pub mod types;
+
+use std::net::SocketAddr;
+use std::sync::Arc;
+
+/// Start the approval surface HTTP server.
+///
+/// `rp_id`     — WebAuthn relying-party domain, e.g. `"localhost"` or `"approve.helixmain.com"`
+/// `rp_origin` — Browser origin, e.g. `"http://localhost:9100"`
+pub async fn serve(
+    addr: impl Into<SocketAddr>,
+    gatekeeper: Arc<SparkGatekeeper>,
+    rp_id: &str,
+    rp_origin: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let state = Arc::new(api::AppState::new(gatekeeper, rp_id, rp_origin)?);
+    let app = api::router(state);
+    let listener = tokio::net::TcpListener::bind(addr.into()).await?;
+    axum::serve(listener, app).await?;
+    Ok(())
+}
 
 use crate::gates::{
     cause_effect::CauseEffectGate, correspondence::CorrespondenceGate, gender::GenderGate,
@@ -11,7 +32,6 @@ use crate::gates::{
 use crate::hold_queue::HoldQueue;
 use crate::types::{GateContext, GateResult, GateTrail, Receipt, Verdict};
 use chrono::Utc;
-use std::sync::Arc;
 use uuid::Uuid;
 
 pub struct SparkGatekeeper {

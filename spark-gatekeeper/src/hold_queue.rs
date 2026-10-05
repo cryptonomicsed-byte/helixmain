@@ -62,6 +62,11 @@ impl HoldQueue {
                 trail_json           TEXT NOT NULL,
                 previous_receipt_id  TEXT,
                 minted_at            TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS webauthn_passkeys (
+                user_id      TEXT PRIMARY KEY,
+                passkey_json TEXT NOT NULL,
+                updated_at   TEXT NOT NULL
             );",
         )?;
         Ok(Self {
@@ -170,6 +175,32 @@ impl HoldQueue {
             params![hold_id],
         )?;
         Ok(n > 0)
+    }
+
+    /// Upsert the single registered approver passkey (serialized Passkey JSON).
+    pub fn store_approver_passkey(&self, passkey_json: &str) -> rusqlite::Result<()> {
+        self.conn.lock().unwrap().execute(
+            "INSERT INTO webauthn_passkeys (user_id, passkey_json, updated_at)
+             VALUES ('approver', ?1, ?2)
+             ON CONFLICT(user_id) DO UPDATE SET passkey_json = ?1, updated_at = ?2",
+            params![passkey_json, Utc::now().to_rfc3339()],
+        )?;
+        Ok(())
+    }
+
+    /// Load the approver passkey JSON, if registered.
+    pub fn load_approver_passkey(&self) -> rusqlite::Result<Option<String>> {
+        self.conn
+            .lock()
+            .unwrap()
+            .query_row(
+                "SELECT passkey_json FROM webauthn_passkeys WHERE user_id = 'approver'",
+                [],
+                |row| row.get(0),
+            )
+            .ok()
+            .map(Ok)
+            .transpose()
     }
 
     /// Return all pending operations (for the TS approval surface to display).
