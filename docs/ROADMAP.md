@@ -1,6 +1,6 @@
 # HelixMain Roadmap
 
-Updated: 2026-10-05
+Updated: 2026-10-06
 
 ## Critical Path
 
@@ -10,7 +10,7 @@ The dependency order to first paying client: **1 → 2 → 3 → 5 → 6**, with
 | --- | --- | --- | --- |
 | 1 | Anchor rollout | `helixmain/dna-foundry/compiler/` | 🟢 Done — 35/35 tests, all sections anchored (`c500d9f`) |
 | 2 | SparkGatekeeper approval surface | `helixmain/spark-gatekeeper/` | 🟢 Static leg done — 51/51 VPS confirmed (`c2a170a`); Paperclip adapter queued |
-| 3 | card-protocol 0.2 conformance | `card-protocol` | 🔴 Pushed but unproven |
+| 3 | card-protocol 0.2 conformance | `card-protocol` | 🟢 Done — 20/20 VPS confirmed (`27d693d`) |
 | 4 | OSS adoptions | `helixmain` (phased) | 🔴 Queued by dependency |
 | 5 | Runtime exit proof | `helixmain` + `mesh-voice` + VPS | 🔴 Blocked on external gates |
 | 6 | Registry and Sui | `helixmain` (TBD) | 🔴 Post-revenue |
@@ -52,17 +52,19 @@ All work in `dna-foundry/compiler/` (`src/card-md.ts` + `src/card-md-parse.ts`).
 
 ## 3. card-protocol 0.2 conformance debt — `cryptonomicsed-byte/card-protocol`
 
-0.2 is pushed but not honestly proven. The current fixture is missing required `hash`/`acting_hash` fields; parity runs against an invalid fixture. This is the unsexy one — it looks done until someone tests it against real data.
+**Done (VPS confirmed `27d693d`, 20/20 green):**
+- Both open errata resolved: acting-layer key set locked to 7 JSON keys (identity, voice, offerings, operations, policies, handoff, knowledge); field names canonized to implementation keys throughout spec.
+- `business-card/0.2` spec (`spec/business-card-spec.md`) rewritten — tier annex, field name table, acting_hash definition, sound-via-voice.sonic clarification.
+- Schema bumped to `business-card/0.2`; `acting_hash` description corrected; `previous_version` property added.
+- `tierViews()` TS + Python with tier_hashes, envelope format, monotonicity guarantees (`public ⊆ authorized ⊆ owner`).
+- 2 AJV schema validation tests added: conformance fixture validates, minimal valid card validates.
+- Format string `business-card/0.1` → `0.2`; parser accepts both (migration path).
+- Package `@card-protocol/core` bumped to 0.2.0.
 
-**Remaining:**
+**Remaining (non-blocking):**
+- Public vs. private decision for the protocol repo (Justin call)
 
-- Define the acyclic hash order (tier-view/full-hash cycle is still unresolved)
-- Generate a schema-valid 0.2 fixture
-- Re-run schema, TS, Python, parity, and hash checks against the valid fixture
-- Audit `tierViews()` package version and export
-- Public vs. private decision for the protocol repo
-
-**Exit:** 0.2 conformance genuinely proven; public-vs-private decision made.
+**Exit:** ✅ 0.2 conformance proven; errata closed; 20/20 VPS green.
 
 ## 4. OSS adoptions — `cryptonomicsed-byte/helixmain` (phased)
 
