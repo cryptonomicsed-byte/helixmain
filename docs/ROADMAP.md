@@ -1,6 +1,6 @@
 # HelixMain Roadmap
 
-Updated: 2026-10-06
+Updated: 2026-10-07
 
 ## Critical Path
 
@@ -10,7 +10,7 @@ The dependency order to first paying client: **1 → 2 → 3 → 5 → 6**, with
 | --- | --- | --- | --- |
 | 1 | Anchor rollout | `helixmain/dna-foundry/compiler/` | 🟢 Done — 35/35 tests, all sections anchored (`c500d9f`) |
 | 2 | SparkGatekeeper approval surface | `helixmain/spark-gatekeeper/` | 🟢 Static leg done — 51/51 VPS confirmed (`c2a170a`); Paperclip adapter queued |
-| 3 | card-protocol 0.2 conformance | `card-protocol` | 🟢 Done — 20/20 VPS confirmed (`27d693d`) |
+| 3 | card-protocol 0.2 conformance | `card-protocol` | 🟢 Done — 20/20 VPS confirmed (`dac16c3`) |
 | 4 | OSS adoptions | `helixmain` (phased) | 🔴 Queued by dependency |
 | 5 | Runtime exit proof | `helixmain` + `mesh-voice` + VPS | 🔴 Blocked on external gates |
 | 6 | Registry and Sui | `helixmain` (TBD) | 🔴 Post-revenue |
@@ -52,14 +52,14 @@ All work in `dna-foundry/compiler/` (`src/card-md.ts` + `src/card-md-parse.ts`).
 
 ## 3. card-protocol 0.2 conformance debt — `cryptonomicsed-byte/card-protocol`
 
-**Done (VPS confirmed `27d693d`, 20/20 green):**
-- Both open errata resolved: acting-layer key set locked to 7 JSON keys (identity, voice, offerings, operations, policies, handoff, knowledge); field names canonized to implementation keys throughout spec.
-- `business-card/0.2` spec (`spec/business-card-spec.md`) rewritten — tier annex, field name table, acting_hash definition, sound-via-voice.sonic clarification.
+**Done (VPS confirmed `dac16c3`, 20/20 green):**
+- Both open errata resolved via `tier-annex-0.2.md §15`: acting-layer key set locked to 7 JSON keys; field names canonized to implementation keys throughout spec.
+- `business-card/0.2` spec rewritten — tier annex, field name table, acting_hash definition (7 keys, sound included via voice.sonic), hash prefix convention.
 - Schema bumped to `business-card/0.2`; `acting_hash` description corrected; `previous_version` property added.
-- `tierViews()` TS + Python with tier_hashes, envelope format, monotonicity guarantees (`public ⊆ authorized ⊆ owner`).
-- 2 AJV schema validation tests added: conformance fixture validates, minimal valid card validates.
-- Format string `business-card/0.1` → `0.2`; parser accepts both (migration path).
-- Package `@card-protocol/core` bumped to 0.2.0.
+- `tierViews()` TS + Python: derives `public ⊆ authorized ⊆ owner` views on demand, returns tier_hashes alongside. **Hash cycle broken by construction** — `tier_hashes` was removed from the card schema, so the card hash cannot include it. Dependency is one-way: views include `card.hash`; nothing flows back. No cycle to manage.
+- `minimal-card.json` conformance fixture carries real `hash` + `acting_hash`; `tiered-card.json` (tier-test fixture) also fixed with correct hashes — both now schema-valid.
+- 20 tests: 10 round-trip/hash + 2 AJV schema validation + 8 tier (monotonicity, public/authorized/owner splits, null-price, no private-key leakage, tier-hash self-consistency).
+- Format string `0.1` → `0.2`; parser accepts both. Package `@card-protocol/core` → 0.2.0.
 
 **Remaining (non-blocking):**
 - Public vs. private decision for the protocol repo (Justin call)
