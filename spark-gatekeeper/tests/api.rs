@@ -214,7 +214,7 @@ async fn approve_without_challenge_returns_conflict() {
             },
             "type": "public-key"
         },
-        "previous_receipt_id": null
+        "parent_receipt_hash": null
     });
     let app = make_app(gatekeeper);
     let resp = app

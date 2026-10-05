@@ -248,3 +248,29 @@ pub struct Receipt {
     pub previous_receipt_id: Option<String>,
     pub minted_at: DateTime<Utc>,
 }
+
+/// GovernanceReceipt: Ed25519-signed, JCS-canonicalized receipt with a hash chain.
+/// The signed body is all fields except `signer_key` and `signature`.
+/// Verifiable offline — the signer public key is embedded in the receipt itself.
+///
+/// Chain: `parent_receipt_hash = SHA-256(JCS-body of the previous GovernanceReceipt)`
+/// This commits to content (not just an ID reference) and is verifiable without the DB.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GovernanceReceipt {
+    pub id: String,
+    pub card_id: String,
+    pub card_version: u32,
+    pub acting_hash: String,
+    pub action_id: String,
+    pub final_verdict: Verdict,
+    pub trail: Vec<GateTrail>,
+    /// SHA-256 hex of the JCS-canonical body of the previous GovernanceReceipt.
+    /// None for the first receipt in the chain.
+    pub parent_receipt_hash: Option<String>,
+    pub minted_at: DateTime<Utc>,
+    /// Hex-encoded Ed25519 public key of the signer (embedded for offline verification).
+    pub signer_key: String,
+    /// Hex-encoded Ed25519 signature over the JCS-canonical body (all fields except
+    /// signer_key and signature themselves).
+    pub signature: String,
+}

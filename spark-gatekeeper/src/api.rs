@@ -13,7 +13,7 @@
 /// before calling HoldQueue::approve(). Minting the receipt is atomic with approval.
 /// Anyone who can POST to /held/:id/approve must first win a WebAuthn ceremony
 /// against a registered passkey — there is no other code path to approval.
-use crate::{hold_queue::HoldQueue, SparkGatekeeper};
+use crate::{receipt_signer::ReceiptSigner, SparkGatekeeper};
 use axum::{
     extract::{Path, State},
     http::StatusCode,
@@ -35,6 +35,8 @@ use webauthn_rs::prelude::*;
 pub struct AppState {
     pub gatekeeper: Arc<SparkGatekeeper>,
     pub webauthn: Arc<Webauthn>,
+    /// Ed25519 signer for GovernanceReceipt minting.
+    pub signer: ReceiptSigner,
     /// Short-lived authentication states: hold_id → PasskeyAuthentication.
     /// Populated by /held/:id/challenge, consumed by /held/:id/approve.
     auth_states: Mutex<HashMap<String, PasskeyAuthentication>>,
@@ -52,6 +54,7 @@ impl AppState {
         Ok(Self {
             gatekeeper,
             webauthn: Arc::new(webauthn),
+            signer: ReceiptSigner::from_env_or_generate(),
             auth_states: Mutex::new(HashMap::new()),
             reg_states: Mutex::new(HashMap::new()),
         })
@@ -121,7 +124,9 @@ pub struct SetupFinishRequest {
 #[derive(Deserialize)]
 pub struct ApproveRequest {
     pub credential: PublicKeyCredential,
-    pub previous_receipt_id: Option<String>,
+    /// SHA-256 hex of the JCS-canonical body of the previous GovernanceReceipt.
+    /// None for the first approval in the chain.
+    pub parent_receipt_hash: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -264,14 +269,18 @@ async fn held_approve(
             .store_approver_passkey(&updated_json)?;
     }
 
-    // Atomically approve and mint the receipt.
+    // Atomically approve and mint the base receipt, then sign it as a GovernanceReceipt.
+    // The two steps are sequential in the same request — there is no window where the
+    // hold is approved but the receipt is unsigned.
     let receipt = state
         .gatekeeper
         .hold_queue
-        .approve(&hold_id, body.previous_receipt_id)?
+        .approve(&hold_id, None)?
         .ok_or(ApiError::NotFound)?;
 
-    Ok(Json(receipt))
+    let governance_receipt = state.signer.sign(&receipt, body.parent_receipt_hash);
+
+    Ok(Json(governance_receipt))
 }
 
 /// Deny a held operation. No ceremony required — denying is the safe path.

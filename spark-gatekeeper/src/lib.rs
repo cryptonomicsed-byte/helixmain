@@ -1,6 +1,7 @@
 pub mod api;
 pub mod gates;
 pub mod hold_queue;
+pub mod receipt_signer;
 pub mod sidecar;
 pub mod types;
 
