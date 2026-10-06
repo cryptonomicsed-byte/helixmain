@@ -8,6 +8,11 @@ ExecStart=/usr/local/bin/spark-gatekeeper
 Restart=on-failure
 RestartSec=5
 
+# Secrets file (0600 root:root) — create before starting the service:
+#   echo "GATEKEEPER_SIGNING_KEY=$(openssl rand -hex 32)" > /etc/spark-gatekeeper.env
+#   chmod 0600 /etc/spark-gatekeeper.env
+EnvironmentFile=/etc/spark-gatekeeper.env
+
 Environment=BIND_ADDR=127.0.0.1:9100
 Environment=DB_PATH=/var/lib/spark-gatekeeper/queue.db
 Environment=RP_ID=omokoda.duckdns.org
