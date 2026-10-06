@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 
 export default defineConfig({
+  base: "/spark/",
   server: {
     port: 9101,
     proxy: {

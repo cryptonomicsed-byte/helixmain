@@ -90,9 +90,7 @@ async function approveHold(
 
   // Step 2: browser ceremony — authenticator signs the challenge.
   // webauthn-rs sends { publicKey: PublicKeyCredentialRequestOptions }.
-  const credential = await startAuthentication({
-    optionsJSON: chalJSON.publicKey,
-  });
+  const credential = await startAuthentication(chalJSON.publicKey);
 
   // Step 3: send assertion + optional chain hash → Rust verifies → approves → mints.
   const approveResp = await fetch(`/held/${holdId}/approve`, {
@@ -124,9 +122,7 @@ async function registerPasskey(
   }
   const chalJSON = await chalResp.json();
 
-  const credential = await startRegistration({
-    optionsJSON: chalJSON.publicKey,
-  });
+  const credential = await startRegistration(chalJSON.publicKey);
 
   const finishResp = await fetch("/setup/finish", {
     method: "POST",

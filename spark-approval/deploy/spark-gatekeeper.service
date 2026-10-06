@@ -1,0 +1,17 @@
+[Unit]
+Description=SparkGatekeeper approval surface
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/spark-gatekeeper
+Restart=on-failure
+RestartSec=5
+
+Environment=BIND_ADDR=127.0.0.1:9100
+Environment=DB_PATH=/var/lib/spark-gatekeeper/queue.db
+Environment=RP_ID=omokoda.duckdns.org
+Environment=RP_ORIGIN=https://omokoda.duckdns.org
+
+[Install]
+WantedBy=multi-user.target
