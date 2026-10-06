@@ -180,7 +180,7 @@ if (diffPath) {
 }
 
 const cl = changelogPath ? JSON.parse(fs.readFileSync(changelogPath, "utf8")) : [];
-const compiled = compileCard(card, new Date().toISOString(), cl);
+const compiled = compileCard(card, new Date().toISOString(), cl, openshellRuntime());
 
 if (outDir) {
   fs.mkdirSync(outDir, { recursive: true });
@@ -192,10 +192,11 @@ if (outDir) {
   fs.writeFileSync(path.join(outDir, "CARD.md"), compiled.cardMd);
   fs.writeFileSync(path.join(outDir, "CHANGELOG.json"), JSON.stringify(cl, null, 2));
   // card.compile_openshell_policy -> the sandbox egress/landlock policy OpenShell consumes.
-  // Deterministic: same card + runtime -> byte-identical YAML. Never invents a host.
+  // The policy object came out of compileCard (one call, no double compute); the
+  // CLI only serialises it. Deterministic: same card + runtime -> byte-identical YAML.
   fs.writeFileSync(
     path.join(outDir, "openshell-policy.yaml"),
-    emitOpenshellPolicyYaml(compileOpenshellPolicy(card, openshellRuntime()))
+    emitOpenshellPolicyYaml(compiled.openshellPolicy)
   );
   for (const [rel, content] of Object.entries(compiled.hugoSite)) {
     const full = path.join(outDir, "hugo", rel);

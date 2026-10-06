@@ -80,5 +80,6 @@
     "content/_index.md": "---\ntitle: \"Santino's Pizza\"\ntagline: \"Family owned and operated since 1970.\"\n---\n\nFamily owned and operated since 1970.\n",
     "content/menu.md": "---\ntitle: \"Menu\"\n---\n\n- **Classic Cheese Pizza**\n- **Pepperoni Pizza**\n",
     "content/contact.md": "---\ntitle: \"Contact\"\n---\n\n**Hours:** Mon–Fri 11am–9pm\n\n**Phone:** (732) 721-3163\n\n**Location:** 499 Ernston Rd, Parlin, NJ 08859\n\n**Reach us:** phone\n"
-  }
+  },
+  "openshellPolicy": null
 }

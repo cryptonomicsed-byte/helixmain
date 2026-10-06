@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   compileOpenshellPolicy,
+  compileCard,
   actingHash,
   type SandboxRuntimeConfig,
 } from "../index.js";
@@ -84,4 +85,17 @@ test("missing card id or binary path throws", () => {
     () => compileOpenshellPolicy(CARD, { ...RUNTIME, agentBinaryPath: "" }),
     /agentBinaryPath is required/
   );
+});
+
+test("compileCard carries the sandbox policy as a value — null without a runtime", () => {
+  const withRuntime = compileCard(CARD, "2026-10-03T00:00:00Z", [], RUNTIME);
+  assert.deepEqual(withRuntime.openshellPolicy, compileOpenshellPolicy(CARD, RUNTIME));
+
+  // No runtime supplied -> null, never invented. Purity preserved.
+  const without = compileCard(CARD, "2026-10-03T00:00:00Z", [], null);
+  assert.equal(without.openshellPolicy, null);
+
+  // Backwards-compatible default: existing 3-arg callers get null.
+  const defaulted = compileCard(CARD, "2026-10-03T00:00:00Z", []);
+  assert.equal(defaulted.openshellPolicy, null);
 });

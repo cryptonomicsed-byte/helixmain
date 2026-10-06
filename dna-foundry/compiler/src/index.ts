@@ -1,6 +1,11 @@
 import { canonicalJson, cardHash } from "./business-md";
 import { emitCardMd, actingHash, ACTING_KEYS } from "./card-md";
 import { parseCardMd, verifyCardMd } from "./card-md-parse";
+import {
+  compileOpenshellPolicy,
+  type CompiledOpenshellPolicy,
+  type SandboxRuntimeConfig,
+} from "./openshell-policy";
 
 export { canonicalJson, cardHash, emitCardMd, actingHash, ACTING_KEYS, parseCardMd, verifyCardMd };
 export {
@@ -60,6 +65,13 @@ export interface CompiledOutputs {
   ragManifest: RagManifest;
   dnaFieldsUsed: string[];
   hugoSite: Record<string, string>;
+  /**
+   * The card compiled to its OpenShell sandbox policy, or null when no runtime
+   * was supplied. Still pure — the caller decides the runtime; given the same
+   * card and runtime the result is byte-identical. Persisting it stays the CLI's
+   * job (this is a value, not a write).
+   */
+  openshellPolicy: CompiledOpenshellPolicy | null;
 }
 
 /** Map a card policy topic onto the risk/verdict taxonomy. */
@@ -308,7 +320,12 @@ export function compileHugoSite(card: any): Record<string, string> {
   return files;
 }
 
-export function compileCard(card: any, now = new Date().toISOString(), changelog: string[] = []): CompiledOutputs {
+export function compileCard(
+  card: any,
+  now = new Date().toISOString(),
+  changelog: string[] = [],
+  runtime: SandboxRuntimeConfig | null = null
+): CompiledOutputs {
   return {
     cardMd: emitCardMd(card, changelog),
     systemPrompt: compileSystemPrompt(card),
@@ -317,6 +334,10 @@ export function compileCard(card: any, now = new Date().toISOString(), changelog
     ragManifest: compileRagManifest(card),
     dnaFieldsUsed: dnaFieldsUsed(card),
     hugoSite: compileHugoSite(card),
+    // Only when the caller supplies a runtime: the sandbox policy as a value,
+    // so consumers (CLI, boot script, job 3's binding) need no disk round-trip.
+    // No runtime -> null. The compiler never invents a host.
+    openshellPolicy: runtime ? compileOpenshellPolicy(card, runtime) : null,
   };
 }
 
