@@ -65,10 +65,54 @@ try:
     npub = bech32_encode(HRP, [0] + converted)  # type: ignore
     print(json.dumps({"sk_hex": sk_hex, "pk_hex": pk_hex, "npub": npub}))
 except Exception as e:
-    # fallback: just generate the hex, no bech32
+    # No minipae: derive with pure-Python secp256k1 (no dependency), then bech32 npub.
     import secrets
+    P  = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F
+    N  = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
+    Gx = 0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798
+    Gy = 0x483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8
+    def _add(p, q):
+        if p is None: return q
+        if q is None: return p
+        if p[0] == q[0] and (p[1] + q[1]) % P == 0: return None
+        if p == q:
+            lam = (3 * p[0] * p[0] * pow(2 * p[1], P - 2, P)) % P
+        else:
+            lam = ((q[1] - p[1]) * pow(q[0] - p[0], P - 2, P)) % P
+        x = (lam * lam - p[0] - q[0]) % P
+        return (x, (lam * (p[0] - x) - p[1]) % P)
+    def _mul(k, pt):
+        r = None
+        while k:
+            if k & 1: r = _add(r, pt)
+            pt = _add(pt, pt)
+            k >>= 1
+        return r
     sk_hex = secrets.token_bytes(32).hex()
-    print(json.dumps({"sk_hex": sk_hex, "pk_hex": "DERIVE_ON_BOOT", "error": str(e)}))
+    px, _py = _mul(int(sk_hex, 16) % N, (Gx, Gy))
+    pk32 = px.to_bytes(32, "big")          # nostr pubkeys are x-only
+    CH = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
+    def _pm(vals):
+        gen = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3]
+        chk = 1
+        for v in vals:
+            b = chk >> 25
+            chk = ((chk & 0x1ffffff) << 5) ^ v
+            for i in range(5):
+                chk ^= gen[i] if ((b >> i) & 1) else 0
+        return chk
+    def _cb(data):
+        acc = 0; bits = 0; out = []
+        for value in data:
+            acc = ((acc << 8) | value) & 0xFFFFFF; bits += 8
+            while bits >= 5:
+                bits -= 5; out.append((acc >> bits) & 31)
+        if bits: out.append((acc << (5 - bits)) & 31)
+        return out
+    data = [0] + _cb(pk32)
+    pm = _pm([ord(c) >> 5 for c in "npub"] + [0] + [ord(c) & 31 for c in "npub"] + data + [0] * 6) ^ 1
+    npub = "npub1" + "".join(CH[d] for d in data) + "".join(CH[(pm >> 5 * (5 - i)) & 31] for i in range(6))
+    print(json.dumps({"sk_hex": sk_hex, "pk_hex": pk32.hex(), "npub": npub, "note": "pure-python secp256k1 (minipae absent)"}))
 PYEOF
 )
 
@@ -86,7 +130,7 @@ echo "==> patching config.toml"
 # Read the system prompt from the compiled card (strip provenance section)
 SYSTEM_PROMPT=$(python3 - <<PYEOF
 import re, sys
-with open("$POLICY_DIR/../system-prompt.md") as f:
+with open("$POLICY_DIR/system-prompt.md") as f:
     content = f.read()
 # Drop the Provenance section (verbose field-by-field trace, not useful at runtime)
 content = re.sub(r'\n## Provenance\n.*', '', content, flags=re.DOTALL)
@@ -139,7 +183,11 @@ PYEOF
 
 # ── validate + restart ────────────────────────────────────────────────────────
 echo "==> validating config"
-/usr/local/bin/zeroclaw --config-dir /etc/zeroclaw config validate
+# `zeroclaw config validate` does not exist (subcommands: schema/list/get/set/init/migrate/patch/docs/generate).
+# Validate by parsing the TOML, then confirm the daemon resolves the agent's channel + bundle.
+python3 -c "import tomllib; tomllib.load(open('$ZEROCLAW_CONFIG','rb')); print('  TOML OK')"
+/usr/local/bin/zeroclaw --config-dir /etc/zeroclaw config get agents.santinos.channels
+/usr/local/bin/zeroclaw --config-dir /etc/zeroclaw config get agents.santinos.mcp_bundles
 
 echo "==> restarting zeroclaw"
 systemctl restart zeroclaw
