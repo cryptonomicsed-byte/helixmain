@@ -13,7 +13,11 @@
 /// before calling HoldQueue::approve(). Minting the receipt is atomic with approval.
 /// Anyone who can POST to /held/:id/approve must first win a WebAuthn ceremony
 /// against a registered passkey — there is no other code path to approval.
+use crate::sidecar::{self, SidecarResponse};
+use crate::types::{Action, ActionRequest, Card, GateContext, PolicySeed, ToolAllowlist};
 use crate::{receipt_signer::ReceiptSigner, SparkGatekeeper};
+use chrono::Utc;
+use uuid::Uuid;
 use axum::{
     extract::{Path, State},
     http::StatusCode,
@@ -32,11 +36,24 @@ use webauthn_rs::prelude::*;
 
 // ── AppState ──────────────────────────────────────────────────────────────────
 
+/// The card policy the gate engine judges against. Loaded once at startup so an
+/// agent cannot supply its own policy on the request it is being judged for.
+pub struct LoadedPolicy {
+    pub card: Card,
+    pub policy_seed: PolicySeed,
+    pub tool_allowlist: ToolAllowlist,
+}
+
 pub struct AppState {
     pub gatekeeper: Arc<SparkGatekeeper>,
     pub webauthn: Arc<Webauthn>,
     /// Ed25519 signer for GovernanceReceipt minting.
     pub signer: ReceiptSigner,
+    /// Card policy for POST /invoke. `None` = no policy configured; the approval
+    /// surface still works, but /invoke answers 503 until a card is loaded.
+    pub policy: Option<Arc<LoadedPolicy>>,
+    /// MCP tool bus an `allow` verdict forwards to. Empty = no bus configured.
+    pub tool_bus_url: String,
     /// Short-lived authentication states: hold_id → PasskeyAuthentication.
     /// Populated by /held/:id/challenge, consumed by /held/:id/approve.
     auth_states: Mutex<HashMap<String, PasskeyAuthentication>>,
@@ -55,9 +72,25 @@ impl AppState {
             gatekeeper,
             webauthn: Arc::new(webauthn),
             signer: ReceiptSigner::from_env_or_generate(),
+            policy: None,
+            tool_bus_url: String::new(),
             auth_states: Mutex::new(HashMap::new()),
             reg_states: Mutex::new(HashMap::new()),
         })
+    }
+
+    /// Like [`AppState::new`], but with a card policy loaded, enabling `/invoke`.
+    pub fn with_policy(
+        gatekeeper: Arc<SparkGatekeeper>,
+        rp_id: &str,
+        rp_origin: &str,
+        policy: LoadedPolicy,
+        tool_bus_url: String,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        let mut state = Self::new(gatekeeper, rp_id, rp_origin)?;
+        state.policy = Some(Arc::new(policy));
+        state.tool_bus_url = tool_bus_url;
+        Ok(state)
     }
 }
 
@@ -72,6 +105,7 @@ pub enum ApiError {
     Queue(rusqlite::Error),
     Json(serde_json::Error),
     BadRequest(String),
+    NoPolicyLoaded,
 }
 
 impl From<WebauthnError> for ApiError {
@@ -102,6 +136,10 @@ impl IntoResponse for ApiError {
             ApiError::Queue(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("queue error: {e}")),
             ApiError::Json(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("json error: {e}")),
             ApiError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg),
+            ApiError::NoPolicyLoaded => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "no card policy loaded — set SPARK_CARD / SPARK_POLICY_SEED / SPARK_TOOL_ALLOWLIST".to_string(),
+            ),
         };
         (status, body).into_response()
     }
@@ -139,6 +177,7 @@ pub struct DenyResponse {
 pub fn router(state: Arc<AppState>) -> Router {
     Router::new()
         .route("/health", get(health))
+        .route("/invoke", post(invoke))
         .route("/held", get(list_held))
         .route("/held/:id", get(get_held))
         .route("/setup/challenge", post(setup_challenge))
@@ -160,6 +199,104 @@ async fn health() -> impl IntoResponse {
         "service": "spark-gatekeeper",
         "version": env!("CARGO_PKG_VERSION"),
     }))
+}
+
+/// POST /invoke — the sidecar contract described in `sidecar.rs`.
+///
+/// An agent submits an action; the 7 gates run; the answer is exactly one of:
+///   200  allowed  — forwarded to the tool bus (if one is configured)
+///   202  held     — `{"hold_id": ...}`; escalated, awaiting human approval
+///   403  denied   — the denial receipt
+///
+/// The card, policy seed and tool allowlist come from server state, never from
+/// the request — a caller must not be able to choose the policy judging it.
+async fn invoke(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<ActionRequest>,
+) -> Result<Response, ApiError> {
+    let policy = state.policy.as_ref().ok_or(ApiError::NoPolicyLoaded)?;
+
+    let action = Action {
+        id: req.action_id.unwrap_or_else(|| Uuid::new_v4().to_string()),
+        session_id: req.session_id,
+        kind: req.kind,
+        tool: req.tool,
+        payload: req.payload,
+        acting_hash: req.acting_hash,
+        initiated_at: Utc::now(),
+    };
+    let action_id = action.id.clone();
+
+    let ctx = GateContext {
+        card: policy.card.clone(),
+        policy_seed: policy.policy_seed.clone(),
+        tool_allowlist: policy.tool_allowlist.clone(),
+        session: req.session,
+        action,
+    };
+
+    match sidecar::dispatch(&state.gatekeeper, &ctx) {
+        SidecarResponse::Forwarded { body } => {
+            let outcome = forward_to_tool_bus(&state.tool_bus_url, &body).await;
+            Ok((
+                StatusCode::OK,
+                Json(serde_json::json!({
+                    "status": "allowed",
+                    "action_id": action_id,
+                    "tool_bus": state.tool_bus_url,
+                    "forwarded": outcome.is_ok(),
+                    "forward_error": outcome.err(),
+                })),
+            )
+                .into_response())
+        }
+        SidecarResponse::Held { hold_id } => Ok((
+            StatusCode::ACCEPTED,
+            Json(serde_json::json!({
+                "status": "held",
+                "action_id": action_id,
+                "hold_id": hold_id,
+            })),
+        )
+            .into_response()),
+        SidecarResponse::Denied { receipt_json } => {
+            let receipt =
+                serde_json::from_str(&receipt_json).unwrap_or(serde_json::Value::Null);
+            Ok((
+                StatusCode::FORBIDDEN,
+                Json(serde_json::json!({
+                    "status": "denied",
+                    "action_id": action_id,
+                    "receipt": receipt,
+                })),
+            )
+                .into_response())
+        }
+    }
+}
+
+/// Best-effort forward of an allowed action to the MCP tool bus.
+///
+/// An `allow` verdict stands even when the bus is unreachable — the forward
+/// result is reported, never fatal. Empty `bus` means no bus is configured.
+async fn forward_to_tool_bus(bus: &str, body: &str) -> Result<(), String> {
+    use tokio::io::AsyncWriteExt;
+    if bus.is_empty() {
+        return Err("no tool bus configured (TOOL_BUS_URL unset)".into());
+    }
+    let hostport = bus.trim_start_matches("http://").trim_end_matches('/');
+    let mut stream = tokio::net::TcpStream::connect(hostport)
+        .await
+        .map_err(|e| format!("connect {hostport}: {e}"))?;
+    let req = format!(
+        "POST /invoke HTTP/1.1\r\nHost: {hostport}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        body.len()
+    );
+    stream
+        .write_all(req.as_bytes())
+        .await
+        .map_err(|e| format!("write: {e}"))?;
+    Ok(())
 }
 
 async fn list_held(

@@ -9,10 +9,10 @@ use axum::{
 };
 use http_body_util::BodyExt;
 use spark_gatekeeper::{
-    api::AppState,
+    api::{AppState, LoadedPolicy},
     gates::rhythm::{InMemoryRateLimitStore, RhythmGate},
     hold_queue::HoldQueue,
-    types::{Action, ActionKind, Card, GateContext, GateResult, GateTrail, PolicySeed, ToolAllowlist, Verdict},
+    types::{Action, ActionKind, Card, GateContext, GateResult, GateTrail, PolicySeed, Session, ToolAllowlist, Verdict},
     SparkGatekeeper,
 };
 use std::sync::Arc;
@@ -41,6 +41,47 @@ fn make_app(gatekeeper: Arc<SparkGatekeeper>) -> axum::Router {
         AppState::new(gatekeeper, "localhost", "http://localhost:9100").unwrap(),
     );
     spark_gatekeeper::api::router(state)
+}
+
+/// Router with the real Santino's v4 policy loaded — the /invoke path.
+fn make_app_with_policy(gatekeeper: Arc<SparkGatekeeper>) -> axum::Router {
+    let (card, policy_seed, tool_allowlist) = load();
+    let state = Arc::new(
+        AppState::with_policy(
+            gatekeeper,
+            "localhost",
+            "http://localhost:9100",
+            LoadedPolicy { card, policy_seed, tool_allowlist },
+            String::new(),
+        )
+        .unwrap(),
+    );
+    spark_gatekeeper::api::router(state)
+}
+
+async fn post_invoke(
+    app: axum::Router,
+    body: serde_json::Value,
+) -> (StatusCode, serde_json::Value) {
+    let resp = app
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/invoke")
+                .header("content-type", "application/json")
+                .body(Body::from(body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let status = resp.status();
+    // Some responses are plain text (e.g. the 503 when no policy is loaded), so
+    // fall back to a JSON string instead of panicking on a non-JSON body.
+    let bytes = resp.into_body().collect().await.unwrap().to_bytes();
+    let value = serde_json::from_slice(&bytes).unwrap_or_else(|_| {
+        serde_json::Value::String(String::from_utf8_lossy(&bytes).into_owned())
+    });
+    (status, value)
 }
 
 fn escalate_result(action_id: &str) -> GateResult {
@@ -280,4 +321,59 @@ async fn challenge_without_registered_passkey_returns_precondition_failed() {
         .unwrap();
     // 412 Precondition Failed: no passkey registered yet
     assert_eq!(resp.status(), StatusCode::PRECONDITION_FAILED);
+}
+
+// ── POST /invoke — the sidecar contract (sidecar.rs) ──────────────────────────
+
+#[tokio::test]
+async fn invoke_without_policy_returns_503() {
+    // No policy in state → the gate engine cannot judge; must refuse, not guess.
+    let app = make_app(make_gatekeeper());
+    let (status, _) = post_invoke(app, serde_json::json!({"kind": "think"})).await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+}
+
+#[tokio::test]
+async fn invoke_refund_escalates_to_hold_queue() {
+    // "refunds" is the high-risk rule in the seed → escalate → hold queue.
+    // think/act require a session (birth → think → act), so supply one.
+    let (card, _, _) = load();
+    let session = Session {
+        id: "sess_invoke".into(),
+        card_id: card.id.clone(),
+        card_version: card.version,
+        acting_hash: card.acting_hash.clone(),
+        birth_receipt_id: "rcpt_birth".into(),
+        created_at: chrono::Utc::now(),
+        expires_at: chrono::Utc::now() + chrono::Duration::hours(1),
+    };
+    let app = make_app_with_policy(make_gatekeeper());
+    let (status, v) = post_invoke(
+        app,
+        serde_json::json!({
+            "kind": "act",
+            "tool": "refunds",
+            "acting_hash": card.acting_hash,
+            "session_id": session.id.clone(),
+            "session": session,
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::ACCEPTED, "refund should escalate, got {v}");
+    assert_eq!(v["status"], "held");
+    assert!(v["hold_id"].as_str().map_or(false, |s| !s.is_empty()));
+}
+
+#[tokio::test]
+async fn invoke_draft_deploy_is_denied() {
+    // Demo 1: Santino's v4 draft card cannot ship — polarity denies.
+    let (card, _, _) = load();
+    let app = make_app_with_policy(make_gatekeeper());
+    let (status, v) = post_invoke(
+        app,
+        serde_json::json!({"kind": "deploy", "acting_hash": card.acting_hash}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN, "draft deploy should be denied, got {v}");
+    assert_eq!(v["status"], "denied");
 }

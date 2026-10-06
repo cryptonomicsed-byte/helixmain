@@ -19,6 +19,29 @@ pub async fn serve(
     rp_origin: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let state = Arc::new(api::AppState::new(gatekeeper, rp_id, rp_origin)?);
+    run(addr, state).await
+}
+
+/// Like [`serve`], but with a card policy loaded so `POST /invoke` can run the
+/// 7 gates over a submitted action. Without a policy, `/invoke` answers 503.
+pub async fn serve_with_policy(
+    addr: impl Into<SocketAddr>,
+    gatekeeper: Arc<SparkGatekeeper>,
+    rp_id: &str,
+    rp_origin: &str,
+    policy: api::LoadedPolicy,
+    tool_bus_url: String,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let state = Arc::new(api::AppState::with_policy(
+        gatekeeper, rp_id, rp_origin, policy, tool_bus_url,
+    )?);
+    run(addr, state).await
+}
+
+async fn run(
+    addr: impl Into<SocketAddr>,
+    state: Arc<api::AppState>,
+) -> Result<(), Box<dyn std::error::Error>> {
     let app = api::router(state);
     let listener = tokio::net::TcpListener::bind(addr.into()).await?;
     axum::serve(listener, app).await?;

@@ -190,6 +190,37 @@ impl ActionKind {
     }
 }
 
+// ── Sidecar invoke contract ───────────────────────────────────────────────────
+
+/// Request body for `POST /invoke` — an agent's submission into the gate engine.
+///
+/// This is the contract `sidecar.rs` describes: the caller posts an action, the
+/// gatekeeper runs the 7 gates and answers allow (200) / held (202) / denied (403).
+/// The card, policy seed and tool allowlist are loaded once at startup, not sent
+/// per request — an agent must not be able to choose the policy that judges it.
+#[derive(Debug, Clone, Deserialize)]
+pub struct ActionRequest {
+    pub kind: ActionKind,
+    #[serde(default)]
+    pub tool: Option<String>,
+    #[serde(default)]
+    pub payload: serde_json::Value,
+    /// The acting_hash the caller believes it is operating under.
+    #[serde(default)]
+    pub acting_hash: String,
+    #[serde(default)]
+    pub session_id: String,
+    /// The session the action runs under. The gates require one for think/act
+    /// (birth → think → act); without it those actions are denied — fail-closed.
+    /// Session *issuance* (a birth endpoint + session store) is not implemented
+    /// yet, so for now the caller supplies the session it was issued.
+    #[serde(default)]
+    pub session: Option<Session>,
+    /// Optional caller-supplied action id; a UUID is minted when omitted.
+    #[serde(default)]
+    pub action_id: Option<String>,
+}
+
 // ── Gate context (immutable, passed to every gate) ───────────────────────────
 
 #[derive(Debug, Clone)]
