@@ -55,7 +55,9 @@ test("egress allowlist is exactly the declared endpoints", () => {
   const keys = Object.keys(policy.network_policies).sort();
   assert.deepEqual(keys, ["hold_queue_sidecar", "inference", "pocketbase"]);
   const hq = policy.network_policies.hold_queue_sidecar;
-  assert.deepEqual(hq.endpoints, [{ host: "127.0.0.1", port: 9100, path: "/mcp/*" }]);
+  // Frozen contract: the SparkGatekeeper sidecar serves POST /invoke on 9100
+  // (sidecar.rs), not an /mcp/* mount — the sidecar IS the path to the tool bus.
+  assert.deepEqual(hq.endpoints, [{ host: "127.0.0.1", port: 9100, path: "/invoke" }]);
   assert.deepEqual(hq.binaries, [{ path: "/usr/local/bin/zeroclaw" }]);
 });
 

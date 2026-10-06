@@ -2,11 +2,34 @@
 /** CLI: compile a DNA card JSON into artifacts, verify/parse CARD.md, patch sound. */
 const fs = require("fs");
 const path = require("path");
-const { compileCard, diffCards, emitCardMd, parseCardMd, verifyCardMd, canonicalJson, confirmAnchors } = require("./index");
+const { compileCard, diffCards, emitCardMd, parseCardMd, verifyCardMd, canonicalJson, confirmAnchors, compileOpenshellPolicy, emitOpenshellPolicyYaml } = require("./index");
 
 function arg(name) {
   const i = process.argv.indexOf(name);
   return i >= 0 ? process.argv[i + 1] : null;
+}
+
+/**
+ * OpenShell sandbox runtime config — the endpoints the sandboxed agent may reach.
+ *
+ * Frozen contract: hold queue is 127.0.0.1:9100, path /invoke (the SparkGatekeeper
+ * sidecar). Pass `--runtime <runtime.json>` to override wholesale, or set the
+ * OPEN_SHELL_* env vars. Endpoints left null emit no rule at all — the compiler
+ * never invents a host, so an unset inference/pocketbase means no egress there.
+ */
+function openshellRuntime() {
+  const p = arg("--runtime");
+  if (p) return JSON.parse(fs.readFileSync(p, "utf8"));
+  const host = process.env.OPEN_SHELL_HOLD_QUEUE_HOST || "127.0.0.1";
+  const port = Number(process.env.OPEN_SHELL_HOLD_QUEUE_PORT || 9100);
+  const ep = (h, p2, dflt) =>
+    process.env[h] ? { host: process.env[h], port: Number(process.env[p2] || dflt) } : null;
+  return {
+    agentBinaryPath: process.env.OPEN_SHELL_AGENT_BINARY || "/usr/local/bin/zeroclaw",
+    holdQueue: { host, port, path: "/invoke" },
+    inference: ep("OPEN_SHELL_INFERENCE_HOST", "OPEN_SHELL_INFERENCE_PORT", 443),
+    pocketbase: ep("OPEN_SHELL_POCKETBASE_HOST", "OPEN_SHELL_POCKETBASE_PORT", 8090),
+  };
 }
 
 const cardPath = arg("--card");
@@ -168,6 +191,12 @@ if (outDir) {
   fs.writeFileSync(path.join(outDir, "dna-fields-used.json"), JSON.stringify(compiled.dnaFieldsUsed, null, 2));
   fs.writeFileSync(path.join(outDir, "CARD.md"), compiled.cardMd);
   fs.writeFileSync(path.join(outDir, "CHANGELOG.json"), JSON.stringify(cl, null, 2));
+  // card.compile_openshell_policy -> the sandbox egress/landlock policy OpenShell consumes.
+  // Deterministic: same card + runtime -> byte-identical YAML. Never invents a host.
+  fs.writeFileSync(
+    path.join(outDir, "openshell-policy.yaml"),
+    emitOpenshellPolicyYaml(compileOpenshellPolicy(card, openshellRuntime()))
+  );
   for (const [rel, content] of Object.entries(compiled.hugoSite)) {
     const full = path.join(outDir, "hugo", rel);
     fs.mkdirSync(path.dirname(full), { recursive: true });

@@ -5,6 +5,7 @@ import { parseCardMd, verifyCardMd } from "./card-md-parse";
 export { canonicalJson, cardHash, emitCardMd, actingHash, ACTING_KEYS, parseCardMd, verifyCardMd };
 export {
   compileOpenshellPolicy,
+  emitOpenshellPolicyYaml,
   type SandboxEndpoint,
   type SandboxRuntimeConfig,
   type OpenshellPolicyDocument,
