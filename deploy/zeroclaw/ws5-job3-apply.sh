@@ -211,6 +211,21 @@ open(cfg_path, "w").write(content)
 print("  agents.santinos patched (channels + knowledge_bundles)")
 PYEOF
 
+# ── SOUL.md — agent persona grounding ────────────────────────────────────────
+# ZeroClaw 0.8.5 grounds agent persona via SOUL.md in the agent workspace,
+# NOT via system_prompt (that field doesn't exist). doctor warns "SOUL.md not
+# found" when it's absent; the constant system_sha256 in traces is the default.
+echo "==> placing SOUL.md in agent workspace"
+WORKSPACE=$("$ZC" --config-dir /etc/zeroclaw config get agents.santinos.workspace 2>/dev/null \
+  | grep -oP '(?<=workspace = ).*' | tr -d '"' || true)
+if [ -z "$WORKSPACE" ]; then
+  # Default workspace if not configured
+  WORKSPACE=/etc/zeroclaw/workspaces/santinos
+fi
+mkdir -p "$WORKSPACE"
+cp "$POLICY_DIR/SOUL.md" "$WORKSPACE/SOUL.md"
+echo "  SOUL.md → $WORKSPACE/SOUL.md"
+
 # ── validate + restart ───────────────────────────────────────────────────────
 echo "==> validating config"
 # `zeroclaw config validate` does not exist (schema/list/get/set/init/migrate/patch/docs/generate).
