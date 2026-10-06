@@ -1,6 +1,6 @@
 # HelixMain Roadmap
 
-Updated: 2026-10-05
+Updated: 2026-10-06
 
 ## Critical Path
 
@@ -9,7 +9,7 @@ The dependency order to first paying client: **1 → 2 → 3 → 5 → 6**, with
 | # | Workstream | Repo | Status |
 | --- | --- | --- | --- |
 | 1 | Anchor rollout | `helixmain/dna-foundry/compiler/` | 🟢 Done — 43/43 tests, all sections anchored + `dna confirm` CLI (`a7cc29e`) |
-| 2 | SparkGatekeeper approval surface | `helixmain/spark-gatekeeper/` | 🟢 Static leg done — 51/51 VPS confirmed (`c2a170a`); Paperclip adapter queued |
+| 2 | SparkGatekeeper approval surface | `helixmain/spark-gatekeeper/` | 🟢 Done — UI live at omokoda.duckdns.org/spark/ (`1a65062`); passkey enroll on first browser visit |
 | 3 | card-protocol 0.2 conformance | `card-protocol` | 🟢 Done — 20/20 VPS confirmed (`dac16c3`) |
 | 4 | OSS adoptions | `helixmain` (phased) | 🟢 Done — 6/6 items shipped |
 | 5 | Runtime exit proof | `helixmain` + `mesh-voice` + VPS | 🔴 Blocked on external gates |
@@ -17,7 +17,7 @@ The dependency order to first paying client: **1 → 2 → 3 → 5 → 6**, with
 
 **Not on this path:** Hostinger ticket (drafted, awaiting your send); GMGN key rotation (separate security thread); seven-fold work (separate boundary).
 
-**Static leg** (compiler + gatekeeper + card-protocol) active now. **Runtime leg** blocked until VPS Docker confirmed and tunnel approval surface live.
+**Approval surface live** at `https://omokoda.duckdns.org/spark/` — enroll passkey once on first browser visit. **Runtime leg** (WS5) blocked until VPS Docker confirmed.
 
 ## 1. Anchor rollout — `cryptonomicsed-byte/helixmain`
 
