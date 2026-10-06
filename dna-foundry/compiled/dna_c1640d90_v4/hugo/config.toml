@@ -1,0 +1,12 @@
+baseURL = "https://santinospizzanj.com"
+languageCode = "en-us"
+title = "Santino's Pizza"
+
+[params]
+  card_id = "dna_c1640d90"
+  card_version = 4
+  tagline = "Family owned and operated since 1970. Classic pizza in Parlin, NJ."
+  description = "Family owned and operated since 1970 — hand-tossed pies in Parlin, NJ."
+  phone = "(732) 721-3163"
+  location = "499 Ernston Rd, Parlin, NJ 08859"
+  hours = "Mon–Fri 11am–10pm; Sat–Sun 12pm–8pm"
