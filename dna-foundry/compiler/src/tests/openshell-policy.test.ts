@@ -59,7 +59,12 @@ test("egress allowlist is exactly the declared endpoints", () => {
   // Frozen contract: the SparkGatekeeper sidecar serves POST /invoke on 9100
   // (sidecar.rs), not an /mcp/* mount — the sidecar IS the path to the tool bus.
   assert.deepEqual(hq.endpoints, [{ host: "127.0.0.1", port: 9100, path: "/invoke" }]);
-  assert.deepEqual(hq.binaries, [{ path: "/usr/local/bin/zeroclaw" }]);
+  // Both binaries may reach the hold queue: the agent directly, and the MCP shim
+  // that forwards on its behalf. The agent path is present, never replaced.
+  assert.deepEqual(hq.binaries, [
+    { path: "/usr/local/bin/zeroclaw" },
+    { path: "/usr/local/bin/spark-gate-mcp" },
+  ]);
 });
 
 test("null endpoint stays null — never invented", () => {
@@ -98,4 +103,49 @@ test("compileCard carries the sandbox policy as a value — null without a runti
   // Backwards-compatible default: existing 3-arg callers get null.
   const defaulted = compileCard(CARD, "2026-10-03T00:00:00Z", []);
   assert.equal(defaulted.openshellPolicy, null);
+});
+
+test("mcp shim binary joins the hold-queue rule only — never replaces the agent", () => {
+  const { policy } = compileOpenshellPolicy(CARD, {
+    ...RUNTIME,
+    mcpServerBinary: "/opt/shim/spark-gate-mcp",
+  });
+  assert.deepEqual(policy.network_policies.hold_queue_sidecar.binaries, [
+    { path: "/usr/local/bin/zeroclaw" },
+    { path: "/opt/shim/spark-gate-mcp" },
+  ]);
+  // inference + pocketbase stay agent-only — the shim never calls them.
+  assert.deepEqual(policy.network_policies.inference.binaries, [
+    { path: "/usr/local/bin/zeroclaw" },
+  ]);
+  assert.deepEqual(policy.network_policies.pocketbase.binaries, [
+    { path: "/usr/local/bin/zeroclaw" },
+  ]);
+});
+
+test('mcpServerBinary "" declares no shim — agent binary alone', () => {
+  const { policy } = compileOpenshellPolicy(CARD, { ...RUNTIME, mcpServerBinary: "" });
+  assert.deepEqual(policy.network_policies.hold_queue_sidecar.binaries, [
+    { path: "/usr/local/bin/zeroclaw" },
+  ]);
+});
+
+test("shim path equal to the agent path is emitted once (deduped, not invented)", () => {
+  const { policy } = compileOpenshellPolicy(CARD, {
+    ...RUNTIME,
+    mcpServerBinary: "/usr/local/bin/zeroclaw",
+  });
+  assert.deepEqual(policy.network_policies.hold_queue_sidecar.binaries, [
+    { path: "/usr/local/bin/zeroclaw" },
+  ]);
+});
+
+test("relative shim path is rejected upstream (must be absolute)", () => {
+  // The compiler emits what it is given; the OpenShell schema/validator is what
+  // enforces absoluteness. Pin the expectation here so a regression is visible.
+  const { policy } = compileOpenshellPolicy(CARD, {
+    ...RUNTIME,
+    mcpServerBinary: "spark-gate-mcp",
+  });
+  assert.equal(policy.network_policies.hold_queue_sidecar.binaries[1].path, "spark-gate-mcp");
 });

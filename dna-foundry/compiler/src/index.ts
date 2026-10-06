@@ -11,6 +11,7 @@ export { canonicalJson, cardHash, emitCardMd, actingHash, ACTING_KEYS, parseCard
 export {
   compileOpenshellPolicy,
   emitOpenshellPolicyYaml,
+  DEFAULT_MCP_SERVER_BINARY,
   type SandboxEndpoint,
   type SandboxRuntimeConfig,
   type OpenshellPolicyDocument,

@@ -29,6 +29,9 @@ export interface SandboxEndpoint {
   path?: string;
 }
 
+/** Standard deploy path for the SparkGatekeeper stdio MCP shim (spark__invoke). */
+export const DEFAULT_MCP_SERVER_BINARY = "/usr/local/bin/spark-gate-mcp";
+
 export interface SandboxRuntimeConfig {
   /** Absolute path of the agent binary inside the sandbox, e.g. /usr/local/bin/zeroclaw */
   agentBinaryPath: string;
@@ -43,6 +46,14 @@ export interface SandboxRuntimeConfig {
   /** Per-card read-write data dir (PocketBase volume) */
   dataPath?: string;
   runAsUser?: string;
+  /**
+   * Absolute path of the MCP shim binary that reaches the hold queue on the
+   * agent's behalf (stdio MCP server -> POST /invoke). Defaults to the standard
+   * deploy path when omitted; pass "" to declare no shim. Emitted alongside
+   * agentBinaryPath in the HOLD-QUEUE egress rule only — never replacing it, and
+   * never granted to the inference/pocketbase rules, which the shim does not use.
+   */
+  mcpServerBinary?: string;
 }
 
 export interface OpenshellPolicyDocument {
@@ -88,7 +99,8 @@ export function compileOpenshellPolicy(
     key: string,
     name: string,
     ep: SandboxEndpoint | null,
-    extraPath?: string
+    extraPath?: string,
+    extraBinaries: string[] = []
   ) => {
     // Null stays null: no endpoint declared, no rule emitted. The agent
     // simply cannot reach that surface. Never invent a host.
@@ -98,14 +110,24 @@ export function compileOpenshellPolicy(
       port: ep.port,
     };
     if (ep.path ?? extraPath) endpoint.path = ep.path ?? extraPath;
+    // Which binaries may reach THIS endpoint: the agent binary always, plus any
+    // extras (e.g. the MCP shim, which reaches the hold queue on the agent's
+    // behalf). Deduped, so an equal path is emitted once.
+    const paths = [runtime.agentBinaryPath, ...extraBinaries].filter(
+      (p, i, a) => !!p && a.indexOf(p) === i
+    );
     network_policies[key] = {
       name: `${name} [${card.id} v${card.version}]`,
       endpoints: [endpoint],
-      binaries: [{ path: runtime.agentBinaryPath }],
+      binaries: paths.map((p) => ({ path: p })),
     };
   };
 
-  allow("hold_queue_sidecar", "hold-queue sidecar", runtime.holdQueue, "/invoke");
+  // The hold queue is the one endpoint a second binary legitimately reaches: the
+  // MCP shim forwards the agent's action to POST /invoke. Both binaries are
+  // listed; the agent path is never replaced. "" declares no shim.
+  const mcpBinary = runtime.mcpServerBinary ?? DEFAULT_MCP_SERVER_BINARY;
+  allow("hold_queue_sidecar", "hold-queue sidecar", runtime.holdQueue, "/invoke", [mcpBinary]);
   allow("inference", "inference endpoint", runtime.inference);
   allow("pocketbase", "per-card ops store", runtime.pocketbase);
 

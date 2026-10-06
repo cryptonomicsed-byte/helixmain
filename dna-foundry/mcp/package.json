@@ -1,0 +1,14 @@
+{
+  "name": "@helixmain/spark-gate-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SparkGatekeeper MCP shim — one tool (spark__invoke) forwarding ActionRequests to the hold queue at POST /invoke.",
+  "type": "commonjs",
+  "bin": {
+    "spark-gate-mcp": "./spark-gate-mcp.js"
+  },
+  "scripts": {
+    "test": "node --test spark-gate-mcp.test.js"
+  },
+  "license": "MIT"
+}
