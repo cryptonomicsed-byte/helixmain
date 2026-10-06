@@ -86,7 +86,8 @@ def _cb(d):
     return out
 
 def npub_of(pk32):
-    data = [0] + _cb(pk32)
+    # NIP-19 npub: NO leading version byte (see ws5-job3-apply.sh).
+    data = _cb(pk32)
     pm = _pm([ord(c) >> 5 for c in "npub"] + [0] + [ord(c) & 31 for c in "npub"] + data + [0] * 6) ^ 1
     return "npub1" + "".join(CH[d] for d in data) + "".join(CH[(pm >> 5 * (5 - i)) & 31] for i in range(6))
 
