@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
 # WS5 job 3 completion — run as root on the VPS.
 #
-# Applies: santinos Nostr channel keypair, system_prompt from the compiled card,
-#          stray default-dir config cleanup; then validates, restarts ZeroClaw,
-#          runs doctor, and reports the queue.
+# Applies: santinos Nostr channel keypair, knowledge_bundle card wiring,
+#          keyword search mode, stray default-dir config cleanup; then validates,
+#          restarts ZeroClaw, runs doctor, and reports the queue.
+#
+# NOTE: system_prompt is NOT a valid ZeroClaw 0.8.5 agent field — it is silently
+# ignored. Card content must arrive via knowledge_bundles. This script does NOT
+# write system_prompt.
 #
 # Idempotent — safe to re-run: sections are appended only if absent, an existing
 # sk is reused (the keypair does not churn), and stale agent keys are replaced.
@@ -149,32 +153,21 @@ external_peers = []
 TOMLEOF
 fi
 
-# ── system_prompt + channels on agents.santinos (stdlib text patch) ──────────
-# tomlkit is absent and pip is PEP-668 blocked, so edit the file directly.
-# json.dumps gives a valid TOML basic string (JSON escapes are TOML-compatible).
-PROMPT_FILE=$(mktemp)
-trap 'rm -f "$PROMPT_FILE"' EXIT
-python3 - "$POLICY_DIR/system-prompt.md" > "$PROMPT_FILE" <<'PYEOF'
-import re, sys
-with open(sys.argv[1]) as f:
-    content = f.read()
-content = re.sub(r'\n## Provenance\n.*', '', content, flags=re.DOTALL)
-print(content.strip(), end="")
-PYEOF
-
-ZC_CONFIG="$ZEROCLAW_CONFIG" ZC_PROMPT="$PROMPT_FILE" python3 - <<'PYEOF'
+# ── channels + knowledge_bundles on agents.santinos (stdlib text patch) ──────
+# system_prompt is NOT a valid ZeroClaw 0.8.5 agent field — never write it.
+# Card content loads via knowledge_bundles only.
+ZC_CONFIG="$ZEROCLAW_CONFIG" POLICY_DIR="$POLICY_DIR" python3 - <<'PYEOF'
 import json, os, re
 
 cfg_path = os.environ["ZC_CONFIG"]
-with open(os.environ["ZC_PROMPT"]) as f:
-    system_prompt = f.read().strip()
+card_path = os.path.join(os.environ["POLICY_DIR"], "CARD.md")
 
 lines = open(cfg_path).read().splitlines(keepends=True)
 out, inserted, in_santinos = [], False, False
 
 def emit():
     out.append('channels = ["nostr.santinos"]\n')
-    out.append("system_prompt = " + json.dumps(system_prompt) + "\n")
+    out.append('knowledge_bundles = ["card"]\n')
 
 for ln in lines:
     stripped = ln.strip()
@@ -185,8 +178,8 @@ for ln in lines:
         in_santinos = stripped == "[agents.santinos]"
         out.append(ln)
         continue
-    # drop stale keys inside the table so a rerun is idempotent
-    if in_santinos and re.match(r'^\s*(channels|system_prompt)\s*=', ln):
+    # drop stale keys so reruns are idempotent
+    if in_santinos and re.match(r'^\s*(channels|knowledge_bundles|system_prompt)\s*=', ln):
         continue
     out.append(ln)
 
@@ -197,8 +190,22 @@ if in_santinos and not inserted:
 if not inserted:
     raise SystemExit("agents.santinos table not found in " + cfg_path)
 
-open(cfg_path, "w").writelines(out)
-print("  agents.santinos patched (channels + system_prompt)")
+# Append knowledge_bundles.card section if absent
+content = "".join(out)
+if "[knowledge_bundles.card]" not in content:
+    content += f'\n[knowledge_bundles.card]\nsources = ["{card_path}"]\n'
+    print(f"  knowledge_bundles.card appended ({card_path})")
+
+# Set memory.search_mode = "keyword" to avoid hybrid-with-no-embedding noise
+if "[memory]" not in content:
+    content += '\n[memory]\nsearch_mode = "keyword"\n'
+    print("  [memory] search_mode = keyword appended")
+else:
+    # replace existing search_mode line if present
+    content = re.sub(r'(?m)^search_mode\s*=.*$', 'search_mode = "keyword"', content)
+
+open(cfg_path, "w").write(content)
+print("  agents.santinos patched (channels + knowledge_bundles)")
 PYEOF
 
 # ── validate + restart ───────────────────────────────────────────────────────
@@ -234,16 +241,17 @@ else:
 
 echo ""
 echo "==> SUMMARY"
-echo "  santinos channel : nostr.santinos (relays: omokoda.duckdns.org:3443)"
-echo "  system_prompt    : set from $POLICY_DIR/system-prompt.md"
-echo "  stray config     : /root/.zeroclaw/config.toml removed"
-echo "  mcp_bundles      : card_agent_tools -> spark -> spark__invoke -> 127.0.0.1:9100/invoke"
-echo "  keys file        : $KEYFILE (0600)"
+echo "  santinos channel   : nostr.santinos (relays: omokoda.duckdns.org:3443)"
+echo "  knowledge_bundles  : card → $POLICY_DIR/CARD.md (keyword search)"
+echo "  system_prompt      : NOT written (dead key in ZeroClaw 0.8.5 — card via RAG only)"
+echo "  stray config       : /root/.zeroclaw/config.toml removed (if present)"
+echo "  mcp_bundles        : card_agent_tools -> spark -> spark__invoke -> 127.0.0.1:9100/invoke"
+echo "  keys file          : $KEYFILE (0600)"
 echo ""
 echo "  SAVE THESE KEYS:"
 echo "    SANTINOS_SK_HEX=$SK_HEX"
 echo "    SANTINOS_PK_HEX=$PK_HEX"
 echo "    SANTINOS_NPUB=$NPUB"
 echo ""
-echo "  Next: DM santinos from a known pubkey to trigger spark__invoke; confirm the"
-echo "        hold lands in /held and is visible at /spark/"
+echo "  Next: DM santinos from a known pubkey; check /etc/zeroclaw/data/state/runtime-trace.jsonl"
+echo "        for retrieval injection before the model response; confirm hold lands in /held"
