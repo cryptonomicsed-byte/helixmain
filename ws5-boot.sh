@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # ws5-boot.sh — stage the WS5 runtime exit proof.
 #
-# Boots/verifies the three sidecars and preflights every external gate, then
-# reports the WIRING GAPS that would silently break the live demo. Idempotent
-# and non-destructive: it starts things, it never deletes or reconfigures.
+# If the three sidecars are already running, this just verifies and prints
+# ready-to-demo status. Otherwise it starts what it can, then preflights every
+# external gate and reports the WIRING GAPS that would silently break the demo.
+# Idempotent and non-destructive: it starts things, it never deletes or reconfigures.
 #
 # Run ON THE VPS (hostinger 2.25.70.156):
 #   scp ws5-boot.sh hostinger:/opt/helixmain/ && ssh hostinger 'bash /opt/helixmain/ws5-boot.sh'
@@ -17,6 +18,7 @@ REPO="/opt/helixmain"
 FIXT="$REPO/spark-gatekeeper/tests/fixtures"
 GATEKEEPER="127.0.0.1:9100"
 POCKETBASE="127.0.0.1:8090"
+ZEROCLAW_GW="127.0.0.1:42617"
 TOOLBUS="127.0.0.1:9200"
 OS_GATEWAY="127.0.0.1:8080"
 
@@ -28,82 +30,87 @@ hdr()  { printf '\n\033[1m== %s ==\033[0m\n' "$*"; }
 code() { curl -s -o /dev/null -m 5 -w '%{http_code}' "$@" 2>/dev/null || echo 000; }
 
 hdr "A. Host preflight"
-if systemctl is-active --quiet docker; then ok "docker daemon active"
-else bad "docker daemon not active"; fi
-if timeout 40 docker run --rm alpine:latest true >/dev/null 2>&1; then ok "docker can run a container"
-else bad "docker cannot run a container"; fi
+systemctl is-active --quiet docker && ok "docker daemon active" || bad "docker daemon not active"
+timeout 40 docker run --rm alpine:latest true >/dev/null 2>&1 && ok "docker can run a container" || bad "docker cannot run a container"
 KVER=$(uname -r); case "$KVER" in 5.[1-9][3-9]*|5.[2-9][0-9]*|[6-9].*) ok "kernel $KVER (>=5.13, Landlock hard-requirement OK)";; *) bad "kernel $KVER < 5.13 (Landlock falls back to best_effort)";; esac
-command -v runsc >/dev/null && ok "gVisor runsc present ($(runsc --version 2>/dev/null | head -1))" || gap "gVisor runsc not installed (runbook preflight asks for it)"
-FREE=$(df -h / | awk 'NR==2{print $4}'); ok "disk free: $FREE"
-curl -s -m 3 -o /dev/null -w '' https://openrouter.ai/api/v1/models && ok "VPS egress to openrouter.ai" || gap "VPS cannot reach openrouter.ai (runbook §D inference provider)"
+command -v runsc >/dev/null && ok "gVisor runsc present" || gap "gVisor runsc not installed (runbook preflight asks for it)"
+ok "disk free: $(df -h / | awk 'NR==2{print $4}')"
+curl -s -m 3 -o /dev/null https://openrouter.ai/api/v1/models && ok "VPS egress to openrouter.ai" || gap "VPS cannot reach openrouter.ai (runbook §D inference provider)"
 
-hdr "B. Sidecars"
-# ZeroClaw (Helix)
-if systemctl is-active --quiet zeroclaw; then ok "zeroclaw active ($(systemctl show zeroclaw -p MainPID --value))"
-else bad "zeroclaw not active — run: systemctl start zeroclaw"; fi
-# SparkGatekeeper
+hdr "B. Sidecars (start if stopped, then verify)"
+if systemctl is-active --quiet zeroclaw; then ok "zeroclaw active (pid $(systemctl show zeroclaw -p MainPID --value))"
+else systemctl start zeroclaw && ok "zeroclaw started" || bad "zeroclaw failed to start"; fi
+
 if systemctl is-active --quiet spark-gatekeeper; then ok "spark-gatekeeper active (exe=$(readlink /proc/$(systemctl show spark-gatekeeper -p MainPID --value)/exe 2>/dev/null))"
-else bad "spark-gatekeeper not active — run: systemctl start spark-gatekeeper"; fi
-# PocketBase (docker)
-if docker ps --format '{{.Names}}' 2>/dev/null | grep -q '^pocketbase-santinos$'; then ok "pocketbase-santinos container up"
-else
-  if docker ps -a --format '{{.Names}}' | grep -q '^pocketbase-santinos$'; then docker start pocketbase-santinos >/dev/null 2>&1 && ok "pocketbase-santinos started" || bad "pocketbase-santinos failed to start"
-  else bad "pocketbase-santinos container missing entirely"; fi
-fi
+else systemctl start spark-gatekeeper && ok "spark-gatekeeper started" || bad "spark-gatekeeper failed to start"; fi
 
-hdr "C. Listener / endpoint checks"
-for pair in "gatekeeper:$GATEKEEPER/held" "pocketbase:$POCKETBASE/api/health"; do
-  name=${pair%%:*}; url=${pair#*:}
-  c=$(code "http://$url")
-  case "$name:$c" in
-    gatekeeper:200) ok "gatekeeper /held -> 200";;
-    gatekeeper:*)   bad "gatekeeper /held -> $c (expected 200)";;
-    pocketbase:*)   ok "pocketbase reachable (HTTP $c) — any code means the port answers";;
-  esac
-done
+if docker ps --format '{{.Names}}' 2>/dev/null | grep -q '^pocketbase-santinos$'; then ok "pocketbase-santinos up (already running)"
+elif docker ps -a --format '{{.Names}}' | grep -q '^pocketbase-santinos$'; then docker start pocketbase-santinos >/dev/null 2>&1 && ok "pocketbase-santinos started" || bad "pocketbase-santinos failed to start"
+else bad "pocketbase-santinos container missing entirely"; fi
+
+hdr "C. Health checks"
+gh=$(code "http://$GATEKEEPER/health")
+if [ "$gh" = "200" ]; then
+  ok "spark-gatekeeper /health -> 200  $(curl -s -m5 "http://$GATEKEEPER/health")"
+elif [ "$(code "http://$GATEKEEPER/held")" = "200" ]; then
+  ok "spark-gatekeeper /held -> 200 (alive)"
+  gap "spark-gatekeeper has no /health route (got $gh) — health contract expects it"
+else
+  bad "spark-gatekeeper not answering on $GATEKEEPER"
+fi
+ok "pocketbase reachable (HTTP $(code "http://$POCKETBASE/api/health") on $POCKETBASE)"
+zg=$(code "http://$ZEROCLAW_GW/health"); [ "$zg" = "200" ] && ok "zeroclaw gateway /health -> 200" || gap "zeroclaw gateway /health -> $zg"
 
 hdr "D. Card policy artifacts"
-for f in "dna_${CARD_ID#dna_}_v4.json:card" "policy_seed_v4.json:policy seed" "tool_allowlist_v4.json:tool allowlist"; do
-  fn=${f%%:*}; label=${f#*:}
-  [ -f "$FIXT/$fn" ] && ok "$label present ($(wc -c <"$FIXT/$fn") bytes)" || bad "$label MISSING ($FIXT/$fn)"
-done
-if [ -f "$REPO/dna-foundry/compiled/${CARD_ID}_v4/openshell-policy.yaml" ]; then ok "compiled OpenShell policy present"
-else gap "compiled/<card>_v4/openshell-policy.yaml NOT generated — card.compile_openshell_policy is 'NOT YET IMPLEMENTED'; only the hand-authored example exists"; fi
+[ -f "$FIXT/dna_${CARD_ID#dna_}_v4.json" ] && ok "card present ($(wc -c <"$FIXT/dna_${CARD_ID#dna_}_v4.json") bytes)" || bad "card MISSING"
+[ -f "$FIXT/policy_seed_v4.json" ] && ok "policy seed present" || bad "policy seed MISSING"
+[ -f "$FIXT/tool_allowlist_v4.json" ] && ok "tool allowlist present" || bad "tool allowlist MISSING"
+[ -f "$REPO/dna-foundry/compiled/${CARD_ID}_v4/openshell-policy.yaml" ] && ok "compiled OpenShell policy present" \
+  || gap "compiled/<card>_v4/openshell-policy.yaml not generated — card.compile_openshell_policy is 'NOT YET IMPLEMENTED'"
 [ -f /etc/spark-gatekeeper.env ] && ok "gatekeeper signing key present (persistent)" || gap "GATEKEEPER_SIGNING_KEY file missing — receipts won't verify across restarts"
 
 hdr "E. WIRING — the load-bearing checks (these gate a live demo)"
-# E1: can anything submit an action into the gate engine?
 c=$(code -X POST -H 'Content-Type: application/json' -d '{}' "http://$GATEKEEPER/invoke")
 if [ "$c" = "404" ] || [ "$c" = "405" ]; then
-  gap "gatekeeper has NO /invoke route (got $c). sidecar.rs documents the contract but dispatch() is unused and the binary never wires it — NOTHING can enqueue an action or run the 7 gates on a real request"
-else ok "/invoke responds ($c) — sidecar contract is wired"; fi
-# E2: the tool bus an Allow verdict would forward to
-if ss -tln 2>/dev/null | grep -q "$TOOLBUS"; then ok "tool bus listening on $TOOLBUS"
-else gap "no tool bus on $TOOLBUS — an 'Allow' verdict has nowhere to forward (sidecar.rs SidecarConfig.tool_bus_url default)"; fi
-# E3: is ZeroClaw bound to the card or the gatekeeper at all?
-if grep -qiE "dna_c1640d90|policy.seed|9100|gatekeeper|hold" /etc/zeroclaw/config.toml 2>/dev/null; then
-  ok "zeroclaw config references the card/gatekeeper"
-else
-  gap "zeroclaw config references NEITHER the card NOR the gatekeeper — agents.helix.system_prompt is generic; nothing routes Helix's actions to the hold queue"
-fi
-# E4: passkey enrolled (approval surface usable)
+  gap "gatekeeper has NO /invoke route (got $c) — sidecar.rs dispatch() is unused, so NOTHING can enqueue an action or run the 7 gates live"
+else ok "/invoke responds ($c) — sidecar contract wired"; fi
+ss -tln 2>/dev/null | grep -q "$TOOLBUS" && ok "tool bus listening on $TOOLBUS" \
+  || gap "no tool bus on $TOOLBUS — an 'Allow' verdict has nowhere to forward"
+grep -qiE "dna_c1640d90|policy.seed|9100|gatekeeper|hold" /etc/zeroclaw/config.toml 2>/dev/null \
+  && ok "zeroclaw config references the card/gatekeeper" \
+  || gap "zeroclaw config references NEITHER the card NOR the gatekeeper — nothing routes Helix's actions to the hold queue"
 PK=$(python3 - <<'PY' 2>/dev/null || echo "?"
 import sqlite3;print(sqlite3.connect("/var/lib/spark-gatekeeper/queue.db").execute("SELECT COUNT(*) FROM webauthn_passkeys").fetchone()[0])
 PY
 )
 [ "$PK" = "1" ] && ok "approver passkey enrolled" || gap "passkey rows = $PK (expected 1)"
 
-hdr "F. External dependencies for steps 2-5"
-if command -v openshell >/dev/null; then ok "openshell installed ($(openshell --version 2>/dev/null))"
-else gap "openshell NOT installed — runbook §B: curl -LsSf https://raw.githubusercontent.com/NVIDIA/OpenShell/main/install.sh | sh"; fi
-code "http://$OS_GATEWAY/health" | grep -q 200 && ok "openshell gateway up on $OS_GATEWAY" || gap "openshell gateway not running on $OS_GATEWAY (runbook §C)"
-timeout 8 tailscale status 2>/dev/null | grep -q 'grokbot-box.*offline' && gap "grokbot-box OFFLINE — WS5 step 2 (Meshenger QR call) cannot run" || ok "grokbot-box reachable via tailnet"
-[ -d "$HOME/mesh-voice" ] || [ -d /opt/mesh-voice ] && ok "mesh-voice present on this host" || gap "mesh-voice not found on this host (WS5 step 2)"
+hdr "F. External dependencies (steps 2-5)"
+command -v openshell >/dev/null && ok "openshell installed" || gap "openshell NOT installed — runbook §B install.sh"
+[ "$(code "http://$OS_GATEWAY/health")" = "200" ] && ok "openshell gateway up on $OS_GATEWAY" || gap "openshell gateway not running on $OS_GATEWAY (runbook §C)"
+timeout 8 tailscale status 2>/dev/null | grep -q 'grokbot-box.*offline' && gap "grokbot-box OFFLINE — WS5 step 2 cannot run" || ok "grokbot-box reachable on tailnet"
+{ [ -d "$HOME/mesh-voice" ] || [ -d /opt/mesh-voice ]; } && ok "mesh-voice present" || gap "mesh-voice not found on this host (WS5 step 2)"
 
 hdr "SUMMARY"
 printf '  PASS=%d  FAIL=%d  GAP=%d\n' "$PASS" "$FAIL" "$GAP"
-if [ "$GAP" -gt 0 ]; then
-  printf '\n  \033[33mBoot is staged, but %d wiring/external gap(s) will block a live demo.\033[0m\n' "$GAP"
-  printf '  The components run; the CONNECTIONS between them do not yet exist.\n'
+if [ "$FAIL" -eq 0 ] && [ "$GAP" -eq 0 ]; then
+  printf '\n\033[32m  READY TO DEMO — all three sidecars verified, no gaps.\033[0m\n'
+  cat <<'READY'
+
+  WS5 — Meshenger QR call (step 2)
+  ────────────────────────────────────────────────────────────
+  1. Confirm grokbot-box is back on Tailscale at 100.109.5.90
+       tailscale status | grep grokbot
+  2. On grokbot-box: start mesh-voice — it presents the Meshenger session QR.
+  3. On the phone: Meshenger → Scan → point at the QR shown by mesh-voice.
+  4. Answer the incoming call; speak the test utterance (a refund / pricing ask).
+  5. Expected: null-price refusal fires at the vibration gate → the action escalates
+     to the hold queue → open https://omokoda.duckdns.org/spark/ → Approve → receipt mints.
+  6. Record the receipt: offline-verifiable, Ed25519 / JCS-canonical / hash-chained.
+READY
+else
+  printf '\n\033[33m  Not demo-ready: FAIL=%d  GAP=%d\033[0m\n' "$FAIL" "$GAP"
+  [ "$FAIL" -gt 0 ] && printf '  FAIL = infrastructure (fix before running).\n'
+  [ "$GAP" -gt 0 ]  && printf '  GAP  = missing connection / external dep — components run, chain not closed.\n'
 fi
 exit 0

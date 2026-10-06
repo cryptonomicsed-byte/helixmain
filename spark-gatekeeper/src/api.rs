@@ -138,6 +138,7 @@ pub struct DenyResponse {
 
 pub fn router(state: Arc<AppState>) -> Router {
     Router::new()
+        .route("/health", get(health))
         .route("/held", get(list_held))
         .route("/held/:id", get(get_held))
         .route("/setup/challenge", post(setup_challenge))
@@ -150,6 +151,16 @@ pub fn router(state: Arc<AppState>) -> Router {
 }
 
 // ── Handlers ──────────────────────────────────────────────────────────────────
+
+/// Liveness probe. The old `spark-gatekeeper-server` served `/health`; the port to
+/// the compiled-gates binary dropped it, which broke health checks that expect it.
+async fn health() -> impl IntoResponse {
+    Json(serde_json::json!({
+        "status": "ok",
+        "service": "spark-gatekeeper",
+        "version": env!("CARGO_PKG_VERSION"),
+    }))
+}
 
 async fn list_held(
     State(state): State<Arc<AppState>>,
