@@ -85,10 +85,13 @@ The two uncommitted repo-examination docs (`helixmain/docs/blueprint/`) land on 
 **Preflight:** `ws5-boot.sh` on VPS — 16 PASS, 9 GAP as of 2026-10-06. Script only prints
 QR demo steps when FAIL=0 and GAP=0; otherwise prints exactly what's blocking.
 
-**3 code jobs remaining (before grokbot-box matters):**
-1. `/invoke` + sidecar dispatch — so an action can reach the gate engine (job in progress)
-2. `compile_openshell_policy` — so the card produces a real policy seed, not the example
-3. ZeroClaw ↔ card/gatekeeper binding — so Helix's actions route to the hold queue
+**3 code jobs — all complete:**
+1. `POST /invoke` + sidecar dispatch — 50/50 green (`3a2a88b`) ✅
+2. `compile_openshell_policy` + `openshell-policy.yaml` emitted — 48/48 green (`35ab67b`, `d21f20f`) ✅
+3. `spark-gate-mcp` MCP shim + ZeroClaw `[mcp]` binding + santinos agent config — 61/61 green (`ebf23df`, `8aaf919`) ✅
+
+**1 VPS wiring step remaining:**
+- Run `deploy/zeroclaw/ws5-job3-apply.sh` on the VPS to install santinos channel + system_prompt (keygen, TOML patch, restart, proof)
 
 **2 infra steps (yours):**
 - grokbot-box back online (Tailscale 100.109.5.90, needs power cycle)
