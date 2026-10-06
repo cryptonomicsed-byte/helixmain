@@ -244,6 +244,17 @@ async function handle(msg) {
 
 // ── stdio loop: newline-delimited JSON-RPC ───────────────────────────────────
 let buf = "";
+let inflight = 0;
+let stdinEnded = false;
+
+/** Exit only once every in-flight request has answered and stdout has flushed.
+ *  A bare process.exit() on stdin end drops a pending tools/call — the exact
+ *  hang a real client sees when it half-closes the pipe right after requesting. */
+function exitWhenDrained() {
+  if (!stdinEnded || inflight > 0) return;
+  process.stdout.write("", () => process.exit(0));
+}
+
 process.stdin.setEncoding("utf8");
 process.stdin.on("data", (chunk) => {
   buf += chunk;
@@ -259,16 +270,24 @@ process.stdin.on("data", (chunk) => {
       process.stdout.write(rpcError(null, -32700, "parse error") + "\n");
       continue;
     }
+    inflight++;
     handle(msg)
       .then((out) => {
         if (out) process.stdout.write(out + "\n");
       })
       .catch((e) => {
         process.stdout.write(rpcError(msg.id ?? null, -32603, String(e.message || e)) + "\n");
+      })
+      .finally(() => {
+        inflight--;
+        exitWhenDrained();
       });
   }
 });
-process.stdin.on("end", () => process.exit(0));
+process.stdin.on("end", () => {
+  stdinEnded = true;
+  exitWhenDrained();
+});
 
 if (process.env.SPARK_MCP_SELFTEST) {
   // Smoke-check the wiring without a sidecar: proves the tool surface loads.

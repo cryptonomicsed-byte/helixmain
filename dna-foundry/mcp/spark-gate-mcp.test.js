@@ -210,6 +210,47 @@ test("unknown tool name is rejected", async () => {
   assert.equal(res.error.code, -32602);
 });
 
+/** Like driveShim, but half-closes stdin right after writing — the client pattern
+ *  that must not drop an in-flight tools/call. Resolves on process exit. */
+function driveShimThenClose(env, messages) {
+  return new Promise((resolve, reject) => {
+    const proc = spawn(process.execPath, [SHIM], {
+      env: { ...process.env, ...env },
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    const out = [];
+    let buf = "";
+    proc.stdout.on("data", (c) => {
+      buf += c;
+      let nl;
+      while ((nl = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, nl).trim();
+        buf = buf.slice(nl + 1);
+        if (line) out.push(JSON.parse(line));
+      }
+    });
+    proc.on("error", reject);
+    proc.on("exit", () => resolve(out));
+    for (const m of messages) proc.stdin.write(JSON.stringify(m) + "\n");
+    proc.stdin.end();
+    setTimeout(() => {
+      proc.kill();
+      resolve(out);
+    }, 8000);
+  });
+}
+
+test("an in-flight tools/call survives stdin half-close (drain before exit)", async () => {
+  const mock = await mockSidecar(200, { status: "allowed", action_id: "a1" });
+  const out = await driveShimThenClose({ SPARK_INVOKE_URL: mock.url }, [
+    { jsonrpc: "2.0", id: 90, method: "tools/call", params: { name: "invoke", arguments: { kind: "act" } } },
+  ]);
+  assert.equal(out.length, 1, "the response must arrive despite stdin closing");
+  assert.equal(out[0].id, 90);
+  assert.equal(out[0].result.content[0].type, "text");
+  await mock.close();
+});
+
 test("with SPARK_CARD set, the card is exposed as a resource (for pinned_resources)", async () => {
   const cardPath = path.join(os.tmpdir(), `card-res-${process.pid}.md`);
   fs.writeFileSync(cardPath, `---\nid: dna_res\nacting_hash: sha256:${"b".repeat(64)}\n---\n\n# Santino's Pizza\n`);
