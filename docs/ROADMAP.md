@@ -82,17 +82,26 @@ The two uncommitted repo-examination docs (`helixmain/docs/blueprint/`) land on 
 
 **Repos:** `helixmain` + `mesh-voice` + VPS (ZeroClaw + PocketBase + SparkGatekeeper sidecar)
 
-**Gates still closed:** VPS Docker confirmed; tunnel approval surface live.
+**Preflight:** `ws5-boot.sh` on VPS — 16 PASS, 9 GAP as of 2026-10-06. Script only prints
+QR demo steps when FAIL=0 and GAP=0; otherwise prints exactly what's blocking.
 
-**Steps (in order, once gates open):**
+**3 code jobs remaining (before grokbot-box matters):**
+1. `/invoke` + sidecar dispatch — so an action can reach the gate engine (job in progress)
+2. `compile_openshell_policy` — so the card produces a real policy seed, not the example
+3. ZeroClaw ↔ card/gatekeeper binding — so Helix's actions route to the hold queue
 
-1. Boot ZeroClaw + PocketBase + SparkGatekeeper sidecar; apply the real OpenShell policy from the Santino's card
-2. Answer a Meshenger QR call from `mesh-voice` deployed on grokbot-box — fo tunnel needed for the deploy itself
-3. Live null-price refusal and handoff demonstration
-4. PicoClaw compiles from the same card — runtime stays a swappable driver
+**2 infra steps (yours):**
+- grokbot-box back online (Tailscale 100.109.5.90, needs power cycle)
+- `mesh-voice` deployed to grokbot-box
+
+**Demo sequence (once all gaps close):**
+1. `ws5-boot.sh` prints READY — ZeroClaw + PocketBase + SparkGatekeeper all green
+2. Meshenger QR call from mesh-voice on grokbot-box
+3. Live null-price refusal routed through hold queue; approve in browser at /spark/
+4. PicoClaw compiles from same card — runtime stays a swappable driver
 5. Idle RSS at 18-card scale
 
-**Not on Hostinger** until the CPU steal issue is resolved — a measurement taken at 90% steal proves nothing.
+**Not on Hostinger** for step 5 RSS measurement until CPU steal is resolved — a reading at 90% steal proves nothing.
 
 ## 6. Registry and Sui — post-revenue
 
