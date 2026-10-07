@@ -87,7 +87,14 @@ PY
 
 hdr "F. External dependencies (steps 2-5)"
 command -v openshell >/dev/null && ok "openshell installed" || gap "openshell NOT installed — runbook §B install.sh"
-[ "$(code "http://$OS_GATEWAY/health")" = "200" ] && ok "openshell gateway up on $OS_GATEWAY" || gap "openshell gateway not running on $OS_GATEWAY (runbook §C)"
+# openshell-gateway speaks HTTPS + mTLS, so a plaintext `http://` probe can never
+# return 200 — it reported a false GAP while the gateway was healthy. `openshell
+# status` is the authoritative, certificate-aware check.
+if openshell status 2>/dev/null | grep -q "Status: Connected"; then
+  ok "openshell gateway up on $OS_GATEWAY (mTLS Connected)"
+else
+  gap "openshell gateway not running on $OS_GATEWAY (runbook §C)"
+fi
 timeout 8 tailscale status 2>/dev/null | grep -q 'grokbot-box.*offline' && gap "grokbot-box OFFLINE — WS5 step 2 cannot run" || ok "grokbot-box reachable on tailnet"
 { [ -d "$HOME/mesh-voice" ] || [ -d /opt/mesh-voice ]; } && ok "mesh-voice present" || gap "mesh-voice not found on this host (WS5 step 2)"
 
