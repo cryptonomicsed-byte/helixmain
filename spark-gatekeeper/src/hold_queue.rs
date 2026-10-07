@@ -385,6 +385,86 @@ mod tests {
     }
 
     #[test]
+    fn approve_persist_and_fetch_governance_receipt_verifies() {
+        use crate::receipt_signer::ReceiptSigner;
+
+        let (card, seed, tools) = load();
+        let action = Action {
+            id: "act_persist_test".into(),
+            session_id: "sess".into(),
+            kind: ActionKind::Act,
+            tool: Some("ticket.create".into()),
+            payload: serde_json::json!({"topic": "refunds", "amount": 24.99}),
+            acting_hash: card.acting_hash.clone(),
+            initiated_at: Utc::now(),
+        };
+        let ctx = GateContext { card, policy_seed: seed, tool_allowlist: tools, session: None, action };
+        let result = escalate_result("act_persist_test");
+
+        let queue = HoldQueue::in_memory().unwrap();
+        let hold_id = queue.enqueue(&ctx, &result).unwrap();
+
+        // No previous receipt — first in chain.
+        assert!(queue.latest_receipt_body_hash().unwrap().is_none());
+
+        let receipt = queue.approve(&hold_id, None).unwrap().unwrap();
+        let signer = ReceiptSigner::from_env_or_generate();
+        let gov = signer.sign(&receipt, None);
+        let body_hash = ReceiptSigner::receipt_hash(&gov);
+
+        queue.persist_receipt_signature(
+            &gov.id,
+            &gov.signer_key,
+            &gov.signature,
+            &body_hash,
+            gov.parent_receipt_hash.as_deref(),
+            None,
+        ).unwrap();
+
+        // fetch_governance_receipt must return the full signed receipt.
+        let fetched = queue.fetch_governance_receipt(&gov.id).unwrap()
+            .expect("receipt must be fetchable after persist");
+        assert_eq!(fetched.id, gov.id);
+        assert_eq!(fetched.signer_key, gov.signer_key);
+        assert_eq!(fetched.signature, gov.signature);
+        assert_eq!(fetched.parent_receipt_hash, None);
+
+        // Offline verification must pass.
+        ReceiptSigner::verify(&fetched).expect("fetched receipt must verify offline");
+
+        // Second approval chains to the first.
+        let latest = queue.latest_receipt_body_hash().unwrap()
+            .expect("latest_receipt_body_hash must return something after first persist");
+        assert_eq!(latest.0, gov.id);
+        assert_eq!(latest.1, body_hash);
+
+        // Enqueue and approve a second hold to prove chaining.
+        let (card2, seed2, tools2) = load();
+        let action2 = Action {
+            id: "act_persist_test_2".into(),
+            session_id: "sess".into(),
+            kind: ActionKind::Act,
+            tool: Some("ticket.create".into()),
+            payload: serde_json::json!({"topic": "refunds", "amount": 9.99}),
+            acting_hash: card2.acting_hash.clone(),
+            initiated_at: Utc::now(),
+        };
+        let ctx2 = GateContext { card: card2, policy_seed: seed2, tool_allowlist: tools2, session: None, action: action2 };
+        let hold2 = queue.enqueue(&ctx2, &escalate_result("act_persist_test_2")).unwrap();
+        let receipt2 = queue.approve(&hold2, Some(gov.id.clone())).unwrap().unwrap();
+        let gov2 = signer.sign(&receipt2, Some(body_hash.clone()));
+        let body_hash2 = ReceiptSigner::receipt_hash(&gov2);
+        queue.persist_receipt_signature(
+            &gov2.id, &gov2.signer_key, &gov2.signature, &body_hash2,
+            gov2.parent_receipt_hash.as_deref(), Some(&gov.id),
+        ).unwrap();
+
+        let fetched2 = queue.fetch_governance_receipt(&gov2.id).unwrap().unwrap();
+        assert_eq!(fetched2.parent_receipt_hash, Some(body_hash));
+        ReceiptSigner::verify(&fetched2).expect("chained receipt must verify offline");
+    }
+
+    #[test]
     fn deny_removes_from_pending() {
         let (card, seed, tools) = load();
         let action = Action {
