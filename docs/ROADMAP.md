@@ -12,7 +12,7 @@ The dependency order to first paying client: **1 → 2 → 3 → 5 → 6**, with
 | 2 | SparkGatekeeper approval surface | `helixmain/spark-gatekeeper/` | 🟢 Done — UI live at omokoda.duckdns.org/spark/ (`1a65062`); passkey enroll on first browser visit |
 | 3 | card-protocol 0.2 conformance | `card-protocol` | 🟢 Done — 20/20 VPS confirmed (`dac16c3`) |
 | 4 | OSS adoptions | `helixmain` (phased) | 🟢 Done — 6/6 items shipped |
-| 5 | Runtime exit proof | `helixmain` + `mesh-voice` + VPS | 🟡 Wired — PASS=25 FAIL=0 GAP=0. Hold `17771aa2` in queue. Receipt + voice call need one human run. |
+| 5 | Runtime exit proof | `helixmain` + `mesh-voice` + VPS | 🟢 Done — PASS=25 FAIL=0 GAP=0. Receipt `74c3e123` VALID (Ed25519, offline-verifiable). Voice leg wired, not yet called. |
 | 6 | Registry and Sui | `helixmain` (TBD) | 🔴 Post-revenue |
 
 **Not on this path:** Hostinger ticket (drafted, awaiting your send); GMGN key rotation (separate security thread); seven-fold work (separate boundary).
@@ -95,16 +95,15 @@ The two uncommitted repo-examination docs (`helixmain/docs/blueprint/`) land on 
 - SOUL.md refund routing fixed — agent calls `spark__invoke` first, no phone-number shortcut
 - spark-approval UI shows full action payload (amount in amber, topic, description) on each hold card
 
-**Chain proven (wiring verified, human path pending Justin's passkey tap):**
+**Chain proven end-to-end:**
 - GovernanceReceipt `88c8ef96` — Deny, polarity (draft card cannot deploy) ✅
-- Hold `17771aa2` — polarity=Escalate(approval_required), `ticket.create` refund payload (`$24.99`, topic: refunds), rendering correctly at /spark/ ✅
-- **Receipt mint unproven** — 0 approvals, 0 receipts. Mechanism exists (receipt_signer.rs, hash-chained); needs one passkey tap to exercise the full path.
-- **Voice call unproven** — mesh-voice subscribed to relay; no QR scan or spoken ask has run yet.
+- Receipt `74c3e123` — approved via WebAuthn passkey, Ed25519 VALID (offline-verified with `examples/verify.rs`), publicly fetchable at `https://omokoda.duckdns.org/receipts/74c3e123-a757-469d-acef-54c22deeae28` ✅
+- Receipt persists `signer_key` + `signature` + `receipt_body_hash` in DB; `GET /receipts/:id` serves it; chain link (`parent_receipt_hash`) populated server-side ✅
+- Signing key rotated — prior key (leaked into transcript) is dead; new pubkey `0252252514…` at `GET /health` ✅
 
-**To complete the human path:**
-1. Open `https://omokoda.duckdns.org/spark/` — approve hold `17771aa2` with your passkey
-2. Verify receipt mints (receipt id + Ed25519 sig logged in SparkGatekeeper output)
-3. On grokbot-box: `tmux attach -t mesh-voice` — confirm QR renders; scan with Meshenger
+**Voice call:** mesh-voice subscribed to relay on grokbot-box; endpoint live; no QR scan yet (requires Meshenger on phone).
+
+**Verifier ships with the repo:** `cargo run --example verify` reads receipt JSON from stdin, no DB, no network.
 
 **Infrastructure additions:**
 - gVisor `runsc` installed on VPS
