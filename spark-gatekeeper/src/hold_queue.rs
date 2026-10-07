@@ -1,6 +1,6 @@
 /// Hold queue: durable SQLite store for escalated operations.
 /// Approval surface is TypeScript (Human presents, never controls).
-use crate::types::{GateContext, GateResult, Receipt, Verdict};
+use crate::types::{GateContext, GateResult, GovernanceReceipt, GateTrail, Receipt, Verdict};
 use chrono::{DateTime, Duration, Utc};
 use rusqlite::{Connection, params};
 use serde::{Deserialize, Serialize};
@@ -61,7 +61,11 @@ impl HoldQueue {
                 final_verdict_json   TEXT NOT NULL,
                 trail_json           TEXT NOT NULL,
                 previous_receipt_id  TEXT,
-                minted_at            TEXT NOT NULL
+                minted_at            TEXT NOT NULL,
+                signer_key           TEXT,
+                signature            TEXT,
+                receipt_body_hash    TEXT,
+                parent_receipt_hash  TEXT
             );
             CREATE TABLE IF NOT EXISTS webauthn_passkeys (
                 user_id      TEXT PRIMARY KEY,
@@ -69,6 +73,16 @@ impl HoldQueue {
                 updated_at   TEXT NOT NULL
             );",
         )?;
+        // Migration: add columns introduced in v0.2 (ignore "duplicate column" if already present).
+        for stmt in [
+            "ALTER TABLE receipts ADD COLUMN signer_key TEXT",
+            "ALTER TABLE receipts ADD COLUMN signature TEXT",
+            "ALTER TABLE receipts ADD COLUMN receipt_body_hash TEXT",
+            "ALTER TABLE receipts ADD COLUMN parent_receipt_hash TEXT",
+        ] {
+            let _ = conn.execute(stmt, []);
+        }
+
         Ok(Self {
             conn: Mutex::new(conn),
             ttl: Duration::hours(24),
@@ -165,6 +179,82 @@ impl HoldQueue {
             trail,
             previous_receipt_id: None,
             minted_at: now,
+        }))
+    }
+
+    /// Persist the Ed25519 signature fields after signing — call immediately after `approve()`.
+    /// `body_hash` is `ReceiptSigner::receipt_hash(&governance_receipt)`.
+    pub fn persist_receipt_signature(
+        &self,
+        receipt_id: &str,
+        signer_key: &str,
+        signature: &str,
+        body_hash: &str,
+        parent_receipt_hash: Option<&str>,
+        previous_receipt_id: Option<&str>,
+    ) -> rusqlite::Result<()> {
+        self.conn.lock().unwrap().execute(
+            "UPDATE receipts SET signer_key = ?1, signature = ?2, receipt_body_hash = ?3,
+             parent_receipt_hash = ?4, previous_receipt_id = ?5 WHERE id = ?6",
+            params![signer_key, signature, body_hash, parent_receipt_hash, previous_receipt_id, receipt_id],
+        )?;
+        Ok(())
+    }
+
+    /// Return `(receipt_id, receipt_body_hash)` of the most recently minted signed receipt.
+    /// Used to derive the `parent_receipt_hash` for the next approval in the chain.
+    pub fn latest_receipt_body_hash(&self) -> rusqlite::Result<Option<(String, String)>> {
+        self.conn.lock().unwrap().query_row(
+            "SELECT id, receipt_body_hash FROM receipts WHERE receipt_body_hash IS NOT NULL
+             ORDER BY minted_at DESC LIMIT 1",
+            [],
+            |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+        ).ok().map(Ok).transpose()
+    }
+
+    /// Fetch a full `GovernanceReceipt` by id from the DB.
+    /// Returns `None` if the receipt doesn't exist or hasn't been signed yet.
+    pub fn fetch_governance_receipt(&self, id: &str) -> rusqlite::Result<Option<GovernanceReceipt>> {
+        let row: Option<(String, u32, String, String, String, String, String, Option<String>, Option<String>, Option<String>)> =
+            self.conn.lock().unwrap().query_row(
+                "SELECT card_id, card_version, acting_hash, action_id,
+                        final_verdict_json, trail_json, minted_at,
+                        signer_key, signature, parent_receipt_hash
+                 FROM receipts WHERE id = ?1",
+                params![id],
+                |row| Ok((
+                    row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?,
+                    row.get(4)?, row.get(5)?, row.get(6)?,
+                    row.get(7)?, row.get(8)?, row.get(9)?,
+                )),
+            ).ok();
+
+        let Some((card_id, card_version, acting_hash, action_id,
+                  final_verdict_json, trail_json, minted_at_str,
+                  signer_key, signature, parent_receipt_hash)) = row else {
+            return Ok(None);
+        };
+
+        let (Some(signer_key), Some(signature)) = (signer_key, signature) else {
+            return Ok(None); // unsigned row — signed fields not yet persisted
+        };
+
+        let final_verdict: Verdict = serde_json::from_str(&final_verdict_json).unwrap_or(Verdict::Allow);
+        let trail: Vec<GateTrail> = serde_json::from_str(&trail_json).unwrap_or_default();
+        let minted_at = minted_at_str.parse().unwrap_or_else(|_| Utc::now());
+
+        Ok(Some(GovernanceReceipt {
+            id: id.to_string(),
+            card_id,
+            card_version,
+            acting_hash,
+            action_id,
+            final_verdict,
+            trail,
+            parent_receipt_hash,
+            minted_at,
+            signer_key,
+            signature,
         }))
     }
 

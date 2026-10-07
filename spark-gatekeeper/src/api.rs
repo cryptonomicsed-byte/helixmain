@@ -3,6 +3,7 @@
 /// Routes:
 ///   GET  /held                   — list pending held operations
 ///   GET  /held/:id               — single held operation
+///   GET  /receipts/:id           — fetch a signed GovernanceReceipt by id
 ///   POST /setup/challenge        — begin approver passkey registration
 ///   POST /setup/finish           — complete registration and store passkey
 ///   POST /held/:id/challenge     — generate WebAuthn challenge for a specific hold
@@ -13,9 +14,10 @@
 /// before calling HoldQueue::approve(). Minting the receipt is atomic with approval.
 /// Anyone who can POST to /held/:id/approve must first win a WebAuthn ceremony
 /// against a registered passkey — there is no other code path to approval.
+use crate::receipt_signer::ReceiptSigner;
 use crate::sidecar::{self, SidecarResponse};
 use crate::types::{Action, ActionRequest, Card, GateContext, PolicySeed, ToolAllowlist};
-use crate::{receipt_signer::ReceiptSigner, SparkGatekeeper};
+use crate::SparkGatekeeper;
 use chrono::Utc;
 use uuid::Uuid;
 use axum::{
@@ -162,9 +164,6 @@ pub struct SetupFinishRequest {
 #[derive(Deserialize)]
 pub struct ApproveRequest {
     pub credential: PublicKeyCredential,
-    /// SHA-256 hex of the JCS-canonical body of the previous GovernanceReceipt.
-    /// None for the first approval in the chain.
-    pub parent_receipt_hash: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -180,6 +179,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/invoke", post(invoke))
         .route("/held", get(list_held))
         .route("/held/:id", get(get_held))
+        .route("/receipts/:id", get(get_receipt))
         .route("/setup/challenge", post(setup_challenge))
         .route("/setup/finish", post(setup_finish))
         .route("/held/:id/challenge", post(held_challenge))
@@ -193,11 +193,12 @@ pub fn router(state: Arc<AppState>) -> Router {
 
 /// Liveness probe. The old `spark-gatekeeper-server` served `/health`; the port to
 /// the compiled-gates binary dropped it, which broke health checks that expect it.
-async fn health() -> impl IntoResponse {
+async fn health(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     Json(serde_json::json!({
         "status": "ok",
         "service": "spark-gatekeeper",
         "version": env!("CARGO_PKG_VERSION"),
+        "signer_key": state.signer.verifying_key_hex,
     }))
 }
 
@@ -417,18 +418,47 @@ async fn held_approve(
             .store_approver_passkey(&updated_json)?;
     }
 
-    // Atomically approve and mint the base receipt, then sign it as a GovernanceReceipt.
-    // The two steps are sequential in the same request — there is no window where the
-    // hold is approved but the receipt is unsigned.
+    // Derive parent hash from the last signed receipt in the DB — the chain is
+    // server-controlled, not client-supplied, so the caller cannot forge a link.
+    let parent = state.gatekeeper.hold_queue.latest_receipt_body_hash()?;
+    let parent_receipt_hash = parent.as_ref().map(|(_, h)| h.clone());
+    let previous_receipt_id = parent.map(|(id, _)| id);
+
+    // Approve and mint the base receipt.
     let receipt = state
         .gatekeeper
         .hold_queue
-        .approve(&hold_id, None)?
+        .approve(&hold_id, previous_receipt_id.clone())?
         .ok_or(ApiError::NotFound)?;
 
-    let governance_receipt = state.signer.sign(&receipt, body.parent_receipt_hash);
+    // Sign to produce the GovernanceReceipt, then persist the signature fields.
+    let governance_receipt = state.signer.sign(&receipt, parent_receipt_hash);
+    let body_hash = ReceiptSigner::receipt_hash(&governance_receipt);
+    state.gatekeeper.hold_queue.persist_receipt_signature(
+        &governance_receipt.id,
+        &governance_receipt.signer_key,
+        &governance_receipt.signature,
+        &body_hash,
+        governance_receipt.parent_receipt_hash.as_deref(),
+        previous_receipt_id.as_deref(),
+    )?;
 
     Ok(Json(governance_receipt))
+}
+
+/// Fetch a signed GovernanceReceipt by id. Returns 404 if not found or unsigned.
+/// The returned receipt is offline-verifiable: call ReceiptSigner::verify() with
+/// signer_key=`signer_key` from /health or the known public key.
+async fn get_receipt(
+    State(state): State<Arc<AppState>>,
+    Path(receipt_id): Path<String>,
+) -> Result<impl IntoResponse, ApiError> {
+    let receipt = state
+        .gatekeeper
+        .hold_queue
+        .fetch_governance_receipt(&receipt_id)?
+        .ok_or(ApiError::NotFound)?;
+    Ok(Json(receipt))
 }
 
 /// Deny a held operation. No ceremony required — denying is the safe path.
