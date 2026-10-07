@@ -12,7 +12,7 @@ The dependency order to first paying client: **1 → 2 → 3 → 5 → 6**, with
 | 2 | SparkGatekeeper approval surface | `helixmain/spark-gatekeeper/` | 🟢 Done — UI live at omokoda.duckdns.org/spark/ (`1a65062`); passkey enroll on first browser visit |
 | 3 | card-protocol 0.2 conformance | `card-protocol` | 🟢 Done — 20/20 VPS confirmed (`dac16c3`) |
 | 4 | OSS adoptions | `helixmain` (phased) | 🟢 Done — 6/6 items shipped |
-| 5 | Runtime exit proof | `helixmain` + `mesh-voice` + VPS | 🔴 Blocked on external gates |
+| 5 | Runtime exit proof | `helixmain` + `mesh-voice` + VPS | 🟡 In progress — PASS=22 FAIL=0 GAP=3. Chain live (receipt 88c8ef96). Remaining: mesh-voice deploy to grokbot-box. |
 | 6 | Registry and Sui | `helixmain` (TBD) | 🔴 Post-revenue |
 
 **Not on this path:** Hostinger ticket (drafted, awaiting your send); GMGN key rotation (separate security thread); seven-fold work (separate boundary).
@@ -90,12 +90,10 @@ QR demo steps when FAIL=0 and GAP=0; otherwise prints exactly what's blocking.
 2. `compile_openshell_policy` + `openshell-policy.yaml` emitted — 48/48 green (`35ab67b`, `d21f20f`) ✅
 3. `spark-gate-mcp` MCP shim + ZeroClaw `[mcp]` binding + santinos agent config — 61/61 green (`ebf23df`, `8aaf919`) ✅
 
-**1 VPS wiring step remaining:**
-- Run `deploy/zeroclaw/ws5-job3-apply.sh` on the VPS to install santinos channel + system_prompt (keygen, TOML patch, restart, proof)
-
-**2 infra steps (yours):**
-- grokbot-box back online (Tailscale 100.109.5.90, needs power cycle)
-- `mesh-voice` deployed to grokbot-box
+**Remaining before demo:**
+- Deploy mesh-voice to grokbot-box (now online at 100.109.5.90)
+- Run refund action to prove `/spark/` hold card UI (approval_required → escalate → hold)
+- Optional: tool bus on :9200 (Allow-path only, not needed for deny/escalate demo); gVisor (preflight only)
 
 **Demo sequence (once all gaps close):**
 1. `ws5-boot.sh` prints READY — ZeroClaw + PocketBase + SparkGatekeeper all green
