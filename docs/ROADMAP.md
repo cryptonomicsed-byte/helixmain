@@ -12,7 +12,7 @@ The dependency order to first paying client: **1 → 2 → 3 → 5 → 6**, with
 | 2 | SparkGatekeeper approval surface | `helixmain/spark-gatekeeper/` | 🟢 Done — UI live at omokoda.duckdns.org/spark/ (`1a65062`); passkey enroll on first browser visit |
 | 3 | card-protocol 0.2 conformance | `card-protocol` | 🟢 Done — 20/20 VPS confirmed (`dac16c3`) |
 | 4 | OSS adoptions | `helixmain` (phased) | 🟢 Done — 6/6 items shipped |
-| 5 | Runtime exit proof | `helixmain` + `mesh-voice` + VPS | 🟡 In progress — PASS=22 FAIL=0 GAP=3. Chain live (receipt 88c8ef96). Remaining: mesh-voice deploy to grokbot-box. |
+| 5 | Runtime exit proof | `helixmain` + `mesh-voice` + VPS | 🟡 In progress — PASS=23 FAIL=0 GAP=2. Refund hold proven (17771aa2). Remaining: grokbot-box Tailscale auth (Justin). |
 | 6 | Registry and Sui | `helixmain` (TBD) | 🔴 Post-revenue |
 
 **Not on this path:** Hostinger ticket (drafted, awaiting your send); GMGN key rotation (separate security thread); seven-fold work (separate boundary).
@@ -82,7 +82,7 @@ The two uncommitted repo-examination docs (`helixmain/docs/blueprint/`) land on 
 
 **Repos:** `helixmain` + `mesh-voice` + VPS (ZeroClaw + PocketBase + SparkGatekeeper sidecar)
 
-**Preflight:** `ws5-boot.sh` on VPS — 16 PASS, 9 GAP as of 2026-10-06. Script only prints
+**Preflight:** `ws5-boot.sh` on VPS — PASS=23 FAIL=0 GAP=2 as of 2026-10-06. Script only prints
 QR demo steps when FAIL=0 and GAP=0; otherwise prints exactly what's blocking.
 
 **3 code jobs — all complete:**
@@ -90,9 +90,14 @@ QR demo steps when FAIL=0 and GAP=0; otherwise prints exactly what's blocking.
 2. `compile_openshell_policy` + `openshell-policy.yaml` emitted — 48/48 green (`35ab67b`, `d21f20f`) ✅
 3. `spark-gate-mcp` MCP shim + ZeroClaw `[mcp]` binding + santinos agent config — 61/61 green (`ebf23df`, `8aaf919`) ✅
 
-**Remaining before demo:**
-- Deploy mesh-voice to grokbot-box (now online at 100.109.5.90)
-- Run refund action to prove `/spark/` hold card UI (approval_required → escalate → hold)
+**Additional fixes (`cea775e`):**
+- Mentalism gate panic on empty `acting_hash` fixed (safe slice guard in all 3 format sites)
+- SOUL.md refund routing fixed — agent now calls `spark__invoke` before responding (was giving phone number from card knowledge)
+
+**Refund hold proven** — hold `17771aa2` in queue, polarity=Escalate(approval_required), visible at /spark/ ✅
+
+**Remaining before live Meshenger demo:**
+- `mesh-voice/` present on VPS (`~/mesh-voice/.env` configured); actual process on grokbot-box blocked on Tailscale auth (Justin clicks one-time browser link at `https://login.tailscale.com/a/...`)
 - Optional: tool bus on :9200 (Allow-path only, not needed for deny/escalate demo); gVisor (preflight only)
 
 **Demo sequence (once all gaps close):**
