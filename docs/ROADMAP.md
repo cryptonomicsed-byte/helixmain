@@ -12,7 +12,7 @@ The dependency order to first paying client: **1 → 2 → 3 → 5 → 6**, with
 | 2 | SparkGatekeeper approval surface | `helixmain/spark-gatekeeper/` | 🟢 Done — UI live at omokoda.duckdns.org/spark/ (`1a65062`); passkey enroll on first browser visit |
 | 3 | card-protocol 0.2 conformance | `card-protocol` | 🟢 Done — 20/20 VPS confirmed (`dac16c3`) |
 | 4 | OSS adoptions | `helixmain` (phased) | 🟢 Done — 6/6 items shipped |
-| 5 | Runtime exit proof | `helixmain` + `mesh-voice` + VPS | 🟢 Done — PASS=25 FAIL=0 GAP=0 READY TO DEMO. mesh-voice live on grokbot-box. Refund hold proven (17771aa2). |
+| 5 | Runtime exit proof | `helixmain` + `mesh-voice` + VPS | 🟡 Wired — PASS=25 FAIL=0 GAP=0. Hold `17771aa2` in queue. Receipt + voice call need one human run. |
 | 6 | Registry and Sui | `helixmain` (TBD) | 🔴 Post-revenue |
 
 **Not on this path:** Hostinger ticket (drafted, awaiting your send); GMGN key rotation (separate security thread); seven-fold work (separate boundary).
@@ -95,14 +95,22 @@ The two uncommitted repo-examination docs (`helixmain/docs/blueprint/`) land on 
 - SOUL.md refund routing fixed — agent calls `spark__invoke` first, no phone-number shortcut
 - spark-approval UI shows full action payload (amount in amber, topic, description) on each hold card
 
-**Chain proven end-to-end:**
-- GovernanceReceipt `88c8ef96` — Deny, polarity (draft card cannot deploy)
-- Hold `17771aa2` — polarity=Escalate(approval_required), `ticket.create` refund payload, visible at /spark/ ✅
+**Chain proven (wiring verified, human path pending Justin's passkey tap):**
+- GovernanceReceipt `88c8ef96` — Deny, polarity (draft card cannot deploy) ✅
+- Hold `17771aa2` — polarity=Escalate(approval_required), `ticket.create` refund payload (`$24.99`, topic: refunds), rendering correctly at /spark/ ✅
+- **Receipt mint unproven** — 0 approvals, 0 receipts. Mechanism exists (receipt_signer.rs, hash-chained); needs one passkey tap to exercise the full path.
+- **Voice call unproven** — mesh-voice subscribed to relay; no QR scan or spoken ask has run yet.
+
+**To complete the human path:**
+1. Open `https://omokoda.duckdns.org/spark/` — approve hold `17771aa2` with your passkey
+2. Verify receipt mints (receipt id + Ed25519 sig logged in SparkGatekeeper output)
+3. On grokbot-box: `tmux attach -t mesh-voice` — confirm QR renders; scan with Meshenger
 
 **Infrastructure additions:**
 - gVisor `runsc` installed on VPS
 - tool-bus-stub systemd service on `127.0.0.1:9200` (Allow-path forward target)
 - Cargo clean weekly cron (`/root/cargo-clean-weekly.sh`, 0 3 * * 0) — cleans spark-gatekeeper + zeroclaw targets
+- `deploy/deploy-spark-ui.sh` — deploy script that sets `a+rX` perms after scp (nginx perms bug fixed)
 
 **Demo sequence (once all gaps close):**
 1. `ws5-boot.sh` prints READY — ZeroClaw + PocketBase + SparkGatekeeper all green
