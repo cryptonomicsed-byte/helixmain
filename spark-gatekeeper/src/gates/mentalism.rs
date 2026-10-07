@@ -31,8 +31,8 @@ impl MentalismGate {
             return Verdict::Deny {
                 reason: format!(
                     "stale acting_hash: action carries {}, card is {}",
-                    &ctx.action.acting_hash[..8],
-                    &ctx.card.acting_hash[..8]
+                    ctx.action.acting_hash.get(..8).unwrap_or(&ctx.action.acting_hash),
+                    ctx.card.acting_hash.get(..8).unwrap_or(&ctx.card.acting_hash)
                 ),
             };
         }
@@ -84,8 +84,8 @@ fn verify_card_hash(ctx: &GateContext) -> Result<(), String> {
     if computed != ctx.card.hash {
         return Err(format!(
             "card hash mismatch: computed {}, stored {}",
-            &computed[..8],
-            &ctx.card.hash[..8]
+            computed.get(..8).unwrap_or(&computed),
+            ctx.card.hash.get(..8).unwrap_or(&ctx.card.hash)
         ));
     }
     Ok(())
@@ -117,8 +117,8 @@ fn verify_acting_hash(ctx: &GateContext) -> Result<(), String> {
     if computed != ctx.card.acting_hash {
         return Err(format!(
             "acting_hash mismatch: computed {}, stored {}",
-            &computed[..8],
-            &ctx.card.acting_hash[..8]
+            computed.get(..8).unwrap_or(&computed),
+            ctx.card.acting_hash.get(..8).unwrap_or(&ctx.card.acting_hash)
         ));
     }
     Ok(())
