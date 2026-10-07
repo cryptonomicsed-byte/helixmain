@@ -179,6 +179,32 @@ function renderAction(actionJson: string): string {
   }
 }
 
+function renderPayload(actionJson: string): HTMLElement | null {
+  let a: Action;
+  try {
+    a = JSON.parse(actionJson);
+  } catch {
+    return null;
+  }
+  const payload = a.payload;
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+  const entries = Object.entries(payload as Record<string, unknown>).filter(
+    ([, v]) => v !== null && v !== undefined && v !== "",
+  );
+  if (entries.length === 0) return null;
+
+  const box = el("div", { class: "payload-box" });
+  for (const [k, v] of entries) {
+    const valStr = typeof v === "object" ? JSON.stringify(v) : String(v);
+    const isAmount = k === "amount" || k === "price" || k === "total";
+    box.appendChild(el("span", { class: "payload-key" }, [k]));
+    box.appendChild(el("span", { class: isAmount ? "payload-val amount" : "payload-val" }, [
+      isAmount && typeof v === "number" ? `$${v.toFixed(2)}` : valStr,
+    ]));
+  }
+  return box;
+}
+
 // ── Hold card rendering ───────────────────────────────────────────────────────
 
 function renderHoldCard(item: HeldOperation): HTMLElement {
@@ -200,6 +226,9 @@ function renderHoldCard(item: HeldOperation): HTMLElement {
   header.appendChild(titleBlock);
   card.appendChild(header);
   card.appendChild(renderTrail(item.trail_json));
+
+  const payloadBox = renderPayload(item.action_json);
+  if (payloadBox) card.appendChild(payloadBox);
 
   const actions = el("div", { class: "actions" });
   const approveBtn = el("button", { class: "btn-approve" }, ["Approve"]);
