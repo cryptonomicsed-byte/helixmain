@@ -172,6 +172,18 @@ def emit():
     out.append('channels = ["nostr.santinos"]\n')
     out.append('knowledge_bundles = ["card"]\n')
 
+def patch_risk_profile(content):
+    # Add auto_approve = ["spark__invoke"] to risk_profiles.card_agent so ZeroClaw
+    # doesn't shadow the gate with its own approval layer before the MCP tool fires.
+    if 'auto_approve' in content:
+        return re.sub(r'(?m)^auto_approve\s*=.*$', 'auto_approve = ["spark__invoke"]', content)
+    # Insert after [risk_profiles.card_agent] block
+    return re.sub(
+        r'(\[risk_profiles\.card_agent\][^\[]*)',
+        lambda m: m.group(1).rstrip() + '\nauto_approve = ["spark__invoke"]\n',
+        content, count=1
+    )
+
 for ln in lines:
     stripped = ln.strip()
     if stripped.startswith("["):
@@ -199,16 +211,17 @@ if "[knowledge_bundles.card]" not in content:
     content += f'\n[knowledge_bundles.card]\nsources = ["{card_path}"]\n'
     print(f"  knowledge_bundles.card appended ({card_path})")
 
-# Set memory.search_mode = "keyword" to avoid hybrid-with-no-embedding noise
+# Set memory.search_mode = "bm25" (schema accepts: bm25 | embedding | hybrid).
+# "keyword" is invalid and silently resets the entire [memory] section.
 if "[memory]" not in content:
-    content += '\n[memory]\nsearch_mode = "keyword"\n'
-    print("  [memory] search_mode = keyword appended")
+    content += '\n[memory]\nsearch_mode = "bm25"\n'
+    print("  [memory] search_mode = bm25 appended")
 else:
-    # replace existing search_mode line if present
-    content = re.sub(r'(?m)^search_mode\s*=.*$', 'search_mode = "keyword"', content)
+    content = re.sub(r'(?m)^search_mode\s*=.*$', 'search_mode = "bm25"', content)
 
+content = patch_risk_profile(content)
 open(cfg_path, "w").write(content)
-print("  agents.santinos patched (channels + knowledge_bundles)")
+print("  agents.santinos patched (channels + knowledge_bundles + auto_approve)")
 PYEOF
 
 # ── SOUL.md — agent persona grounding ────────────────────────────────────────
@@ -219,8 +232,8 @@ echo "==> placing SOUL.md in agent workspace"
 WORKSPACE=$("$ZC" --config-dir /etc/zeroclaw config get agents.santinos.workspace 2>/dev/null \
   | grep -oP '(?<=workspace = ).*' | tr -d '"' || true)
 if [ -z "$WORKSPACE" ]; then
-  # Default workspace if not configured
-  WORKSPACE=/etc/zeroclaw/workspaces/santinos
+  # Real default: /etc/zeroclaw/agents/<alias>/workspace (NOT /workspaces/<alias>)
+  WORKSPACE=/etc/zeroclaw/agents/santinos/workspace
 fi
 mkdir -p "$WORKSPACE"
 cp "$POLICY_DIR/SOUL.md" "$WORKSPACE/SOUL.md"

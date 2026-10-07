@@ -20,7 +20,7 @@ GATEKEEPER="127.0.0.1:9100"
 POCKETBASE="127.0.0.1:8090"
 ZEROCLAW_GW="127.0.0.1:42617"
 TOOLBUS="127.0.0.1:9200"
-OS_GATEWAY="127.0.0.1:8080"
+OS_GATEWAY="127.0.0.1:17670"  # openshell-gateway binds here (not 8080)
 
 PASS=0; FAIL=0; GAP=0
 ok()   { printf '  \033[32mPASS\033[0m  %s\n' "$*"; PASS=$((PASS+1)); }
