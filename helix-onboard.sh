@@ -292,6 +292,47 @@ out = f"{card_dir}/card.json"
 with open(out, "w") as f:
     json.dump(card, f, indent=2)
 print(f"compiled: {out} ({len(offerings)} offerings)")
+
+# Derive policy-seed.json from card policies
+HIGH_TOPICS = {"refund", "cancel", "return", "chargeback", "complaint", "dispute", "compensation"}
+seed_rules = []
+for p in policies:
+    topic = p.get("topic", "")
+    rule  = p.get("rule", "")
+    is_high = any(w in topic.lower() or w in rule.lower() for w in HIGH_TOPICS)
+    seed_rules.append({
+        "topic":             topic,
+        "rule":              rule,
+        "risk":              "high" if is_high else "low",
+        "verdict":           "approval_required" if is_high else "allow",
+        "source_confidence": 0.65,
+    })
+seed = {
+    "card_id":      fm_id,
+    "card_version": fm_version,
+    "generated_at": now,
+    "rules":        seed_rules,
+    "defaults":     {"low": "allow", "medium": "approval_required", "high": "escalate"},
+}
+seed_out = f"{card_dir}/policy-seed.json"
+with open(seed_out, "w") as f:
+    json.dump(seed, f, indent=2)
+
+# Derive tool-allowlist.json — standard set; add telephony if phone channel present
+tools = [
+    {"tool": "kb.search",              "reason": "answer from approved knowledge base"},
+    {"tool": "customer.lookup",        "reason": "read-only customer retrieval"},
+    {"tool": "order.lookup",           "reason": "read-only order retrieval"},
+    {"tool": "ticket.create",          "reason": "ticket creation is low-risk"},
+    {"tool": "ticket.update",          "reason": "ticket updates are low-risk"},
+    {"tool": "conversation.summarize", "reason": "summaries are read-only"},
+]
+if "phone" in channels:
+    tools.append({"tool": "telephony.place_call", "reason": "phone channel present"})
+allowlist = {"card_id": fm_id, "tools": tools}
+allow_out = f"{card_dir}/tool-allowlist.json"
+with open(allow_out, "w") as f:
+    json.dump(allowlist, f, indent=2)
 PYEOF
 }
 
@@ -317,6 +358,93 @@ url_encode() {
 }
 
 # ── Commands ──────────────────────────────────────────────────────────────────
+
+# Append per-company ZeroClaw config blocks (single-file config, no includes support)
+append_zeroclaw_config() {
+  local id="$1"
+  local sk_hex="$2"
+  local card_dir="${HELIX_DIR}/${id}"
+  local zc_config="/etc/zeroclaw/config.toml"
+  local ts; ts="$(date -u +%Y%m%d%H%M%S)"
+
+  # Guard: skip if already present
+  if ssh "$VPS" "grep -q '^\[agents\.${id}\]' '${zc_config}'" 2>/dev/null; then
+    echo "    zeroclaw: [agents.${id}] already present, skipping"
+    return 0
+  fi
+
+  echo "--> Appending ZeroClaw config for ${id}..."
+  ssh "$VPS" "cp '${zc_config}' '${zc_config}.bak-onboard-${ts}'"
+
+  ssh "$VPS" "cat >> '${zc_config}'" << ZCEOF
+
+# ─── Company: ${id} ───────────────────────────────────────────────────────────
+
+[agents.${id}]
+acp_enable_mcp = false
+delegate_same_risk_profile = true
+enabled = true
+model_provider = "openai.deepseek"
+risk_profile = "card_agent"
+mcp_bundles = ["${id}_tools"]
+channels = ["nostr.${id}"]
+knowledge_bundles = ["${id}_card"]
+
+[agents.${id}.a2a]
+published = false
+
+[agents.${id}.identity]
+format = "openclaw"
+
+[agents.${id}.memory]
+backend = "sqlite"
+
+[agents.${id}.precheck]
+enabled = true
+timeout_secs = 5
+
+[agents.${id}.workspace]
+unrestricted_filesystem = false
+
+[channels.nostr.${id}]
+enabled = true
+private_key = "${sk_hex}"
+relays = ["wss://omokoda.duckdns.org:3443"]
+
+[peer_groups.${id}_trusted]
+channel = "nostr.${id}"
+agents = ["${id}"]
+external_peers = []
+
+[[mcp.servers]]
+name = "spark_${id}"
+transport = "stdio"
+command = "/usr/local/bin/spark-gate-mcp"
+args = []
+tool_timeout_secs = 30
+pinned_resources = ["card://local/current"]
+env = { SPARK_INVOKE_URL = "http://127.0.0.1:9100/invoke", SPARK_CARD = "${card_dir}/card.json", SPARK_POLICY_SEED = "${card_dir}/policy-seed.json", SPARK_TOOL_ALLOWLIST = "${card_dir}/tool-allowlist.json" }
+
+[mcp_bundles.${id}_tools]
+servers = ["spark_${id}"]
+exclude = []
+
+[knowledge_bundles.${id}_card]
+sources = ["${card_dir}/CARD.md"]
+tags = ["card", "${id}"]
+ZCEOF
+
+  echo "--> Restarting ZeroClaw..."
+  ssh "$VPS" "systemctl restart zeroclaw"
+  sleep 3
+  local zc_active; zc_active="$(ssh "$VPS" "systemctl is-active zeroclaw" 2>/dev/null || echo inactive)"
+  echo "    zeroclaw: ${zc_active}"
+  if [[ "$zc_active" != "active" ]]; then
+    echo "    WARNING: zeroclaw not active — restoring backup and retrying"
+    ssh "$VPS" "cp '${zc_config}.bak-onboard-${ts}' '${zc_config}' && systemctl restart zeroclaw"
+    die "ZeroClaw failed to start with new config. Backup restored."
+  fi
+}
 
 cmd_create() {
   parse_args "$@"
@@ -399,6 +527,9 @@ SVCEOF
   sleep 3
   local active; active="$(ssh "$VPS" "systemctl is-active '${svc_name}'" 2>/dev/null || echo inactive)"
   echo "    service: $active"
+
+  # 8.5. Append ZeroClaw config (text agent for DMs)
+  append_zeroclaw_config "$id" "$SK_HEX"
 
   # 9. Print summary + QR
   local caller_url="${CALLER_BASE}?npub=${NPUB}&relay=$(url_encode "$RELAY")&name=$(url_encode "$OPT_NAME")"
