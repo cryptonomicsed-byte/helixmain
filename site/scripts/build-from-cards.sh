@@ -66,10 +66,19 @@ json.dump(out, open(f"{out_dir}/{company_id}.json", "w"), indent=2)
 print(f"  built {company_id}: {out['name']}")
 PYEOF
 
-  # Copy QR from wherever helix-onboard.sh left it, if it exists locally
-  local_qr="/data/data/com.termux/files/home/caller-qr-latest.png"
-  target_qr="${QR_OUT}/${id}-talk.png"
-  # If a per-company QR was saved, use it; otherwise skip (no QR = img broken, acceptable)
+  # Generate QR for caller URL
+  if [ -n "$caller_url" ]; then
+    python3 - "$caller_url" "${QR_OUT}/${id}-talk.png" << 'PYEOF'
+import sys, qrcode
+url, out = sys.argv[1], sys.argv[2]
+qr = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=8, border=3)
+qr.add_data(url)
+qr.make(fit=True)
+img = qr.make_image(fill_color="#0f0f0f", back_color="#e2e2e2")
+img.save(out)
+print(f"  qr  {out.split('/')[-1]}")
+PYEOF
+  fi
 done
 
 echo "==> Generating content stubs"
