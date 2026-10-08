@@ -1,0 +1,95 @@
+{{ define "title" }}{{ .Title }} — {{ .Site.Title }}{{ end }}
+{{ define "main" }}
+{{ $id := .Params.company_id }}
+{{ $c := index .Site.Data.companies $id }}
+{{ if not $c }}
+  <p>Company not found.</p>
+{{ else }}
+<style>
+  .company-page { max-width: 680px; }
+  .company-header { margin-bottom: 2rem; }
+  .company-header h1 { margin-bottom: 0.25rem; }
+  .company-header .tagline { color: var(--muted); font-size: 0.95rem; margin-bottom: 1rem; }
+  .contact-line { display: flex; gap: 1rem; flex-wrap: wrap; align-items: center; }
+  .contact-line a { color: var(--accent); font-family: var(--mono); font-size: 0.9rem; }
+  .contact-line address { font-style: normal; color: var(--muted); font-size: 0.85rem; }
+  .hours-val { color: var(--text); font-size: 0.9rem; margin-bottom: 0.5rem; }
+  .offerings-list { list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
+  .offerings-list li {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
+    padding: 0.65rem 0.9rem; display: flex; justify-content: space-between; align-items: center;
+  }
+  .offerings-list .offer-name { font-weight: 500; font-size: 0.9rem; }
+  .offerings-list .offer-price { color: var(--amber); font-family: var(--mono); font-size: 0.85rem; }
+  .connect-section { margin-top: 2rem; }
+  .call-button {
+    display: inline-block; background: var(--accent); color: #000;
+    padding: 0.7rem 1.4rem; border-radius: 6px; font-weight: 700; font-size: 0.95rem;
+    margin-bottom: 1.5rem;
+  }
+  .call-button:hover { opacity: 0.85; text-decoration: none; }
+  .qr-pair { display: flex; gap: 1.5rem; flex-wrap: wrap; }
+  .qr-pair figure { text-align: center; }
+  .qr-pair img { width: 140px; height: 140px; border-radius: 6px; border: 1px solid var(--border); }
+  .qr-pair figcaption { font-size: 0.75rem; color: var(--muted); margin-top: 0.4rem; }
+  .card-proof { margin-top: 2.5rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+  .card-proof small { color: #444; font-family: var(--mono); font-size: 0.72rem; }
+</style>
+
+<article class="company-page">
+  <header class="company-header">
+    <h1>{{ $c.name }}</h1>
+    {{ with $c.tagline }}<p class="tagline">{{ . }}</p>{{ end }}
+    <div class="contact-line">
+      {{ with $c.phone }}<a href="tel:{{ . }}">{{ . }}</a>{{ end }}
+      {{ with $c.address }}<address>{{ . }}</address>{{ end }}
+    </div>
+  </header>
+
+  {{ with $c.hours }}
+  <section>
+    <h2>Hours</h2>
+    <p class="hours-val">{{ . }}</p>
+  </section>
+  {{ end }}
+
+  {{ with $c.offerings }}
+  <section>
+    <h2>Services</h2>
+    <ul class="offerings-list">
+      {{ range . }}
+      <li>
+        <span class="offer-name">{{ .name }}</span>
+        {{ if .price }}<span class="offer-price">${{ .price }}</span>{{ end }}
+      </li>
+      {{ end }}
+    </ul>
+  </section>
+  {{ end }}
+
+  <section class="connect-section">
+    <h2>Talk to us</h2>
+    {{ with $c.caller_url }}
+    <a class="call-button" href="{{ . }}">Call now (browser)</a>
+    {{ end }}
+
+    <div class="qr-pair">
+      <figure>
+        <img src="/qr/{{ $id }}-talk.png" alt="Scan to call {{ $c.name }}">
+        <figcaption>Scan to talk to our AI</figcaption>
+      </figure>
+      {{ with $c.review_url }}
+      <figure>
+        <img src="/qr/{{ $id }}-review.png" alt="Leave a review">
+        <figcaption>Scan to leave a review</figcaption>
+      </figure>
+      {{ end }}
+    </div>
+  </section>
+
+  <footer class="card-proof">
+    <small>Verified business profile · v{{ $c.card_version }} · {{ $c.card_hash }}</small>
+  </footer>
+</article>
+{{ end }}
+{{ end }}

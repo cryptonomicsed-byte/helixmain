@@ -1,0 +1,48 @@
+{{ define "main" }}
+<style>
+  .pitch { max-width: 640px; }
+  .pitch h1 { margin-bottom: 0.5rem; }
+  .pitch .lede { font-size: 1.05rem; color: var(--muted); margin-bottom: 2rem; }
+  .pitch-points { display: flex; flex-direction: column; gap: 1rem; margin-bottom: 2rem; }
+  .point { background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+           padding: 1rem 1.25rem; }
+  .point h3 { color: #fff; font-size: 0.95rem; margin-bottom: 0.25rem; }
+  .point p { font-size: 0.85rem; color: var(--muted); margin: 0; }
+  .cta-box { background: var(--surface); border: 1px solid var(--accent);
+             border-radius: 8px; padding: 1.5rem; }
+  .cta-box h2 { color: var(--accent); margin-bottom: 0.5rem; font-size: 1rem; }
+  .cta-box p { font-size: 0.9rem; color: var(--text); margin-bottom: 1rem; }
+  .cta-box a { background: var(--accent); color: #000; padding: 0.6rem 1.2rem;
+               border-radius: 5px; font-weight: 700; font-size: 0.9rem; }
+</style>
+
+<div class="pitch">
+  <h1>{{ .Title }}</h1>
+  <p class="lede">Your business gets a voice AI that actually knows your hours, services, and policies — not a generic chatbot.</p>
+
+  <div class="pitch-points">
+    <div class="point">
+      <h3>Your card, your agent</h3>
+      <p>We build a signed business card from your information. Your AI reads it — not generic training data. Change your hours, the agent knows the next day.</p>
+    </div>
+    <div class="point">
+      <h3>You stay in control</h3>
+      <p>Any exception — refund, custom request, complaint — gets held for your approval. You approve from your phone. Every decision is receipted.</p>
+    </div>
+    <div class="point">
+      <h3>Browser calls, no app</h3>
+      <p>Customers call from a link or QR code — no download, no account. Works on any phone.</p>
+    </div>
+    <div class="point">
+      <h3>Setup in one session</h3>
+      <p>Tell us your business name, hours, services, and policies. We handle the rest.</p>
+    </div>
+  </div>
+
+  <div class="cta-box">
+    <h2>Get started</h2>
+    <p>We're onboarding local businesses now. Reach out and we'll set up your card.</p>
+    <a href="mailto:hello@helixmain.com">Contact us</a>
+  </div>
+</div>
+{{ end }}

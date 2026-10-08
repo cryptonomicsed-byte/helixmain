@@ -1,0 +1,65 @@
+{{ define "main" }}
+<style>
+  .dir-header { margin-bottom: 1.5rem; }
+  .dir-header p { color: var(--muted); font-size: 0.9rem; }
+  .search-wrap { margin-bottom: 1.5rem; }
+  #dir-search {
+    width: 100%; max-width: 420px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
+    color: var(--text); padding: 0.5rem 0.8rem; font-size: 0.9rem;
+  }
+  #dir-search::placeholder { color: var(--muted); }
+  .dir-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem; }
+  .dir-card {
+    display: block; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 1.25rem; transition: border-color 0.15s;
+    color: var(--text);
+  }
+  .dir-card:hover { border-color: var(--accent); text-decoration: none; }
+  .dir-card h3 { color: #fff; font-size: 0.95rem; margin-bottom: 0.3rem; }
+  .dir-card .tagline { font-size: 0.82rem; color: var(--muted); margin-bottom: 0.5rem; }
+  .dir-card .phone { font-size: 0.8rem; color: var(--accent); font-family: var(--mono); }
+  .no-results { color: var(--muted); font-size: 0.9rem; padding: 2rem 0; display: none; }
+</style>
+
+<div class="dir-header">
+  <h1>{{ .Title }}</h1>
+  <p>Local businesses with AI voice agents</p>
+</div>
+
+<div class="search-wrap">
+  <input type="search" id="dir-search" placeholder="Search by name or service…" autocomplete="off">
+</div>
+
+<div class="dir-grid" id="dir-grid">
+  {{ range $id, $c := .Site.Data.companies }}
+  <a class="dir-card" href="/b/{{ $id }}/"
+     data-name="{{ lower $c.name }}"
+     data-offerings="{{ range $c.offerings }}{{ lower .name }} {{ end }}">
+    <h3>{{ $c.name }}</h3>
+    {{ with $c.tagline }}<p class="tagline">{{ . }}</p>{{ end }}
+    {{ with $c.phone }}<span class="phone">{{ . }}</span>{{ end }}
+  </a>
+  {{ end }}
+</div>
+<p class="no-results" id="no-results">No businesses match your search.</p>
+
+<script>
+(function() {
+  var input = document.getElementById('dir-search');
+  var grid  = document.getElementById('dir-grid');
+  var none  = document.getElementById('no-results');
+  var cards = Array.from(grid.querySelectorAll('.dir-card'));
+  input.addEventListener('input', function() {
+    var q = this.value.toLowerCase().trim();
+    var visible = 0;
+    cards.forEach(function(c) {
+      var match = !q || c.dataset.name.includes(q) || (c.dataset.offerings || '').includes(q);
+      c.style.display = match ? '' : 'none';
+      if (match) visible++;
+    });
+    none.style.display = visible === 0 ? '' : 'none';
+  });
+})();
+</script>
+{{ end }}

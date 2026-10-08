@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ block "title" . }}{{ .Title }} — {{ .Site.Title }}{{ end }}</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0f0f0f; --surface: #161616; --border: #2a2a2a;
+      --text: #e2e2e2; --muted: #888; --accent: #4ade80;
+      --amber: #fbbf24; --blue: #60a5fa;
+      --font: system-ui, -apple-system, sans-serif;
+      --mono: ui-monospace, monospace;
+    }
+    body { background: var(--bg); color: var(--text); font-family: var(--font);
+           line-height: 1.6; min-height: 100vh; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    nav { border-bottom: 1px solid var(--border); padding: 1rem 2rem;
+          display: flex; justify-content: space-between; align-items: center; }
+    nav .logo { font-weight: 700; font-size: 1rem; color: #fff; }
+    nav .nav-links { display: flex; gap: 1.5rem; font-size: 0.85rem; color: var(--muted); }
+    nav .nav-links a { color: var(--muted); }
+    nav .nav-links a:hover { color: var(--text); }
+    main { max-width: 900px; margin: 0 auto; padding: 2rem; }
+    footer { border-top: 1px solid var(--border); padding: 1.5rem 2rem;
+             text-align: center; font-size: 0.75rem; color: var(--muted); margin-top: 4rem; }
+    h1 { font-size: 1.75rem; font-weight: 700; color: #fff; margin-bottom: 0.5rem; }
+    h2 { font-size: 1rem; font-weight: 600; text-transform: uppercase;
+         letter-spacing: 0.05em; color: var(--muted); margin: 1.5rem 0 0.75rem; }
+    p { color: var(--text); margin-bottom: 0.75rem; }
+  </style>
+</head>
+<body>
+  <nav>
+    <a class="logo" href="/">HelixMain</a>
+    <div class="nav-links">
+      <a href="/directory/">Directory</a>
+      <a href="/for-business/">For Business</a>
+    </div>
+  </nav>
+  <main>{{ block "main" . }}{{ end }}</main>
+  <footer>
+    <p>HelixMain · Every local business gets its own AI · <a href="/for-business/">Get started</a></p>
+  </footer>
+</body>
+</html>

@@ -1,0 +1,58 @@
+{{ define "title" }}{{ .Site.Title }} — {{ .Site.Params.tagline }}{{ end }}
+{{ define "main" }}
+<style>
+  .hero { text-align: center; padding: 4rem 0 3rem; }
+  .hero h1 { font-size: 2.5rem; margin-bottom: 1rem; }
+  .hero .tagline { font-size: 1.1rem; color: var(--muted); max-width: 520px; margin: 0 auto 2rem; }
+  .cta-row { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+  .btn { padding: 0.65rem 1.4rem; border-radius: 6px; font-size: 0.9rem; font-weight: 600;
+         cursor: pointer; transition: opacity 0.15s; }
+  .btn-primary { background: var(--accent); color: #000; }
+  .btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+  .btn:hover { opacity: 0.85; text-decoration: none; }
+  .how { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+         gap: 1.5rem; margin-top: 3rem; }
+  .step { background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+          padding: 1.25rem; }
+  .step-num { color: var(--accent); font-weight: 700; font-size: 0.8rem;
+              text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.4rem; }
+  .step h3 { color: #fff; font-size: 0.95rem; margin-bottom: 0.4rem; }
+  .step p { font-size: 0.82rem; color: var(--muted); margin: 0; }
+  .dir-preview { margin-top: 3rem; }
+  .dir-preview h2 { margin-bottom: 1rem; }
+</style>
+
+<div class="hero">
+  <h1>{{ .Site.Title }}</h1>
+  <p class="tagline">{{ .Site.Params.tagline }}</p>
+  <div class="cta-row">
+    <a class="btn btn-primary" href="/directory/">Browse businesses</a>
+    <a class="btn btn-secondary" href="/for-business/">Get your AI</a>
+  </div>
+</div>
+
+<div class="how">
+  <div class="step">
+    <div class="step-num">Step 1</div>
+    <h3>You describe your business</h3>
+    <p>Name, hours, services, policies. One conversation, five minutes.</p>
+  </div>
+  <div class="step">
+    <div class="step-num">Step 2</div>
+    <h3>We build your card</h3>
+    <p>A cryptographically signed business card — your AI's ground truth.</p>
+  </div>
+  <div class="step">
+    <div class="step-num">Step 3</div>
+    <h3>Your AI goes live</h3>
+    <p>Voice agent on your website. Customers call. You approve exceptions.</p>
+  </div>
+</div>
+
+{{ $companies := .Site.Data.companies }}
+{{ if $companies }}
+<div class="dir-preview">
+  <h2>Live businesses</h2>
+</div>
+{{ end }}
+{{ end }}

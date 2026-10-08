@@ -1,0 +1,7 @@
+baseURL = "https://helixmain.com"
+title = "HelixMain"
+
+[params]
+  tagline = "Every local business gets its own AI"
+
+disableKinds = ["taxonomy", "term"]
