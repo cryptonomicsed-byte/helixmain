@@ -30,6 +30,7 @@ interface HeldOperation {
   card_id: string;
   card_version: number;
   acting_hash: string;
+  org_id: string;
   action_id: string;
   action_json: string;
   trail_json: string;
@@ -65,8 +66,11 @@ function verdictLabel(v: Verdict): { text: string; cls: string } {
 
 // ── API calls ─────────────────────────────────────────────────────────────────
 
+let activeOrg: string = new URLSearchParams(location.search).get("org") ?? "";
+
 async function fetchHeld(): Promise<HeldOperation[]> {
-  const resp = await fetch("/held");
+  const url = activeOrg ? `/held?org=${encodeURIComponent(activeOrg)}` : "/held";
+  const resp = await fetch(url);
   if (!resp.ok) throw new Error(`GET /held → ${resp.status}`);
   return resp.json();
 }
@@ -219,7 +223,8 @@ function renderHoldCard(item: HeldOperation): HTMLElement {
   );
   titleBlock.appendChild(
     el("div", { class: "hold-meta" }, [
-      `${item.action_id} · card ${item.card_id}@${item.card_version} · `,
+      el("span", { class: "org-badge" }, [item.org_id || item.card_id]),
+      ` · ${item.action_id} · v${item.card_version} · `,
       `expires ${new Date(item.expires_at).toLocaleString()}`,
     ]),
   );
@@ -339,8 +344,28 @@ async function refresh(): Promise<void> {
     app.innerHTML = "";
     app.appendChild(renderSetup());
 
+    // ── Org filter bar ──────────────────────────────────────────────────────
+    const filterBar = el("div", { class: "filter-bar" });
+    const filterInput = el("input", {
+      type: "text",
+      placeholder: "filter by org (e.g. org_acme)",
+      value: activeOrg,
+      class: "org-filter-input",
+    }) as HTMLInputElement;
+    filterInput.addEventListener("change", () => {
+      activeOrg = filterInput.value.trim();
+      const url = new URL(location.href);
+      if (activeOrg) url.searchParams.set("org", activeOrg);
+      else url.searchParams.delete("org");
+      history.replaceState(null, "", url.toString());
+      refresh();
+    });
+    filterBar.appendChild(el("label", {}, ["Company: "]));
+    filterBar.appendChild(filterInput);
+    app.appendChild(filterBar);
+
     const queueHeader = el("h2", {}, [
-      `Pending (${items.length}) — auto-refreshes every 10s`,
+      `Pending (${items.length})${activeOrg ? ` — ${activeOrg}` : ""} — auto-refreshes every 10s`,
     ]);
     app.appendChild(queueHeader);
 
