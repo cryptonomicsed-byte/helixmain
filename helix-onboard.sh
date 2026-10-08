@@ -37,17 +37,19 @@ require_id() {
 parse_args() {
   OPT_ID=""; OPT_NAME=""; OPT_TYPE="service"; OPT_LOCATION=""
   OPT_PHONE=""; OPT_HOURS=""; OPT_PITCH=""; OPT_OFFERINGS=""; OPT_POLICIES=""
+  OPT_REVIEW_URL=""
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      --id)        OPT_ID="$2";        shift 2 ;;
-      --name)      OPT_NAME="$2";      shift 2 ;;
-      --type)      OPT_TYPE="$2";      shift 2 ;;
-      --location)  OPT_LOCATION="$2";  shift 2 ;;
-      --phone)     OPT_PHONE="$2";     shift 2 ;;
-      --hours)     OPT_HOURS="$2";     shift 2 ;;
-      --pitch)     OPT_PITCH="$2";     shift 2 ;;
-      --offerings) OPT_OFFERINGS="$2"; shift 2 ;;
-      --policies)  OPT_POLICIES="$2";  shift 2 ;;
+      --id)         OPT_ID="$2";         shift 2 ;;
+      --name)       OPT_NAME="$2";       shift 2 ;;
+      --type)       OPT_TYPE="$2";       shift 2 ;;
+      --location)   OPT_LOCATION="$2";   shift 2 ;;
+      --phone)      OPT_PHONE="$2";      shift 2 ;;
+      --hours)      OPT_HOURS="$2";      shift 2 ;;
+      --pitch)      OPT_PITCH="$2";      shift 2 ;;
+      --offerings)  OPT_OFFERINGS="$2";  shift 2 ;;
+      --policies)   OPT_POLICIES="$2";   shift 2 ;;
+      --review-url) OPT_REVIEW_URL="$2"; shift 2 ;;
       *) die "Unknown option: $1" ;;
     esac
   done
@@ -155,8 +157,13 @@ render_policies() {
 render_card_md() {
   local id="$1" org_id="$2" name="$3" type="$4"
   local location="$5" phone="$6" hours="$7" pitch="$8"
-  local offerings="$9" policies="${10}"
+  local offerings="$9" policies="${10}" review_url="${11:-}"
   local ts; ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  local review_line=""
+  if [[ -n "$review_url" ]]; then
+    review_line="- **Reviews:** ${review_url}
+<!-- machine:identity_value@1 {\"key\":\"review_url\",\"text\":\"${review_url}\"} -->"
+  fi
 
   cat << CARDEOF
 ---
@@ -183,6 +190,7 @@ updated: ${ts}
 <!-- machine:identity_value@1 {"key":"location","text":"${location}"} -->
 - **Phone:** ${phone}
 <!-- machine:identity_value@1 {"key":"phone","text":"${phone}"} -->
+${review_line}
 
 ## Voice
 - **Tone:** warm, helpful, professional
@@ -480,7 +488,7 @@ cmd_create() {
   local card_content
   card_content="$(render_card_md "$dna_id" "$org_id" "$OPT_NAME" "$OPT_TYPE" \
     "$OPT_LOCATION" "$OPT_PHONE" "$OPT_HOURS" "$OPT_PITCH" \
-    "$OPT_OFFERINGS" "$OPT_POLICIES")"
+    "$OPT_OFFERINGS" "$OPT_POLICIES" "$OPT_REVIEW_URL")"
   echo "$card_content" | ssh "$VPS" "cat > '${card_dir}/CARD.md'"
 
   # 5. Compile card
@@ -561,7 +569,7 @@ cmd_update() {
   # Read existing CARD.md and patch fields that were provided
   if [[ -n "$OPT_NAME" || -n "$OPT_LOCATION" || -n "$OPT_PHONE" || \
         -n "$OPT_HOURS" || -n "$OPT_PITCH" || -n "$OPT_OFFERINGS" || \
-        -n "$OPT_POLICIES" ]]; then
+        -n "$OPT_POLICIES" || -n "$OPT_REVIEW_URL" ]]; then
     echo "--> Fetching existing card..."
     local existing_card; existing_card="$(ssh "$VPS" "cat '${card_dir}/CARD.md'")"
 
@@ -576,7 +584,8 @@ cmd_update() {
     cur_id="$(echo "$existing_card" | grep '^id:' | head -1 | awk '{print $2}')"
 
     # Extract existing offerings as comma-separated names (fallback when not overriding)
-    local cur_offerings cur_policies
+    local cur_offerings cur_policies cur_review_url
+    cur_review_url="$(echo "$existing_card" | grep '{"key":"review_url"' | head -1 | sed 's/.*"text":"\([^"]*\)".*/\1/' || true)"
     cur_offerings="$(echo "$existing_card" | grep 'machine:offering' | \
       sed 's/.*"name":"\([^"]*\)".*/\1/' | paste -sd ',' -)"
     # Extract existing policies as pipe-separated "topic: rule" pairs
@@ -601,14 +610,15 @@ print('|'.join(pairs))
     [[ -n "$OPT_PHONE" ]]     && cur_phone="$OPT_PHONE"
     [[ -n "$OPT_HOURS" ]]     && cur_hours="$OPT_HOURS"
     [[ -n "$OPT_PITCH" ]]     && cur_pitch="$OPT_PITCH"
-    [[ -z "$OPT_OFFERINGS" ]] && OPT_OFFERINGS="$cur_offerings"
-    [[ -z "$OPT_POLICIES" ]]  && OPT_POLICIES="$cur_policies"
-    [[ -z "$OPT_TYPE" ]]      && OPT_TYPE="service"
+    [[ -z "$OPT_OFFERINGS" ]]   && OPT_OFFERINGS="$cur_offerings"
+    [[ -z "$OPT_POLICIES" ]]    && OPT_POLICIES="$cur_policies"
+    [[ -z "$OPT_REVIEW_URL" ]]  && OPT_REVIEW_URL="$cur_review_url"
+    [[ -z "$OPT_TYPE" ]]        && OPT_TYPE="service"
 
     local new_card
     new_card="$(render_card_md "$cur_id" "$cur_org" "$cur_name" "$OPT_TYPE" \
       "$cur_location" "$cur_phone" "$cur_hours" "$cur_pitch" \
-      "${OPT_OFFERINGS}" "${OPT_POLICIES}")"
+      "${OPT_OFFERINGS}" "${OPT_POLICIES}" "${OPT_REVIEW_URL}")"
     echo "$new_card" | ssh "$VPS" "cat > '${card_dir}/CARD.md'"
     echo "--> Recompiling..."
     compile_card "$id"

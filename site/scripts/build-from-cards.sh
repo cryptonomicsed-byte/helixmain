@@ -66,19 +66,27 @@ json.dump(out, open(f"{out_dir}/{company_id}.json", "w"), indent=2)
 print(f"  built {company_id}: {out['name']}")
 PYEOF
 
-  # Generate QR for caller URL
-  if [ -n "$caller_url" ]; then
-    python3 - "$caller_url" "${QR_OUT}/${id}-talk.png" << 'PYEOF'
-import sys, qrcode
-url, out = sys.argv[1], sys.argv[2]
-qr = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=8, border=3)
-qr.add_data(url)
-qr.make(fit=True)
-img = qr.make_image(fill_color="#0f0f0f", back_color="#e2e2e2")
-img.save(out)
-print(f"  qr  {out.split('/')[-1]}")
+  # Generate talk + review QR images
+  python3 - "$card" "$id" "$caller_url" "$QR_OUT" << 'PYEOF'
+import sys, json, qrcode
+
+card_path, company_id, caller_url, qr_dir = sys.argv[1:]
+card = json.load(open(card_path))
+review_url = card.get("identity", {}).get("review_url", "")
+
+def make_qr(url, path):
+    if not url:
+        return
+    qr = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=8, border=3)
+    qr.add_data(url)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="#0f0f0f", back_color="#e2e2e2")
+    img.save(path)
+    print(f"  qr  {path.split('/')[-1]}")
+
+make_qr(caller_url,  f"{qr_dir}/{company_id}-talk.png")
+make_qr(review_url,  f"{qr_dir}/{company_id}-review.png")
 PYEOF
-  fi
 done
 
 echo "==> Generating content stubs"
