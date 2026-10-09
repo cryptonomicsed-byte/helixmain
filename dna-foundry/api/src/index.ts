@@ -12,6 +12,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import Fastify from "fastify";
 import { extractor } from "./services/extractor";
+import { agentCompiler, AgentRole } from "./services/agentCompiler";
 
 const app = Fastify({ logger: true });
 const ROOT = path.resolve(__dirname, "..", "..");
@@ -108,6 +109,38 @@ app.post("/cards/:id/compile", async (req, reply) => {
   const { code, err } = await run("node", [COMPILER_CLI, "--card", p, "--out", out]);
   if (code !== 0) return reply.code(500).send({ ok: false, error: err.slice(-2000) });
   return { ok: true, card_id: card.id, version: card.version, out_dir: out };
+});
+
+app.post("/compile", async (req, reply) => {
+  const body = (req.body ?? {}) as { cardId?: string; companyId?: string; roles?: string[] };
+  if (!body.cardId)    return reply.code(400).send({ ok: false, error: "cardId required" });
+  if (!body.companyId) return reply.code(400).send({ ok: false, error: "companyId required" });
+
+  const cardPath = await findCard(body.cardId);
+  if (!cardPath) return reply.code(404).send({ ok: false, error: "card not found" });
+
+  const VALID_ROLES: AgentRole[] = ["front-desk", "sales", "content", "owner-manager"];
+  let roles: AgentRole[] | undefined;
+  if (body.roles) {
+    const invalid = body.roles.filter((r) => !VALID_ROLES.includes(r as AgentRole));
+    if (invalid.length) {
+      return reply.code(400).send({ ok: false, error: `invalid roles: ${invalid.join(", ")}` });
+    }
+    roles = body.roles as AgentRole[];
+  }
+
+  try {
+    const result = await agentCompiler.compileCard({
+      cardPath,
+      companyId: body.companyId,
+      outputDir: COMPILED,
+      roles,
+    });
+    return reply.code(200).send({ ok: true, ...result });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return reply.code(500).send({ ok: false, error: msg });
+  }
 });
 
 app.get("/cards/:a/diff/:b", async (req, reply) => {
