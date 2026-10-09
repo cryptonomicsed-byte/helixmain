@@ -265,3 +265,38 @@ export async function topUpCredits(
   saveAccountStore().catch(() => {});
   return entry;
 }
+
+export function upgradeTier(companyId: string, tier: CreditAccount["tier"]): void {
+  const account = getAccount(companyId) ?? initAccount(companyId);
+  account.tier = tier;
+  saveAccountStore().catch(() => {});
+}
+
+// ---------------------------------------------------------------------------
+// Stripe pricing config
+// ---------------------------------------------------------------------------
+
+export const PRICE_TO_CREDITS: Record<string, { credits: number; tier?: CreditAccount["tier"] }> = {
+  // Subscription tiers (monthly)
+  "price_starter_monthly":    { credits: 500,   tier: "free" },
+  "price_pro_monthly":        { credits: 2000,  tier: "pro" },
+  "price_agency_monthly":     { credits: 10000, tier: "agency" },
+  // One-time credit packs
+  "price_pack_spark":    { credits: 150 },
+  "price_pack_boost":    { credits: 550 },
+  "price_pack_power":    { credits: 1200 },
+  "price_pack_agency":   { credits: 4000 },
+};
+
+export const TIER_PRICES: Record<string, { name: string; price: string; credits: number; priceId: string }> = {
+  free:   { name: "Starter", price: "$0/mo",   credits: 500,   priceId: "price_starter_monthly" },
+  pro:    { name: "Pro",     price: "$49/mo",  credits: 2000,  priceId: "price_pro_monthly" },
+  agency: { name: "Agency",  price: "$199/mo", credits: 10000, priceId: "price_agency_monthly" },
+};
+
+export const CREDIT_PACKS: Array<{ name: string; price: string; credits: number; priceId: string }> = [
+  { name: "Spark",  price: "$4.99",  credits: 150,  priceId: "price_pack_spark" },
+  { name: "Boost",  price: "$14.99", credits: 550,  priceId: "price_pack_boost" },
+  { name: "Power",  price: "$29.99", credits: 1200, priceId: "price_pack_power" },
+  { name: "Agency", price: "$89.99", credits: 4000, priceId: "price_pack_agency" },
+];

@@ -123,6 +123,19 @@ import {
   crmSummary,
   contactStore,
 } from "./services/crmLite";
+import {
+  PRICE_TO_CREDITS,
+  TIER_PRICES,
+  CREDIT_PACKS,
+  upgradeTier,
+} from "./services/metering";
+import {
+  generateReferralCode,
+  recordReferral,
+  getAffiliateStats,
+  loadAffiliateStore,
+} from "./services/affiliate";
+import { createHmac } from "crypto";
 
 const app = Fastify({ logger: true });
 const ROOT = path.resolve(__dirname, "..", "..");
@@ -1834,6 +1847,213 @@ app.get("/portfolio/:companyId", async (req, reply) => {
 });
 
 // ---------------------------------------------------------------------------
+// Billing config (no Stripe required)
+// ---------------------------------------------------------------------------
+
+// GET /billing/config — tier + pack pricing for the dashboard
+app.get("/billing/config", async (_req, reply) => {
+  return reply.code(200).send({ tiers: TIER_PRICES, packs: CREDIT_PACKS });
+});
+
+// ---------------------------------------------------------------------------
+// Stripe checkout + webhook + portal
+// ---------------------------------------------------------------------------
+
+// POST /billing/checkout — create a Stripe Checkout session
+app.post("/billing/checkout", async (req, reply) => {
+  const body = (req.body ?? {}) as { companyId?: string; priceId?: string };
+  if (!body.companyId) return reply.code(400).send({ ok: false, error: "companyId required" });
+  if (!body.priceId)   return reply.code(400).send({ ok: false, error: "priceId required" });
+
+  const STRIPE_KEY = process.env.STRIPE_SECRET_KEY;
+  if (!STRIPE_KEY) {
+    return reply.code(200).send({
+      ok: false,
+      error: "Stripe not configured",
+      mockUrl: "https://buy.stripe.com/test",
+    });
+  }
+
+  // Determine mode: subscription for tiers, payment for packs
+  const isTier = Object.values(TIER_PRICES).some((t) => t.priceId === body.priceId);
+  const mode   = isTier ? "subscription" : "payment";
+
+  const params = new URLSearchParams({
+    mode,
+    "line_items[0][price]":    body.priceId,
+    "line_items[0][quantity]": "1",
+    "metadata[companyId]":     body.companyId,
+    success_url: `https://helixmain.duckdns.org/dashboard/billing?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url:  `https://helixmain.duckdns.org/dashboard/billing`,
+  });
+
+  try {
+    const res = await fetch("https://api.stripe.com/v1/checkout/sessions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Basic ${Buffer.from(STRIPE_KEY + ":").toString("base64")}`,
+        "Content-Type":  "application/x-www-form-urlencoded",
+      },
+      body: params.toString(),
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      return reply.code(502).send({ ok: false, error: `Stripe error: ${err.slice(0, 500)}` });
+    }
+
+    const session = await res.json() as { url: string };
+    return reply.code(200).send({ ok: true, checkoutUrl: session.url });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return reply.code(502).send({ ok: false, error: msg });
+  }
+});
+
+// POST /billing/webhook — Stripe webhook handler
+app.post("/billing/webhook", async (req, reply) => {
+  const sig     = req.headers["stripe-signature"] as string | undefined;
+  const secret  = process.env.STRIPE_WEBHOOK_SECRET;
+  const rawBody = JSON.stringify(req.body);   // Fastify already parsed — re-stringify for HMAC
+
+  // Best-effort signature verification
+  if (secret && sig) {
+    try {
+      // sig format: t=<timestamp>,v1=<hmac>,...
+      const parts = sig.split(",").reduce<Record<string, string>>((acc, part) => {
+        const [k, v] = part.split("=");
+        if (k && v) acc[k] = v;
+        return acc;
+      }, {});
+
+      const t        = parts["t"];
+      const v1       = parts["v1"];
+      const payload  = `${t}.${rawBody}`;
+      const expected = createHmac("sha256", secret).update(payload).digest("hex");
+
+      if (v1 !== expected) {
+        app.log.warn("Stripe webhook signature mismatch — processing anyway (dev mode)");
+      }
+    } catch (e) {
+      app.log.warn(`Stripe webhook sig check failed: ${e} — continuing`);
+    }
+  }
+
+  // Always return 200 immediately — Stripe needs it
+  try {
+    const event = req.body as {
+      type: string;
+      data: {
+        object: {
+          metadata?: { companyId?: string };
+          line_items?: { data: Array<{ price: { id: string } }> };
+          lines?: { data: Array<{ price: { id: string } }> };
+        };
+      };
+    };
+
+    if (
+      event.type === "checkout.session.completed" ||
+      event.type === "invoice.payment_succeeded"
+    ) {
+      const obj        = event.data.object;
+      const companyId  = obj.metadata?.companyId;
+      const priceId    =
+        obj.line_items?.data?.[0]?.price?.id ??
+        obj.lines?.data?.[0]?.price?.id;
+
+      if (companyId && priceId) {
+        const entry = PRICE_TO_CREDITS[priceId];
+        if (entry) {
+          await topUpCredits(companyId, entry.credits, "stripe_payment");
+          if (entry.tier) {
+            upgradeTier(companyId, entry.tier);
+          }
+        }
+      }
+    }
+  } catch (e) {
+    app.log.error(`Webhook processing error: ${e}`);
+  }
+
+  return reply.code(200).send({ received: true });
+});
+
+// GET /billing/portal/:companyId — Stripe customer portal
+app.get("/billing/portal/:companyId", async (req, reply) => {
+  const { companyId } = req.params as { companyId: string };
+  const STRIPE_KEY = process.env.STRIPE_SECRET_KEY;
+  if (!STRIPE_KEY) {
+    return reply.code(200).send({ ok: false, error: "Stripe not configured" });
+  }
+
+  // Stub: customer ID lookup not yet implemented
+  // In a full implementation this would load customerId from a customer store
+  const customerId: string | null = null;
+  if (!customerId) {
+    return reply.code(200).send({ ok: false, error: "No Stripe customer found" });
+  }
+
+  try {
+    const params = new URLSearchParams({
+      customer:   customerId,
+      return_url: `https://helixmain.duckdns.org/dashboard/billing`,
+    });
+
+    const res = await fetch("https://api.stripe.com/v1/billing_portal/sessions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Basic ${Buffer.from(STRIPE_KEY + ":").toString("base64")}`,
+        "Content-Type":  "application/x-www-form-urlencoded",
+      },
+      body: params.toString(),
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      return reply.code(502).send({ ok: false, error: `Stripe error: ${err.slice(0, 500)}` });
+    }
+
+    const session = await res.json() as { url: string };
+    return reply.code(200).send({ ok: true, portalUrl: session.url });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return reply.code(502).send({ ok: false, error: msg });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Affiliate routes
+// ---------------------------------------------------------------------------
+
+// POST /affiliate/init/:companyId — generate referral code
+app.post("/affiliate/init/:companyId", async (req, reply) => {
+  const { companyId } = req.params as { companyId: string };
+  const account = generateReferralCode(companyId);
+  return reply.code(200).send({ ok: true, account });
+});
+
+// GET /affiliate/:companyId — affiliate stats
+app.get("/affiliate/:companyId", async (req, reply) => {
+  const { companyId } = req.params as { companyId: string };
+  const stats = getAffiliateStats(companyId);
+  return reply.code(200).send({ ok: true, ...stats });
+});
+
+// POST /affiliate/refer — record a referral
+app.post("/affiliate/refer", async (req, reply) => {
+  const body = (req.body ?? {}) as { code?: string; newCompanyId?: string };
+  if (!body.code)          return reply.code(400).send({ ok: false, error: "code required" });
+  if (!body.newCompanyId)  return reply.code(400).send({ ok: false, error: "newCompanyId required" });
+
+  const recorded = recordReferral(body.code, body.newCompanyId);
+  if (!recorded) {
+    return reply.code(404).send({ ok: false, error: "Referral code not found or invalid" });
+  }
+  return reply.code(200).send({ ok: true });
+});
+
+// ---------------------------------------------------------------------------
 // Admin
 // ---------------------------------------------------------------------------
 
@@ -1892,6 +2112,7 @@ async function main() {
   await loadContentStores();
   await loadSiteStore();
   await loadJingleStore();
+  await loadAffiliateStore();
 
   // Scheduler loop — check for due assets every 60s and submit to SparkGatekeeper
   setInterval(async () => {
