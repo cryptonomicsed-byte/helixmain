@@ -173,6 +173,23 @@ app.post("/greeting", async (req, reply) => {
 });
 
 // ---------------------------------------------------------------------------
+// Build status route
+// ---------------------------------------------------------------------------
+
+// GET /build-status — proxy the build-status.json written by helix-rebuild.sh
+app.get("/build-status", async (_req, reply) => {
+  const BUILD_STATUS_URL = "https://helixmain.duckdns.org/build-status.json";
+  try {
+    const res = await fetch(BUILD_STATUS_URL, { signal: AbortSignal.timeout(5000) });
+    if (!res.ok) return reply.code(200).send({ status: "unknown", reason: `upstream ${res.status}` });
+    const json = await res.json();
+    return reply.code(200).send(json);
+  } catch {
+    return reply.code(200).send({ status: "unknown" });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Voice routes
 // ---------------------------------------------------------------------------
 

@@ -1,0 +1,15 @@
+[Unit]
+Description=HelixMain card watcher — rebuild Hugo on card changes
+After=network.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/bin/bash /opt/helix/helix-watcher.sh
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

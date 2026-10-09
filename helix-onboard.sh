@@ -457,6 +457,13 @@ url_encode() {
 
 # ── Commands ──────────────────────────────────────────────────────────────────
 
+# Trigger Hugo site rebuild on VPS via the installed watcher rebuild script
+trigger_site_rebuild() {
+  echo "--> Triggering site rebuild..."
+  ssh "$VPS" "bash /opt/helix/helix-rebuild.sh" 2>&1 | tail -5 \
+    || echo "    rebuild script not installed yet, run: bash infra/install-watcher.sh"
+}
+
 # Call agentCompiler API to generate role-specific files (sales/content/owner-manager)
 post_compile_roles() {
   local id="$1"
@@ -745,6 +752,7 @@ SVCEOF
   echo "  Approval:   ${spark_url}"
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   show_qr "$caller_url"
+  trigger_site_rebuild
 }
 
 cmd_update() {
@@ -881,6 +889,7 @@ print('|'.join(pairs))
   fi
 
   cmd_reload_inner "$id"
+  trigger_site_rebuild
 }
 
 cmd_reload_inner() {
