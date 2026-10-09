@@ -1,4 +1,4 @@
-baseURL = "https://helixmain.com"
+baseURL = "https://helixmain.duckdns.org"
 title = "HelixMain"
 
 [params]
