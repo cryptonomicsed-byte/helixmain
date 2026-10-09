@@ -39,6 +39,13 @@ import {
   leadStore,
   type LeadStatus,
 } from "./services/salesPipeline";
+import {
+  deriveChannelGrants,
+  sendEmail,
+  postToSocial,
+  ChannelNotGranted,
+} from "./services/channelGrants";
+import { generateImage, getCompanyImages } from "./services/imageGenerator";
 
 const app = Fastify({ logger: true });
 const ROOT = path.resolve(__dirname, "..", "..");
@@ -535,6 +542,141 @@ app.patch("/sales/leads/:leadId", async (req, reply) => {
   }
 
   return reply.code(200).send({ ok: true, lead });
+});
+
+// ---------------------------------------------------------------------------
+// Channel grant routes  (MCP scoped by operations.channels[], H-gated sends)
+// ---------------------------------------------------------------------------
+
+// GET /channels/:companyId — derive channel grants from stored card
+app.get("/channels/:companyId", async (req, reply) => {
+  const { companyId } = req.params as { companyId: string };
+  const p = await findCard(companyId);
+  if (!p) return reply.code(404).send({ ok: false, error: "card not found" });
+  try {
+    const card = JSON.parse(await fs.readFile(p, "utf8"));
+    const grants = deriveChannelGrants(card);
+    return reply.code(200).send(grants);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return reply.code(500).send({ ok: false, error: msg });
+  }
+});
+
+// POST /channels/email — H-gated email send via SparkGatekeeper
+app.post("/channels/email", async (req, reply) => {
+  const body = (req.body ?? {}) as {
+    companyId?: string;
+    cardId?: string;
+    to?: string;
+    subject?: string;
+    body?: string;
+  };
+  if (!body.companyId) return reply.code(400).send({ ok: false, error: "companyId required" });
+  if (!body.cardId)    return reply.code(400).send({ ok: false, error: "cardId required" });
+  if (!body.to)        return reply.code(400).send({ ok: false, error: "to required" });
+  if (!body.subject)   return reply.code(400).send({ ok: false, error: "subject required" });
+  if (!body.body)      return reply.code(400).send({ ok: false, error: "body required" });
+
+  const cardPath = await findCard(body.cardId);
+  if (!cardPath) return reply.code(404).send({ ok: false, error: "card not found" });
+
+  try {
+    const card = JSON.parse(await fs.readFile(cardPath, "utf8"));
+    const result = await sendEmail(body.companyId, body.to, body.subject, body.body, card);
+    return reply.code(200).send({ ok: true, ...result });
+  } catch (e) {
+    if (e instanceof ChannelNotGranted) {
+      return reply.code(403).send({ ok: false, error: e.message });
+    }
+    const msg = e instanceof Error ? e.message : String(e);
+    return reply.code(503).send({ ok: false, error: msg });
+  }
+});
+
+// POST /channels/social — H-gated social post via SparkGatekeeper
+app.post("/channels/social", async (req, reply) => {
+  const body = (req.body ?? {}) as {
+    companyId?: string;
+    cardId?: string;
+    channel?: "instagram" | "facebook" | "x" | "linkedin";
+    content?: string;
+    mediaUrl?: string;
+  };
+  if (!body.companyId) return reply.code(400).send({ ok: false, error: "companyId required" });
+  if (!body.cardId)    return reply.code(400).send({ ok: false, error: "cardId required" });
+  if (!body.channel)   return reply.code(400).send({ ok: false, error: "channel required" });
+  if (!body.content)   return reply.code(400).send({ ok: false, error: "content required" });
+
+  const VALID_SOCIAL = ["instagram", "facebook", "x", "linkedin"];
+  if (!VALID_SOCIAL.includes(body.channel)) {
+    return reply.code(400).send({ ok: false, error: `invalid channel: ${body.channel}` });
+  }
+
+  const cardPath = await findCard(body.cardId);
+  if (!cardPath) return reply.code(404).send({ ok: false, error: "card not found" });
+
+  try {
+    const card = JSON.parse(await fs.readFile(cardPath, "utf8"));
+    const result = await postToSocial(body.companyId, body.channel, body.content, body.mediaUrl, card);
+    return reply.code(200).send({ ok: true, ...result });
+  } catch (e) {
+    if (e instanceof ChannelNotGranted) {
+      return reply.code(403).send({ ok: false, error: e.message });
+    }
+    const msg = e instanceof Error ? e.message : String(e);
+    return reply.code(503).send({ ok: false, error: msg });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Image generation routes  (multi-provider, content-addressed cache)
+// ---------------------------------------------------------------------------
+
+// POST /images/generate — generate an image via provider cascade
+app.post("/images/generate", async (req, reply) => {
+  const body = (req.body ?? {}) as {
+    companyId?: string;
+    prompt?: string;
+    style?: string;
+    size?: "1024x1024" | "1792x1024" | "1024x1792";
+    assetType?: "product" | "hero" | "social" | "logo_concept" | "background";
+  };
+  if (!body.companyId) return reply.code(400).send({ ok: false, error: "companyId required" });
+  if (!body.prompt)    return reply.code(400).send({ ok: false, error: "prompt required" });
+  if (!body.assetType) return reply.code(400).send({ ok: false, error: "assetType required" });
+
+  const VALID_SIZES = ["1024x1024", "1792x1024", "1024x1792"];
+  if (body.size && !VALID_SIZES.includes(body.size)) {
+    return reply.code(400).send({ ok: false, error: `invalid size: ${body.size}` });
+  }
+
+  const VALID_ASSET_TYPES = ["product", "hero", "social", "logo_concept", "background"];
+  if (!VALID_ASSET_TYPES.includes(body.assetType)) {
+    return reply.code(400).send({ ok: false, error: `invalid assetType: ${body.assetType}` });
+  }
+
+  try {
+    const image = await generateImage({
+      companyId: body.companyId,
+      prompt:    body.prompt,
+      style:     body.style,
+      size:      body.size,
+      assetType: body.assetType,
+    });
+    return reply.code(200).send(image);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    const code = msg.startsWith("ALL_PROVIDERS_FAILED") ? 502 : 500;
+    return reply.code(code).send({ ok: false, error: msg });
+  }
+});
+
+// GET /images/:companyId — all cached images for a company
+app.get("/images/:companyId", async (req, reply) => {
+  const { companyId } = req.params as { companyId: string };
+  const images = getCompanyImages(companyId);
+  return reply.code(200).send(images);
 });
 
 async function main() {
