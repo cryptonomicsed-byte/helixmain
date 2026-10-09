@@ -32,7 +32,25 @@ interface OutreachDraft {
   closingScript: string
   objectionRebuttals: Record<string, string>
   followUpSequence: string[]
+  linkedinMessage: string
+  callScript: string
   holdQueueId?: string
+}
+
+interface DealReview {
+  leadId: string
+  dealHealth: 'strong' | 'at-risk' | 'stalled'
+  redFlags: string[]
+  positiveSignals: string[]
+  recommendedActions: string[]
+  probabilityToClose: number
+  reviewedAt: string
+}
+
+const HEALTH_COLOR: Record<string, string> = {
+  strong:     'var(--ok)',
+  'at-risk':  'var(--warn)',
+  stalled:    'var(--bad)',
 }
 
 // ---------------------------------------------------------------------------
@@ -100,6 +118,8 @@ function LeadPanel({ lead, companyId, cardId, onClose, onLeadUpdate }: PanelProp
   const [submitLoading, setSubmitLoading] = useState(false)
   const [holdId, setHoldId]       = useState<string | null>(null)
   const [activity, setActivity]   = useState<ActivityEntry[]>(lead.activityLog ?? [])
+  const [review, setReview]       = useState<DealReview | null>(null)
+  const [reviewLoading, setReviewLoading] = useState(false)
 
   useEffect(() => {
     // Refresh activity log from server
@@ -149,6 +169,24 @@ function LeadPanel({ lead, companyId, cardId, onClose, onLeadUpdate }: PanelProp
     }
   }
 
+  async function runDealReview() {
+    setReviewLoading(true)
+    try {
+      const res = await fetch(`/api/sales/review/${lead.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ companyId, cardId }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = await res.json() as { review: DealReview }
+      setReview(data.review)
+    } catch (e) {
+      console.warn('[LeadPanel] review error:', e)
+    } finally {
+      setReviewLoading(false)
+    }
+  }
+
   return (
     <div style={{
       position: 'fixed', top: 0, right: 0, bottom: 0, width: 420,
@@ -181,6 +219,51 @@ function LeadPanel({ lead, companyId, cardId, onClose, onLeadUpdate }: PanelProp
             {lead.status}
           </span>
         </div>
+
+        {/* Deal review */}
+        {review && (
+          <div style={{
+            background: 'var(--bg)',
+            border: `1px solid ${HEALTH_COLOR[review.dealHealth] ?? 'var(--line-2)'}`,
+            borderRadius: 6, padding: '0.75rem', marginBottom: '1rem',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.5rem' }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--fg-2)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                Deal Review
+              </span>
+              <span style={{ marginLeft: 'auto', color: HEALTH_COLOR[review.dealHealth], fontWeight: 700, fontSize: '0.8rem', textTransform: 'capitalize' }}>
+                {review.dealHealth}
+              </span>
+              <span style={{ fontSize: '0.78rem', color: 'var(--fg-2)' }}>
+                P(close) {review.probabilityToClose}%
+              </span>
+            </div>
+            {review.positiveSignals.length > 0 && (
+              <div style={{ marginBottom: '0.4rem' }}>
+                <div style={{ fontSize: '0.72rem', color: 'var(--ok)', fontWeight: 600 }}>Positive</div>
+                {review.positiveSignals.map((s, i) => (
+                  <div key={i} style={{ fontSize: '0.78rem', color: 'var(--fg-2)' }}>✓ {s}</div>
+                ))}
+              </div>
+            )}
+            {review.redFlags.length > 0 && (
+              <div style={{ marginBottom: '0.4rem' }}>
+                <div style={{ fontSize: '0.72rem', color: 'var(--bad)', fontWeight: 600 }}>Red flags</div>
+                {review.redFlags.map((s, i) => (
+                  <div key={i} style={{ fontSize: '0.78rem', color: 'var(--fg-2)' }}>⚠ {s}</div>
+                ))}
+              </div>
+            )}
+            {review.recommendedActions.length > 0 && (
+              <div>
+                <div style={{ fontSize: '0.72rem', color: 'var(--info)', fontWeight: 600 }}>Next actions</div>
+                {review.recommendedActions.map((s, i) => (
+                  <div key={i} style={{ fontSize: '0.78rem', color: 'var(--fg-2)' }}>→ {s}</div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Website */}
         {lead.website && (
@@ -239,6 +322,18 @@ function LeadPanel({ lead, companyId, cardId, onClose, onLeadUpdate }: PanelProp
             <div style={{ fontSize: '0.8rem', color: 'var(--fg-2)', whiteSpace: 'pre-wrap', maxHeight: 160, overflowY: 'auto' }}>
               {outreach.emailBody}
             </div>
+            {outreach.linkedinMessage && (
+              <div style={{ marginTop: '0.6rem' }}>
+                <div style={{ fontSize: '0.72rem', color: 'var(--info)', fontWeight: 600, marginBottom: 2 }}>LinkedIn</div>
+                <div style={{ fontSize: '0.78rem', color: 'var(--fg-2)', whiteSpace: 'pre-wrap' }}>{outreach.linkedinMessage}</div>
+              </div>
+            )}
+            {outreach.callScript && (
+              <div style={{ marginTop: '0.6rem' }}>
+                <div style={{ fontSize: '0.72rem', color: 'var(--violet)', fontWeight: 600, marginBottom: 2 }}>Call script</div>
+                <div style={{ fontSize: '0.78rem', color: 'var(--fg-2)', whiteSpace: 'pre-wrap', maxHeight: 120, overflowY: 'auto' }}>{outreach.callScript}</div>
+              </div>
+            )}
           </div>
         )}
 
@@ -258,6 +353,17 @@ function LeadPanel({ lead, companyId, cardId, onClose, onLeadUpdate }: PanelProp
         padding: '1rem 1.25rem', borderTop: '1px solid var(--line-2)',
         display: 'flex', gap: '0.75rem', flexWrap: 'wrap',
       }}>
+        <button
+          onClick={runDealReview}
+          disabled={reviewLoading}
+          style={{
+            flex: '1 1 100%', background: reviewLoading ? 'var(--line-2)' : '#553c9a',
+            color: '#e9d8fd', border: 'none', borderRadius: 6,
+            padding: '0.5rem', fontSize: '0.85rem', cursor: reviewLoading ? 'not-allowed' : 'pointer',
+          }}
+        >
+          {reviewLoading ? 'Reviewing…' : 'Review Deal Health'}
+        </button>
         <button
           onClick={generateOutreach}
           disabled={outLoading}
@@ -400,6 +506,7 @@ export function SalesPipelinePage() {
   const { currentCompany } = useHelixStore()
   const [leads, setLeads]         = useState<LeadRow[]>([])
   const [loading, setLoading]     = useState(false)
+  const [qualifying, setQualifying] = useState(false)
   const [panelLead, setPanelLead] = useState<LeadRow | null>(null)
 
   const loadLeads = useCallback(async (companyId: string) => {
@@ -442,6 +549,24 @@ export function SalesPipelinePage() {
     if (panelLead?.id === updated.id) setPanelLead(updated)
   }
 
+  async function qualifyAll() {
+    setQualifying(true)
+    try {
+      const res = await fetch(`/api/sales/qualify/bulk/${currentCompany!.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cardId: currentCompany!.id }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = await res.json() as { leads: LeadRow[] }
+      setLeads(data.leads ?? [])
+    } catch (e) {
+      console.warn('[SalesPipelinePage] bulk qualify error:', e)
+    } finally {
+      setQualifying(false)
+    }
+  }
+
   if (!currentCompany) {
     return (
       <div style={{ color: 'var(--fg-2)', padding: '2rem', textAlign: 'center' }}>
@@ -463,6 +588,18 @@ export function SalesPipelinePage() {
           <span style={{ fontSize: '0.8rem', color: 'var(--fg-2)' }}>
             {leads.length} total leads
           </span>
+          <button
+            onClick={qualifyAll}
+            disabled={qualifying || leads.length === 0}
+            style={{
+              background: (qualifying || leads.length === 0) ? 'var(--line-2)' : '#2c5282',
+              color: '#bee3f8', border: 'none',
+              borderRadius: 6, padding: '0.35rem 0.85rem', fontSize: '0.8rem',
+              cursor: (qualifying || leads.length === 0) ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {qualifying ? 'Qualifying…' : '⚡ Qualify All'}
+          </button>
           <button
             onClick={() => loadLeads(currentCompany.id)}
             disabled={loading}

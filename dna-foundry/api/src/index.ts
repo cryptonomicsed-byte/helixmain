@@ -51,6 +51,8 @@ import {
   huntLeadsHunter,
   huntLeadsOSM,
   qualifyLead,
+  bulkQualify,
+  reviewDeal,
   generateOutreach,
   generateClosingScript,
   submitOutreachForApproval,
@@ -967,6 +969,43 @@ app.post("/sales/qualify/:leadId", async (req, reply) => {
   }
 });
 
+// POST /sales/qualify/bulk/:companyId — qualify every lead for a company in one pass
+app.post("/sales/qualify/bulk/:companyId", async (req, reply) => {
+  const { companyId } = req.params as { companyId: string };
+  const body = (req.body ?? {}) as { cardId?: string };
+  if (!body.cardId) return reply.code(400).send({ ok: false, error: "cardId required" });
+
+  let usageEntry: UsageEntry | null = null;
+  try {
+    usageEntry = await deductCredits(companyId, "sales_qualify_bulk");
+  } catch (e) {
+    if (e instanceof QuotaExceeded) return reply.code(402).send({ error: e.message });
+    throw e;
+  }
+
+  const cardPath = await findCard(body.cardId);
+  if (!cardPath) {
+    if (usageEntry) await refundCredits(usageEntry.id).catch(() => {});
+    return reply.code(404).send({ ok: false, error: "card not found" });
+  }
+
+  const leads = getLeadsByCompany(companyId);
+  if (leads.length === 0) {
+    if (usageEntry) await refundCredits(usageEntry.id).catch(() => {});
+    return reply.code(200).send({ ok: true, leads: [], count: 0 });
+  }
+
+  try {
+    const card    = JSON.parse(await fs.readFile(cardPath, "utf8"));
+    const updated = await bulkQualify(leads, card);
+    return reply.code(200).send({ ok: true, leads: updated, count: updated.length });
+  } catch (e) {
+    if (usageEntry) await refundCredits(usageEntry.id).catch(() => {});
+    const msg = e instanceof Error ? e.message : String(e);
+    return reply.code(500).send({ ok: false, error: msg });
+  }
+});
+
 // POST /sales/outreach/:leadId — generate personalized outreach draft
 app.post("/sales/outreach/:leadId", async (req, reply) => {
   const { leadId } = req.params as { leadId: string };
@@ -995,6 +1034,41 @@ app.post("/sales/outreach/:leadId", async (req, reply) => {
     const card  = JSON.parse(await fs.readFile(cardPath, "utf8"));
     const draft = await generateOutreach(lead, card);
     return reply.code(200).send({ ok: true, draft });
+  } catch (e) {
+    if (usageEntry) await refundCredits(usageEntry.id).catch(() => {});
+    const msg = e instanceof Error ? e.message : String(e);
+    return reply.code(500).send({ ok: false, error: msg });
+  }
+});
+
+// POST /sales/review/:leadId — sales-manager deal health review
+app.post("/sales/review/:leadId", async (req, reply) => {
+  const { leadId } = req.params as { leadId: string };
+  const body = (req.body ?? {}) as { cardId?: string; companyId?: string };
+  if (!body.cardId) return reply.code(400).send({ ok: false, error: "cardId required" });
+
+  const lead = leadStore.get(leadId);
+  if (!lead) return reply.code(404).send({ ok: false, error: "lead not found" });
+
+  const companyId = body.companyId ?? lead.companyId ?? "default";
+  let usageEntry: UsageEntry | null = null;
+  try {
+    usageEntry = await deductCredits(companyId, "sales_review");
+  } catch (e) {
+    if (e instanceof QuotaExceeded) return reply.code(402).send({ error: e.message });
+    throw e;
+  }
+
+  const cardPath = await findCard(body.cardId);
+  if (!cardPath) {
+    if (usageEntry) await refundCredits(usageEntry.id).catch(() => {});
+    return reply.code(404).send({ ok: false, error: "card not found" });
+  }
+
+  try {
+    const card   = JSON.parse(await fs.readFile(cardPath, "utf8"));
+    const review = await reviewDeal(lead, card);
+    return reply.code(200).send({ ok: true, review });
   } catch (e) {
     if (usageEntry) await refundCredits(usageEntry.id).catch(() => {});
     const msg = e instanceof Error ? e.message : String(e);
@@ -1049,6 +1123,8 @@ app.post("/sales/submit/:leadId", async (req, reply) => {
       closingScript: string;
       objectionRebuttals: Record<string, string>;
       followUpSequence: string[];
+      linkedinMessage: string;
+      callScript: string;
       holdQueueId?: string;
     };
   };

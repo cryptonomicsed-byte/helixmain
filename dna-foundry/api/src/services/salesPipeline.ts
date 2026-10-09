@@ -44,7 +44,7 @@ export interface Lead {
 
 export interface ActivityEntry {
   timestamp: string;
-  type: "created" | "status_change" | "note" | "outreach_draft" | "email_sent" | "call";
+  type: "created" | "status_change" | "note" | "outreach_draft" | "email_sent" | "call" | "deal_review";
   detail: string;
 }
 
@@ -55,7 +55,24 @@ export interface OutreachDraft {
   closingScript: string;
   objectionRebuttals: Record<string, string>; // objection → rebuttal
   followUpSequence: string[];                 // 3 follow-up messages
+  linkedinMessage: string;                    // ≤300 char connection note
+  callScript: string;                         // ~60-second cold-call opener
   holdQueueId?: string;                       // set when submitted to SparkGatekeeper
+}
+
+/**
+ * Deal review — a sales-manager read on a single deal's health.
+ * Absorbed (reimplemented) from the reference closer agent's reviewDeal():
+ * the one capability helixmain's pipeline lacked.
+ */
+export interface DealReview {
+  leadId: string;
+  dealHealth: "strong" | "at-risk" | "stalled";
+  redFlags: string[];
+  positiveSignals: string[];
+  recommendedActions: string[];
+  probabilityToClose: number; // 0-100
+  reviewedAt: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -578,7 +595,7 @@ export async function generateOutreach(
 Business: ${name}, ${pitch}, voice: ${tone}, ${personality}
 Lead: ${lead.name} at ${lead.company ?? "their company"}
 
-Write personalized outreach. Return JSON: {
+Write personalized outreach across three channels. Return JSON: {
   "subjectLine": "<string>",
   "emailBody": "<string>",
   "closingScript": "<string>",
@@ -587,7 +604,9 @@ Write personalized outreach. Return JSON: {
     "not interested": "<string>",
     "bad timing": "<string>"
   },
-  "followUpSequence": ["<day 3 message>", "<day 7 message>", "<day 14 message>"]
+  "followUpSequence": ["<day 3 message>", "<day 7 message>", "<day 14 message>"],
+  "linkedinMessage": "<one connection note, max 300 chars, no pitch-slap>",
+  "callScript": "<60-second cold-call opener ending in one clear question>"
 }`;
 
   const resp = await aiGateway.call({ prompt, jsonMode: true, maxTokens: 2048 });
@@ -598,6 +617,8 @@ Write personalized outreach. Return JSON: {
     closingScript?: string;
     objectionRebuttals?: Record<string, string>;
     followUpSequence?: string[];
+    linkedinMessage?: string;
+    callScript?: string;
   } = {};
 
   try {
@@ -613,6 +634,8 @@ Write personalized outreach. Return JSON: {
     closingScript:      parsed.closingScript       ?? "",
     objectionRebuttals: parsed.objectionRebuttals  ?? {},
     followUpSequence:   Array.isArray(parsed.followUpSequence) ? parsed.followUpSequence : [],
+    linkedinMessage:    parsed.linkedinMessage     ?? "",
+    callScript:         parsed.callScript          ?? "",
   };
 
   // Log activity on lead
@@ -698,6 +721,103 @@ Return JSON:
       dominate: parsed.proposalTiers?.dominate ?? defaultTier,
     },
   };
+}
+
+// ---------------------------------------------------------------------------
+// Deal review — sales-manager health read on a single deal
+// Reimplemented natively from the reference closer agent's reviewDeal().
+// Null-safe: on LLM failure it degrades to a score-derived heuristic rather
+// than inventing signals.
+// ---------------------------------------------------------------------------
+
+export async function reviewDeal(lead: Lead, card: any): Promise<DealReview> {
+  const businessName = card?.identity?.name ?? "the business";
+  const offerings: string = Array.isArray(card?.offerings)
+    ? (card.offerings as any[]).map((o: any) => o.name).join(", ")
+    : "";
+
+  const recent = lead.activityLog
+    .slice(-6)
+    .map((a) => `- [${a.type}] ${a.detail}`)
+    .join("\n");
+
+  const prompt = `You are a sales manager reviewing one deal for ${businessName}.
+Offerings: ${offerings}
+Deal: ${lead.name}${lead.company ? ` at ${lead.company}` : ""}
+Status: ${lead.status} · Score: ${lead.score} · Tier: ${lead.tier ?? "unclassified"}
+Signals: ${lead.signals.join(", ") || "none"}
+Recent activity:
+${recent || "- none"}
+Notes: ${lead.notes.join(" | ") || "none"}
+
+Assess deal health. Return JSON:
+{
+  "dealHealth": "strong" | "at-risk" | "stalled",
+  "redFlags": ["<warning sign>"],
+  "positiveSignals": ["<positive indicator>"],
+  "recommendedActions": ["<specific next action>"],
+  "probabilityToClose": <0-100 integer>
+}`;
+
+  let parsed: Partial<Omit<DealReview, "leadId" | "reviewedAt">> = {};
+  try {
+    const resp = await aiGateway.call({ prompt, jsonMode: true, maxTokens: 1536 });
+    parsed = JSON.parse(resp.text) as typeof parsed;
+  } catch (e) {
+    console.warn("[salesPipeline] reviewDeal failed, using heuristic:", e);
+  }
+
+  const health: DealReview["dealHealth"] =
+    parsed.dealHealth === "strong" || parsed.dealHealth === "at-risk" || parsed.dealHealth === "stalled"
+      ? parsed.dealHealth
+      : lead.score >= 70
+        ? "strong"
+        : lead.score >= 40
+          ? "at-risk"
+          : "stalled";
+
+  const review: DealReview = {
+    leadId: lead.id,
+    dealHealth: health,
+    redFlags: Array.isArray(parsed.redFlags) ? parsed.redFlags : [],
+    positiveSignals: Array.isArray(parsed.positiveSignals) ? parsed.positiveSignals : [],
+    recommendedActions: Array.isArray(parsed.recommendedActions) ? parsed.recommendedActions : [],
+    probabilityToClose:
+      typeof parsed.probabilityToClose === "number"
+        ? Math.min(100, Math.max(0, Math.round(parsed.probabilityToClose)))
+        : Math.min(95, Math.max(5, lead.score)),
+    reviewedAt: now(),
+  };
+
+  const updated: Lead = {
+    ...lead,
+    updatedAt: now(),
+    activityLog: [
+      ...lead.activityLog,
+      makeActivity("deal_review", `Deal review — ${review.dealHealth}, P(close) ${review.probabilityToClose}%`),
+    ],
+  };
+  leadStore.set(updated.id, updated);
+  saveLeadStore().catch(() => {});
+  return review;
+}
+
+// ---------------------------------------------------------------------------
+// Bulk qualify — qualify every un-scored lead for a company in one pass.
+// Reuses qualifyLead() per lead; failures on one lead never abort the batch.
+// ---------------------------------------------------------------------------
+
+export async function bulkQualify(leads: Lead[], card: any): Promise<Lead[]> {
+  const results: Lead[] = [];
+  for (const lead of leads) {
+    try {
+      results.push(await qualifyLead(lead, card));
+    } catch (e) {
+      console.warn(`[salesPipeline] bulkQualify skipped ${lead.id}:`, e);
+      results.push(lead);
+    }
+  }
+  return results;
 }
 
 // ---------------------------------------------------------------------------
