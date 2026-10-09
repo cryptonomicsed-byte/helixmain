@@ -105,6 +105,35 @@ app.get("/cards/:id", async (req, reply) => {
   return JSON.parse(await fs.readFile(p, "utf8"));
 });
 
+// GET /companies — scan CARDS dir, return summary list for the dashboard
+app.get("/companies", async (_req, reply) => {
+  await ensureDirs();
+  const files = await fs.readdir(CARDS).catch(() => [] as string[]);
+  // Group by base card id (strip version suffix), keep latest version per id
+  const byId: Record<string, string> = {};
+  for (const f of files.filter((f) => f.endsWith(".json"))) {
+    const base = f.replace(/\.json$/, "").split("_v")[0];
+    if (!byId[base] || f > byId[base]) byId[base] = f;
+  }
+  const companies = await Promise.all(
+    Object.entries(byId).map(async ([, filename]) => {
+      try {
+        const raw = await fs.readFile(path.join(CARDS, filename), "utf8");
+        const card = JSON.parse(raw);
+        return {
+          id:          card.org_id ?? card.id,
+          name:        card.name?.value ?? card.org_id ?? card.id,
+          cardVersion: card.version ?? 1,
+          lastUpdated: card.updated_at ?? card.extracted_at ?? "",
+        };
+      } catch {
+        return null;
+      }
+    })
+  );
+  return reply.code(200).send(companies.filter(Boolean));
+});
+
 app.post("/cards/:id/compile", async (req, reply) => {
   const p = await findCard((req.params as { id: string }).id);
   if (!p) return reply.code(404).send({ ok: false, error: "card not found" });
