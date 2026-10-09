@@ -13,6 +13,7 @@
 
 import * as fs from "fs/promises";
 import * as path from "path";
+import { compileGuardrails, CompiledGuardrails } from "./guardrailCompiler";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -39,6 +40,9 @@ export interface CompileResult {
   cardVersion: number;
   rolesCompiled: AgentRole[];
   outputPaths: Record<AgentRole, RoleOutputPaths>;
+  guardrailsPath: string;
+  escalationTopics: string[];
+  gatedActionCount: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -565,10 +569,26 @@ export async function compileCard(req: CompileRequest): Promise<CompileResult> {
   const raw = await fs.readFile(req.cardPath, "utf8");
   const card = JSON.parse(raw) as CardJson;
 
+  // Compile guardrails (reads policy-seed.json from cardPath's directory if present)
+  const guardrails: CompiledGuardrails = await compileGuardrails(
+    card,
+    req.companyId,
+    req.cardPath,
+  );
+
+  // Write guardrails.json to the company root dir
+  const companyDir = path.join(req.outputDir, req.companyId);
+  await fs.mkdir(companyDir, { recursive: true });
+  const guardrailsPath = path.join(companyDir, "guardrails.json");
+  await fs.writeFile(guardrailsPath, JSON.stringify(guardrails, null, 2), "utf8");
+
+  // Build a set of gated action names for fast lookup
+  const gatedActionSet = new Set(guardrails.gatedActions);
+
   const outputPaths = {} as Record<AgentRole, RoleOutputPaths>;
 
   for (const role of roles) {
-    const roleDir = path.join(req.outputDir, req.companyId, role);
+    const roleDir = path.join(companyDir, role);
     await fs.mkdir(roleDir, { recursive: true });
 
     const soulPath      = path.join(roleDir, "soul.md");
@@ -576,13 +596,25 @@ export async function compileCard(req: CompileRequest): Promise<CompileResult> {
     const toolGrantPath = path.join(roleDir, "tool-grants.json");
     const greetingPath  = path.join(roleDir, "greeting.txt");
 
-    await fs.writeFile(soulPath,   buildSoul(role, card),   "utf8");
+    // soul.md — append behavioral constraints section from guardrails
+    const soulBase = buildSoul(role, card);
+    const soulFull = `${soulBase}\n\n${guardrails.systemPromptInjection}`;
+    await fs.writeFile(soulPath, soulFull, "utf8");
+
     await fs.writeFile(memoryPath, buildMemory(role, card), "utf8");
-    await fs.writeFile(
-      toolGrantPath,
-      JSON.stringify(buildToolGrants(role, req.companyId, card.version), null, 2),
-      "utf8",
-    );
+
+    // tool-grants.json — mark any tool whose name is in gatedActions
+    const grants = buildToolGrants(role, req.companyId, card.version);
+    if (gatedActionSet.size > 0) {
+      grants.tools = grants.tools.map((t) => {
+        if (gatedActionSet.has(t.tool) && t.gate !== "approval_required") {
+          return { ...t, gate: "approval_required" as const };
+        }
+        return t;
+      });
+    }
+    await fs.writeFile(toolGrantPath, JSON.stringify(grants, null, 2), "utf8");
+
     await fs.writeFile(greetingPath, buildGreeting(role, card), "utf8");
 
     outputPaths[role] = {
@@ -594,10 +626,13 @@ export async function compileCard(req: CompileRequest): Promise<CompileResult> {
   }
 
   return {
-    companyId:     req.companyId,
-    cardVersion:   card.version,
-    rolesCompiled: roles,
+    companyId:        req.companyId,
+    cardVersion:      card.version,
+    rolesCompiled:    roles,
     outputPaths,
+    guardrailsPath,
+    escalationTopics: guardrails.escalationTopics,
+    gatedActionCount: guardrails.gatedActions.length,
   };
 }
 
