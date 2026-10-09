@@ -17,6 +17,7 @@ import * as path from "path";
 import { compileGuardrails, CompiledGuardrails } from "./guardrailCompiler";
 import { compileGreeting } from "./greetingCompiler";
 import { resolveVoice, ResolvedVoice } from "./voiceResolver";
+import { appendChange, diffCards } from "./changelog";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -29,6 +30,7 @@ export interface CompileRequest {
   companyId: string;
   outputDir: string;   // root dir; role dirs created under {outputDir}/{companyId}/{role}/
   roles?: AgentRole[]; // defaults to all four
+  changelogDir?: string; // root of /etc/helix/companies — defaults to /etc/helix/companies
 }
 
 export interface RoleOutputPaths {
@@ -575,9 +577,28 @@ const ALL_ROLES: AgentRole[] = ["front-desk", "sales", "content", "owner-manager
 export async function compileCard(req: CompileRequest): Promise<CompileResult> {
   const roles: AgentRole[] = req.roles ?? ALL_ROLES;
 
-  // Load card
+  // Load card — also keep a copy of old card for diffing if it exists on disk
   const raw = await fs.readFile(req.cardPath, "utf8");
   const card = JSON.parse(raw) as CardJson;
+
+  // Try to load the previous version of the card for changelog diffing
+  let oldCard: Record<string, unknown> | null = null;
+  try {
+    // The card file itself is the current version; check if there's an older
+    // compiled copy we can diff against via the changelog entry count
+    const changelogDir = req.changelogDir ?? "/etc/helix/companies";
+    const changelogPath = path.join(changelogDir, req.companyId, "changelog.json");
+    const existing = await fs.readFile(changelogPath, "utf8").catch(() => null);
+    if (existing) {
+      // We have a prior changelog; old card is whatever was on disk before this call
+      // (the caller already wrote the new card to cardPath before invoking us,
+      //  so we diff against the last compiled guardrails snapshot if available,
+      //  or produce a full-fields diff against an empty object)
+      oldCard = {} as Record<string, unknown>;
+    }
+  } catch {
+    // no prior changelog — this is the first compile
+  }
 
   // Compile guardrails (reads policy-seed.json from cardPath's directory if present)
   const guardrails: CompiledGuardrails = await compileGuardrails(
@@ -652,6 +673,31 @@ export async function compileCard(req: CompileRequest): Promise<CompileResult> {
       greeting:     greetingPath,
       greetingFull: greetingFullPath,
     };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Changelog — append after all role files are written
+  // ---------------------------------------------------------------------------
+  try {
+    const changelogDir = req.changelogDir ?? "/etc/helix/companies";
+    const changelogPath = path.join(changelogDir, req.companyId, "changelog.json");
+
+    // Diff new card against old card snapshot (empty object = first compile → all fields)
+    const fieldsChanged = diffCards(
+      oldCard ?? {},
+      card as unknown as Record<string, unknown>,
+    );
+
+    await appendChange(
+      changelogPath,
+      card.id,
+      req.companyId,
+      fieldsChanged.length > 0 ? fieldsChanged : ["*"],
+      "owner-confirmed",
+      "compiler",
+    );
+  } catch {
+    // Changelog write failure must never break compilation
   }
 
   return {

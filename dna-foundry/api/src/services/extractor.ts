@@ -12,7 +12,9 @@
  */
 
 import { createHash } from "crypto";
+import * as path from "path";
 import { aiGateway } from "./aiGateway";
+import { appendChange, diffCards } from "./changelog";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -21,7 +23,8 @@ import { aiGateway } from "./aiGateway";
 export interface ExtractionRequest {
   url: string;
   orgId: string;
-  cardId?: string; // if updating an existing card
+  cardId?: string;       // if updating an existing card
+  changelogDir?: string; // defaults to /etc/helix/companies
 }
 
 export interface ProvenanceEntry {
@@ -521,6 +524,7 @@ function fallbackCard(req: ExtractionRequest): ExtractedCard {
 export async function extractCard(req: ExtractionRequest): Promise<ExtractedCard> {
   const now = new Date().toISOString();
   const id = req.cardId ?? makeCardId(req.orgId);
+  const changelogDir = req.changelogDir ?? "/etc/helix/companies";
 
   // ---- fetch ----
   const fetched = await fetchPage(req.url);
@@ -638,7 +642,7 @@ export async function extractCard(req: ExtractionRequest): Promise<ExtractedCard
         ]
       : [];
 
-  return {
+  const card: ExtractedCard = {
     id,
     version: 1,
     organizationId: req.orgId,
@@ -691,6 +695,27 @@ export async function extractCard(req: ExtractionRequest): Promise<ExtractedCard
     field_provenance: fp,
     confidenceScore,
   };
+
+  // Append changelog entry — fire-and-forget, never throws
+  (async () => {
+    try {
+      const changelogPath = path.join(changelogDir, req.orgId, "changelog.json");
+      const fieldsChanged = diffCards({}, card as unknown as Record<string, unknown>);
+      await appendChange(
+        changelogPath,
+        card.id,
+        req.orgId,
+        fieldsChanged.length > 0 ? fieldsChanged : ["*"],
+        "inferred",
+        "extractor",
+        `Extracted from ${req.url}`,
+      );
+    } catch {
+      // changelog write failure must never break extraction
+    }
+  })();
+
+  return card;
 }
 
 export const extractor = { extractCard };

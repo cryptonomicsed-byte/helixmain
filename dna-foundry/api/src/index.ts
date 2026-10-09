@@ -15,6 +15,7 @@ import { extractor } from "./services/extractor";
 import { agentCompiler, AgentRole } from "./services/agentCompiler";
 import { compileGreeting } from "./services/greetingCompiler";
 import { resolveVoice, getVoiceCatalog, synthesizeSample } from "./services/voiceResolver";
+import { loadChangelog, verifyChain, changelogToMarkdown } from "./services/changelog";
 
 const app = Fastify({ logger: true });
 const ROOT = path.resolve(__dirname, "..", "..");
@@ -219,6 +220,50 @@ app.post("/voices/sample", async (req, reply) => {
   const resolved = resolveVoice(body.voiceProfile, {});
   const result = await synthesizeSample(resolved, body.text);
   return reply.code(200).send(result);
+});
+
+// ---------------------------------------------------------------------------
+// Changelog routes
+// ---------------------------------------------------------------------------
+
+const HELIX_COMPANIES = process.env.HELIX_CARD_ROOT ?? "/etc/helix/companies";
+
+// GET /changelog/:companyId — full changelog JSON
+app.get("/changelog/:companyId", async (req, reply) => {
+  const { companyId } = req.params as { companyId: string };
+  const changelogPath = path.join(HELIX_COMPANIES, companyId, "changelog.json");
+  try {
+    const log = await loadChangelog(changelogPath, "", companyId);
+    return reply.code(200).send(log);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return reply.code(500).send({ ok: false, error: msg });
+  }
+});
+
+// GET /changelog/:companyId/verify — tamper check
+app.get("/changelog/:companyId/verify", async (req, reply) => {
+  const { companyId } = req.params as { companyId: string };
+  const changelogPath = path.join(HELIX_COMPANIES, companyId, "changelog.json");
+  const result = await verifyChain(changelogPath);
+  return reply.code(200).send(result);
+});
+
+// GET /changelog/:companyId/markdown — human-readable history
+app.get("/changelog/:companyId/markdown", async (req, reply) => {
+  const { companyId } = req.params as { companyId: string };
+  const changelogPath = path.join(HELIX_COMPANIES, companyId, "changelog.json");
+  try {
+    const log = await loadChangelog(changelogPath, "", companyId);
+    const md = changelogToMarkdown(log);
+    return reply
+      .code(200)
+      .header("Content-Type", "text/plain; charset=utf-8")
+      .send(md);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return reply.code(500).send({ ok: false, error: msg });
+  }
 });
 
 async function main() {

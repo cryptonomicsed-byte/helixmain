@@ -59,8 +59,9 @@ out = {
     "npub":         npub,
     "caller_url":   caller_url,
     "review_url":   identity.get("review_url", ""),
-    "card_version": card.get("version", ""),
+    "card_version": card.get("version", 1),
     "card_hash":    (card.get("hash", "") or "")[:16],
+    "last_updated": card.get("created_at", ""),
 }
 json.dump(out, open(f"{out_dir}/{company_id}.json", "w"), indent=2)
 print(f"  built {company_id}: {out['name']}")
