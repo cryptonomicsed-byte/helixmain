@@ -272,6 +272,22 @@ export const api = {
   gkDeny: (id: string) =>
     request<{ denied: boolean }>('POST', `/held/${id}/deny`, undefined, GK_BASE),
 
+  // Approver-passkey enrollment. /setup/finish answers 200 with an EMPTY body,
+  // so it can't go through request<T>() (which always parses JSON).
+  gkSetupChallenge: (userId: string, displayName: string) =>
+    request<any>('POST', '/setup/challenge', { user_id: userId, display_name: displayName }, GK_BASE),
+
+  gkSetupFinish: async (userId: string, credential: unknown) => {
+    const res = await fetch(`${GK_BASE}/setup/finish`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: userId, credential }),
+    })
+    if (!res.ok) {
+      const t = await res.text().catch(() => res.statusText)
+      throw new Error(`POST /setup/finish → ${res.status}: ${t}`)
+    }
+  },
+
 
   // Playground
   playgroundCreate: (companyId: string, cardId: string, persona?: string) =>

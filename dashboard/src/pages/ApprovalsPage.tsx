@@ -20,6 +20,29 @@ function bufToB64url(buf: ArrayBuffer): string {
   for (let i = 0; i < b.length; i++) s += String.fromCharCode(b[i])
   return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
+/** Registration ceremony — returns the attestation the gatekeeper expects. */
+async function registerCredential(ccr: any): Promise<unknown> {
+  const pk = ccr.publicKey ?? ccr
+  const cred = await navigator.credentials.create({ publicKey: {
+    challenge: b64urlToBuf(pk.challenge),
+    rp: pk.rp,
+    user: { ...pk.user, id: b64urlToBuf(pk.user.id) },
+    pubKeyCredParams: pk.pubKeyCredParams,
+    timeout: pk.timeout,
+    attestation: pk.attestation ?? 'none',
+    authenticatorSelection: pk.authenticatorSelection ?? { userVerification: 'required', residentKey: 'required' },
+  }}) as PublicKeyCredential
+  const r: any = cred.response
+  return {
+    id: cred.id, rawId: bufToB64url(cred.rawId), type: cred.type,
+    response: {
+      attestationObject: bufToB64url(r.attestationObject),
+      clientDataJSON: bufToB64url(r.clientDataJSON),
+      transports: r.getTransports?.() ?? [],
+    },
+    extensions: (cred as any).getClientExtensionResults?.() ?? {},
+  }
+}
 /** Run the passkey assertion for a hold and return the credential the gatekeeper expects. */
 async function runAssertion(rcr: any): Promise<unknown> {
   const pk = rcr.publicKey ?? rcr
@@ -72,6 +95,8 @@ export function ApprovalsPage() {
   const [reachable, setReachable] = useState(true)
   const [acting, setActing] = useState<Set<string>>(new Set())
   const [note, setNote] = useState<{ kind: 'ok' | 'bad'; text: string } | null>(null)
+  const [enrolling, setEnrolling] = useState(false)
+  const [enrollMsg, setEnrollMsg] = useState<string | null>(null)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   async function poll() {
@@ -109,6 +134,21 @@ export function ApprovalsPage() {
     } finally { setActing((s) => { const n = new Set(s); n.delete(id); return n }) }
   }
 
+  async function enroll() {
+    setEnrolling(true); setNote(null); setEnrollMsg(null)
+    try {
+      const ccr = await api.gkSetupChallenge('approver', 'Approver')
+      const credential = await registerCredential(ccr)
+      await api.gkSetupFinish('approver', credential)
+      setEnrollMsg('Passkey enrolled on this device — you can now approve.')
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      setEnrollMsg(/40[34]/.test(msg)
+        ? 'Enrollment is closed right now (the /setup endpoint is deliberately not published). Ask the operator to open it for enrollment.'
+        : `Enroll failed: ${msg}`)
+    } finally { setEnrolling(false) }
+  }
+
   return (
     <div style={{ maxWidth: 820, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 18 }}>
       <div className="reveal" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 12 }}>
@@ -128,6 +168,25 @@ export function ApprovalsPage() {
           borderColor: (note.kind === 'ok' ? 'var(--ok)' : 'var(--bad)') + '55',
           color: note.kind === 'ok' ? 'var(--ok)' : 'var(--bad)' }}>
           {note.text}
+        </div>
+      )}
+
+      {/* Approver passkey (WebAuthn) — required to approve */}
+      <div className="glass" style={{ padding: '0.9rem 1.1rem', display: 'flex',
+        justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <div>
+          <div style={{ fontWeight: 600, fontSize: '.875rem' }}>Approver passkey</div>
+          <div className="sub">WebAuthn is required to approve. Enroll this device once.</div>
+        </div>
+        <button className="btn" disabled={enrolling} onClick={enroll}>
+          <Icon name="check" size={14} /> {enrolling ? 'Enrolling…' : 'Enroll this device'}
+        </button>
+      </div>
+      {enrollMsg && (
+        <div className="glass reveal" style={{ padding: '0.7rem 1rem', fontSize: '.84rem',
+          color: /enrolled/.test(enrollMsg) ? 'var(--ok)' : 'var(--bad)',
+          borderColor: (/enrolled/.test(enrollMsg) ? 'var(--ok)' : 'var(--bad)') + '55' }}>
+          {enrollMsg}
         </div>
       )}
 
