@@ -68,6 +68,21 @@ import {
   clearSession,
   getSessions,
 } from "./services/playground";
+import {
+  generateBusinessPlan,
+  exportToPdf,
+  planStore,
+} from "./services/businessPlan";
+import {
+  createContact,
+  updateContact,
+  moveStage,
+  addContactNote,
+  getContacts,
+  getContactsByStage,
+  crmSummary,
+  contactStore,
+} from "./services/crmLite";
 
 const app = Fastify({ logger: true });
 const ROOT = path.resolve(__dirname, "..", "..");
@@ -905,6 +920,151 @@ app.get("/playground/sessions/:companyId", async (req, reply) => {
   const { companyId } = req.params as { companyId: string };
   const list = getSessions(companyId);
   return reply.code(200).send(list);
+});
+
+// ---------------------------------------------------------------------------
+// Business plan routes
+// ---------------------------------------------------------------------------
+
+// POST /plan/generate — generate a business plan draft from a card
+app.post("/plan/generate", async (req, reply) => {
+  const body = (req.body ?? {}) as { cardId?: string; companyId?: string };
+  if (!body.cardId)    return reply.code(400).send({ ok: false, error: "cardId required" });
+  if (!body.companyId) return reply.code(400).send({ ok: false, error: "companyId required" });
+
+  const cardPath = await findCard(body.cardId);
+  if (!cardPath) return reply.code(404).send({ ok: false, error: "card not found" });
+
+  try {
+    const card = JSON.parse(await fs.readFile(cardPath, "utf8"));
+    const plan = await generateBusinessPlan(body.cardId, card);
+    return reply.code(200).send(plan);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return reply.code(500).send({ ok: false, error: msg });
+  }
+});
+
+// GET /plan/:companyId — most recent plan for a company
+app.get("/plan/:companyId", async (req, reply) => {
+  const { companyId } = req.params as { companyId: string };
+  const plan = planStore.get(`latest:${companyId}`);
+  if (!plan) return reply.code(404).send({ ok: false, error: "no plan found for company" });
+  return reply.code(200).send(plan);
+});
+
+// GET /plan/:companyId/html — HTML string for print-to-PDF
+app.get("/plan/:companyId/html", async (req, reply) => {
+  const { companyId } = req.params as { companyId: string };
+  const plan = planStore.get(`latest:${companyId}`);
+  if (!plan) return reply.code(404).send({ ok: false, error: "no plan found for company" });
+
+  // Try to resolve the business name from the stored card
+  let businessName: string | undefined;
+  const cardPath = await findCard(companyId);
+  if (cardPath) {
+    try {
+      const card = JSON.parse(await fs.readFile(cardPath, "utf8"));
+      businessName = card?.identity?.name ?? card?.name?.value ?? undefined;
+    } catch { /* leave undefined */ }
+  }
+
+  const html = exportToPdf(plan, businessName);
+  return reply
+    .code(200)
+    .header("Content-Type", "text/html; charset=utf-8")
+    .send(html);
+});
+
+// ---------------------------------------------------------------------------
+// CRM routes
+// ---------------------------------------------------------------------------
+
+// POST /crm/contacts — create a new contact
+app.post("/crm/contacts", async (req, reply) => {
+  const body = (req.body ?? {}) as { companyId?: string } & Record<string, unknown>;
+  if (!body.companyId) return reply.code(400).send({ ok: false, error: "companyId required" });
+
+  try {
+    const contact = createContact(body.companyId, body as any);
+    return reply.code(201).send(contact);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return reply.code(500).send({ ok: false, error: msg });
+  }
+});
+
+// GET /crm/contacts/:companyId — all contacts for a company
+app.get("/crm/contacts/:companyId", async (req, reply) => {
+  const { companyId } = req.params as { companyId: string };
+  const contacts = getContacts(companyId);
+  return reply.code(200).send(contacts);
+});
+
+// GET /crm/contacts/:companyId/stage/:stage — contacts filtered by pipeline stage
+app.get("/crm/contacts/:companyId/stage/:stage", async (req, reply) => {
+  const { companyId, stage } = req.params as { companyId: string; stage: string };
+  const contacts = getContactsByStage(companyId, stage);
+  return reply.code(200).send(contacts);
+});
+
+// PATCH /crm/contacts/:contactId — update stage, add note, or apply field updates
+app.patch("/crm/contacts/:contactId", async (req, reply) => {
+  const { contactId } = req.params as { contactId: string };
+  const body = (req.body ?? {}) as {
+    stage?: string;
+    note?: string;
+    cardId?: string;
+    updates?: Record<string, unknown>;
+  };
+
+  const existing = contactStore.get(contactId);
+  if (!existing) return reply.code(404).send({ ok: false, error: "contact not found" });
+
+  try {
+    let contact = existing;
+
+    if (body.stage) {
+      // Stage move requires a card for validation; load it if cardId provided
+      let card: any = {};
+      if (body.cardId) {
+        const cardPath = await findCard(body.cardId);
+        if (cardPath) card = JSON.parse(await fs.readFile(cardPath, "utf8"));
+      }
+      contact = moveStage(contactId, body.stage, card);
+    }
+
+    if (body.note) {
+      contact = addContactNote(contactId, body.note, "owner");
+    }
+
+    if (body.updates && typeof body.updates === "object") {
+      contact = updateContact(contactId, body.updates as any);
+    }
+
+    return reply.code(200).send(contact);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    const code = msg.includes("not found") ? 404 : msg.includes("Invalid stage") ? 400 : 500;
+    return reply.code(code).send({ ok: false, error: msg });
+  }
+});
+
+// GET /crm/summary/:companyId — CRM summary with stage counts and recent activity
+app.get("/crm/summary/:companyId", async (req, reply) => {
+  const { companyId } = req.params as { companyId: string };
+
+  // Load card if available so stage list comes from card.operations.pipeline_stages
+  let card: any = {};
+  const cardPath = await findCard(companyId);
+  if (cardPath) {
+    try {
+      card = JSON.parse(await fs.readFile(cardPath, "utf8"));
+    } catch { /* use empty card — crmSummary has sensible defaults */ }
+  }
+
+  const summary = crmSummary(companyId, card);
+  return reply.code(200).send(summary);
 });
 
 async function main() {
