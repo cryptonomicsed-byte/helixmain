@@ -14,6 +14,7 @@ import Fastify from "fastify";
 import { extractor } from "./services/extractor";
 import { agentCompiler, AgentRole } from "./services/agentCompiler";
 import { compileGreeting } from "./services/greetingCompiler";
+import { resolveVoice, getVoiceCatalog, synthesizeSample } from "./services/voiceResolver";
 
 const app = Fastify({ logger: true });
 const ROOT = path.resolve(__dirname, "..", "..");
@@ -169,6 +170,38 @@ app.post("/greeting", async (req, reply) => {
     const msg = e instanceof Error ? e.message : String(e);
     return reply.code(500).send({ ok: false, error: msg });
   }
+});
+
+// ---------------------------------------------------------------------------
+// Voice routes
+// ---------------------------------------------------------------------------
+
+// GET /voices — full catalog, Kokoro first then ElevenLabs
+app.get("/voices", async () => getVoiceCatalog());
+
+// POST /voices/resolve — resolve a voice_profile string against a stored card
+app.post("/voices/resolve", async (req, reply) => {
+  const body = (req.body ?? {}) as { voiceProfile?: string; cardId?: string };
+  if (!body.cardId) return reply.code(400).send({ ok: false, error: "cardId required" });
+
+  const cardPath = await findCard(body.cardId);
+  if (!cardPath) return reply.code(404).send({ ok: false, error: "card not found" });
+
+  const card = JSON.parse(await fs.readFile(cardPath, "utf8"));
+  const resolved = resolveVoice(body.voiceProfile ?? "", card);
+  return reply.code(200).send(resolved);
+});
+
+// POST /voices/sample — synthesise a short TTS preview clip
+app.post("/voices/sample", async (req, reply) => {
+  const body = (req.body ?? {}) as { voiceProfile?: string; text?: string };
+  if (!body.voiceProfile) return reply.code(400).send({ ok: false, error: "voiceProfile required" });
+  if (!body.text)         return reply.code(400).send({ ok: false, error: "text required" });
+
+  // resolveVoice with an empty card object — we only need provider/endpoint from the profile string
+  const resolved = resolveVoice(body.voiceProfile, {});
+  const result = await synthesizeSample(resolved, body.text);
+  return reply.code(200).send(result);
 });
 
 async function main() {

@@ -16,6 +16,7 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import { compileGuardrails, CompiledGuardrails } from "./guardrailCompiler";
 import { compileGreeting } from "./greetingCompiler";
+import { resolveVoice, ResolvedVoice } from "./voiceResolver";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -111,6 +112,12 @@ interface CardJson {
     description?: string;
     donts?: string[];
     sample_phrases?: string[];
+    sonic?: {
+      voice_logo?: {
+        script?: string;
+        voice_profile?: string;
+      };
+    };
   };
   offerings?: CardOffering[];
   specials?: CardSpecial[];
@@ -624,6 +631,14 @@ export async function compileCard(req: CompileRequest): Promise<CompileResult> {
       const compiled = await compileGreeting({ cardPath: req.cardPath, role });
       await fs.writeFile(greetingPath, compiled.text, "utf8");
       await fs.writeFile(greetingFullPath, JSON.stringify(compiled, null, 2), "utf8");
+
+      // voice-config.json — resolve TTS provider + voice ID for front-desk role
+      if (role === "front-desk") {
+        const voiceProfile = card.voice?.sonic?.voice_logo?.voice_profile ?? "";
+        const resolved: ResolvedVoice = resolveVoice(voiceProfile, card as unknown as Record<string, unknown>);
+        const voiceConfigPath = path.join(roleDir, "voice-config.json");
+        await fs.writeFile(voiceConfigPath, JSON.stringify(resolved, null, 2), "utf8");
+      }
     } else {
       // content / owner-manager: use legacy basic greeting, no greeting-full.json
       await fs.writeFile(greetingPath, buildGreeting(role, card), "utf8");
