@@ -38,7 +38,7 @@ for dir in "${CARD_ROOT}"/*/; do
   fi
 
   python3 - "$card" "$id" "$npub" "$caller_url" "$OUT" << 'PYEOF'
-import json, sys
+import json, sys, datetime
 
 card_path, company_id, npub, caller_url, out_dir = sys.argv[1:]
 card = json.load(open(card_path))
@@ -46,6 +46,41 @@ card = json.load(open(card_path))
 identity = card.get("identity", {})
 offerings = card.get("offerings", [])
 ops       = card.get("operations", {})
+
+# Specials — only active ones (valid_to null or >= today)
+today = datetime.date.today().isoformat()
+all_specials = card.get("specials", [])
+active_specials = [s for s in all_specials if not s.get("valid_to") or s.get("valid_to", "") >= today]
+
+# Socials
+socials = identity.get("socials", {})
+
+# Response SLA
+response_sla = ops.get("response_sla", "")
+
+# Card health score — simple completeness calculation
+def card_health(c):
+    checks = [
+        bool(c.get("identity", {}).get("name")),
+        bool(c.get("identity", {}).get("elevator_pitch")),
+        bool(c.get("identity", {}).get("phone")),
+        bool(c.get("identity", {}).get("location")),
+        bool(c.get("identity", {}).get("website")),
+        bool(c.get("voice", {}).get("tone")),
+        bool(c.get("voice", {}).get("personality")),
+        bool(c.get("offerings")),
+        bool(c.get("operations", {}).get("hours")),
+        bool(c.get("identity", {}).get("review_url")),
+        bool(c.get("identity", {}).get("socials")),
+        bool(c.get("specials")),
+        len(c.get("offerings", [])) >= 3,
+        len(c.get("policies", [])) >= 1,
+        bool(c.get("operations", {}).get("response_sla")),
+    ]
+    return round(sum(checks) / len(checks) * 100)
+
+health_score = card_health(card)
+health_label = "excellent" if health_score >= 85 else "good" if health_score >= 65 else "needs work"
 
 out = {
     "id":           company_id,
@@ -61,6 +96,11 @@ out = {
     "review_url":   identity.get("review_url", ""),
     "card_version": card.get("version", 1),
     "card_hash":    (card.get("hash", "") or "")[:16],
+    "specials":     active_specials,
+    "socials":      socials,
+    "response_sla": response_sla,
+    "health_score": health_score,
+    "health_label": health_label,
     "last_updated": card.get("created_at", ""),
 }
 json.dump(out, open(f"{out_dir}/{company_id}.json", "w"), indent=2)

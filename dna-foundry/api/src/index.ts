@@ -16,6 +16,7 @@ import { agentCompiler, AgentRole } from "./services/agentCompiler";
 import { compileGreeting } from "./services/greetingCompiler";
 import { resolveVoice, getVoiceCatalog, synthesizeSample } from "./services/voiceResolver";
 import { loadChangelog, verifyChain, changelogToMarkdown } from "./services/changelog";
+import { scoreCard } from "./services/cardHealth";
 
 const app = Fastify({ logger: true });
 const ROOT = path.resolve(__dirname, "..", "..");
@@ -260,6 +261,25 @@ app.get("/changelog/:companyId/markdown", async (req, reply) => {
       .code(200)
       .header("Content-Type", "text/plain; charset=utf-8")
       .send(md);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return reply.code(500).send({ ok: false, error: msg });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Card health route
+// ---------------------------------------------------------------------------
+
+// GET /health/:companyId — completeness score for a stored card
+app.get("/health/:companyId", async (req, reply) => {
+  const { companyId } = req.params as { companyId: string };
+  const p = await findCard(companyId);
+  if (!p) return reply.code(404).send({ ok: false, error: "card not found" });
+  try {
+    const card = JSON.parse(await fs.readFile(p, "utf8"));
+    const result = scoreCard(card);
+    return reply.code(200).send({ ok: true, companyId, ...result });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return reply.code(500).send({ ok: false, error: msg });

@@ -1,4 +1,28 @@
 {{ define "title" }}{{ .Title }} — {{ .Site.Title }}{{ end }}
+{{ define "head" }}
+{{ $id := .Params.company_id }}
+{{ $c := index .Site.Data.companies $id }}
+{{ if $c }}
+<meta property="og:title" content="{{ $c.name }}">
+<meta property="og:description" content="{{ $c.tagline }}">
+<meta property="og:type" content="business.business">
+<meta property="og:url" content="{{ .Permalink }}">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "LocalBusiness",
+  "name": "{{ $c.name }}",
+  "description": "{{ $c.tagline }}",
+  "telephone": "{{ $c.phone }}",
+  "address": {
+    "@type": "PostalAddress",
+    "streetAddress": "{{ $c.address }}"
+  },
+  "openingHours": "{{ $c.hours }}"
+}
+</script>
+{{ end }}
+{{ end }}
 {{ define "main" }}
 {{ $id := .Params.company_id }}
 {{ $c := index .Site.Data.companies $id }}
@@ -34,6 +58,21 @@
   .qr-pair figcaption { font-size: 0.75rem; color: var(--muted); margin-top: 0.4rem; }
   .card-proof { margin-top: 2.5rem; padding-top: 1rem; border-top: 1px solid var(--border); }
   .card-proof small { color: #444; font-family: var(--mono); font-size: 0.72rem; }
+  .specials-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;margin-top:.75rem}
+  .special-card{background:var(--surface);border:1px solid var(--amber);border-radius:8px;padding:1rem}
+  .special-name{font-weight:600;color:var(--amber)}
+  .special-desc{font-size:.85rem;color:var(--muted);margin-top:.25rem}
+  .special-price{font-size:.9rem;color:var(--accent);margin-top:.5rem}
+  .socials-row{display:flex;gap:1rem;flex-wrap:wrap;margin-top:.5rem}
+  .socials-row a{font-size:.85rem;color:var(--muted);border:1px solid var(--border);padding:.25rem .6rem;border-radius:4px}
+  .socials-row a:hover{color:var(--text);border-color:var(--text);text-decoration:none}
+  .response-sla{font-size:.82rem;color:var(--accent);margin-top:.35rem}
+  .trust-badge{display:flex;gap:.75rem;align-items:center;margin-top:1.5rem;padding-top:1rem;border-top:1px solid var(--border);font-size:.75rem;color:var(--muted)}
+  .trust-version{background:var(--surface);padding:.15rem .4rem;border-radius:3px;border:1px solid var(--border)}
+  .trust-excellent{color:var(--accent)}
+  .trust-good{color:var(--amber)}
+  .trust-needs\.work{color:#f87171}
+  .trust-npub{color:var(--accent)}
 </style>
 
 <article class="company-page">
@@ -50,6 +89,9 @@
   <section>
     <h2>Hours</h2>
     <p class="hours-val">{{ . }}</p>
+    {{ with $c.response_sla }}
+    <div class="response-sla">⚡ {{ . }}</div>
+    {{ end }}
   </section>
   {{ end }}
 
@@ -67,10 +109,35 @@
   </section>
   {{ end }}
 
+  {{ if $c.specials }}
+  <section class="specials">
+    <h2>Today's Specials</h2>
+    <div class="specials-grid">
+      {{ range $c.specials }}
+      <div class="special-card">
+        <div class="special-name">{{ .name }}</div>
+        {{ if .description }}<div class="special-desc">{{ .description }}</div>{{ end }}
+        {{ if .price }}<div class="special-price">${{ .price }}</div>{{ end }}
+      </div>
+      {{ end }}
+    </div>
+  </section>
+  {{ end }}
+
   <section class="connect-section">
     <h2>Talk to us</h2>
     {{ with $c.caller_url }}
     <a class="call-button" href="{{ . }}">Call now (browser)</a>
+    {{ end }}
+
+    {{ if $c.socials }}
+    <div class="socials-row">
+      {{ with $c.socials.instagram }}<a href="https://instagram.com/{{ . }}" target="_blank" rel="noopener">Instagram</a>{{ end }}
+      {{ with $c.socials.facebook }}<a href="https://facebook.com/{{ . }}" target="_blank" rel="noopener">Facebook</a>{{ end }}
+      {{ with $c.socials.x }}<a href="https://x.com/{{ . }}" target="_blank" rel="noopener">X</a>{{ end }}
+      {{ with $c.socials.tiktok }}<a href="https://tiktok.com/@{{ . }}" target="_blank" rel="noopener">TikTok</a>{{ end }}
+      {{ with $c.socials.linkedin }}<a href="https://linkedin.com/company/{{ . }}" target="_blank" rel="noopener">LinkedIn</a>{{ end }}
+    </div>
     {{ end }}
 
     <div class="qr-pair">
@@ -89,6 +156,11 @@
 
   <footer class="card-proof">
     <small>Verified business profile · v{{ $c.card_version }} · {{ $c.card_hash }}</small>
+    <div class="trust-badge">
+      <span class="trust-version">v{{ $c.card_version }}</span>
+      <span class="trust-health trust-{{ $c.health_label }}">{{ $c.health_label }}</span>
+      {{ if $c.npub }}<span class="trust-npub" title="{{ $c.npub }}">✓ verified</span>{{ end }}
+    </div>
   </footer>
 </article>
 {{ end }}
