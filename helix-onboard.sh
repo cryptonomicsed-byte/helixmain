@@ -457,6 +457,24 @@ url_encode() {
 
 # ── Commands ──────────────────────────────────────────────────────────────────
 
+# Call agentCompiler API to generate role-specific files (sales/content/owner-manager)
+post_compile_roles() {
+  local id="$1"
+  local card_dir="${HELIX_DIR}/${id}"
+  local compiled_dir="${card_dir}/compiled"
+
+  echo "--> Compiling agent roles for ${id}..."
+  # If the API is running locally, call it. Otherwise skip gracefully.
+  if curl -sf http://localhost:3000/health > /dev/null 2>&1; then
+    curl -sf -X POST http://localhost:3000/compile \
+      -H "Content-Type: application/json" \
+      -d "{\"cardId\":\"${id}\",\"companyId\":\"${id}\"}" \
+      > /dev/null && echo "    roles compiled" || echo "    compile API unavailable, skipping role files"
+  else
+    echo "    compile API not running, skipping role files"
+  fi
+}
+
 # Append per-company ZeroClaw config blocks (single-file config, no includes support)
 append_zeroclaw_config() {
   local id="$1"
@@ -530,6 +548,87 @@ exclude = []
 [knowledge_bundles.${id}_card]
 sources = ["${card_dir}/CARD.md"]
 tags = ["card", "${id}"]
+
+# ─── Internal role agents: ${id} ──────────────────────────────────────────────
+
+[agents.${id}-sales]
+acp_enable_mcp = false
+delegate_same_risk_profile = true
+enabled = true
+model_provider = "openai.deepseek"
+risk_profile = "card_agent"
+mcp_bundles = ["${id}_tools"]
+knowledge_bundles = ["${id}_card", "${id}_intel"]
+
+[agents.${id}-sales.a2a]
+published = false
+
+[agents.${id}-sales.identity]
+format = "openclaw"
+
+[agents.${id}-sales.memory]
+backend = "sqlite"
+
+[agents.${id}-sales.precheck]
+enabled = true
+timeout_secs = 5
+
+[agents.${id}-sales.workspace]
+unrestricted_filesystem = false
+
+[agents.${id}-content]
+acp_enable_mcp = false
+delegate_same_risk_profile = true
+enabled = true
+model_provider = "openai.deepseek"
+risk_profile = "card_agent"
+mcp_bundles = ["${id}_tools"]
+knowledge_bundles = ["${id}_card"]
+
+[agents.${id}-content.a2a]
+published = false
+
+[agents.${id}-content.identity]
+format = "openclaw"
+
+[agents.${id}-content.memory]
+backend = "sqlite"
+
+[agents.${id}-content.precheck]
+enabled = true
+timeout_secs = 5
+
+[agents.${id}-content.workspace]
+unrestricted_filesystem = false
+
+[agents.${id}-owner]
+acp_enable_mcp = false
+delegate_same_risk_profile = false
+enabled = true
+model_provider = "openai.deepseek"
+risk_profile = "owner_agent"
+mcp_bundles = ["${id}_tools"]
+knowledge_bundles = ["${id}_card", "${id}_intel"]
+
+[agents.${id}-owner.a2a]
+published = false
+
+[agents.${id}-owner.identity]
+format = "openclaw"
+
+[agents.${id}-owner.memory]
+backend = "sqlite"
+
+[agents.${id}-owner.precheck]
+enabled = true
+timeout_secs = 5
+
+[agents.${id}-owner.workspace]
+unrestricted_filesystem = false
+
+[knowledge_bundles.${id}_intel]
+sources = ["${card_dir}/compiled/sales/memory.md", "${card_dir}/compiled/owner-manager/memory.md"]
+tags = ["intel", "${id}"]
 ZCEOF
 
   echo "--> Restarting ZeroClaw..."
@@ -585,6 +684,7 @@ cmd_create() {
   # 5. Compile card
   echo "--> Compiling card..."
   compile_card "$id"
+  post_compile_roles "$id"
 
   # 6. Write env file
   ssh "$VPS" "cat > '${card_dir}/env'" << ENVEOF
