@@ -88,6 +88,7 @@ const app = Fastify({ logger: true });
 const ROOT = path.resolve(__dirname, "..", "..");
 const DATA = path.join(ROOT, "api", "data");
 const CARDS = path.join(DATA, "cards");
+const HELIX_COMPANIES = process.env.HELIX_CARD_ROOT || "/etc/helix/companies";
 const JOBS = path.join(DATA, "jobs");
 const COMPILED = path.join(ROOT, "compiled");
 const COMPILER_CLI = path.join(ROOT, "compiler", "dist", "cli.js");
@@ -108,6 +109,10 @@ function run(cmd: string, args: string[]): Promise<{ code: number; out: string; 
 }
 
 async function findCard(cardId: string): Promise<string | null> {
+  // 1. Check /etc/helix/companies/{id}/card.json first (live onboarded companies)
+  const helixCard = path.join(HELIX_COMPANIES, cardId, "card.json");
+  try { await fs.access(helixCard); return helixCard; } catch {}
+  // 2. Fall back to dna-foundry/api/data/cards/ (extracted/test cards)
   const files = await fs.readdir(CARDS).catch(() => []);
   const hits = files.filter((f) => f.startsWith(cardId)).sort();
   return hits.length ? path.join(CARDS, hits[hits.length - 1]) : null;
@@ -171,33 +176,45 @@ app.get("/cards/:id", async (req, reply) => {
   return JSON.parse(await fs.readFile(p, "utf8"));
 });
 
-// GET /companies — scan CARDS dir, return summary list for the dashboard
+// GET /companies — list helix companies + any extracted cards in CARDS dir
 app.get("/companies", async (_req, reply) => {
   await ensureDirs();
+  const results: object[] = [];
+
+  // 1. Live onboarded companies from /etc/helix/companies/
+  const helixDirs = await fs.readdir(HELIX_COMPANIES).catch(() => [] as string[]);
+  for (const id of helixDirs) {
+    const cardPath = path.join(HELIX_COMPANIES, id, "card.json");
+    try {
+      const card = JSON.parse(await fs.readFile(cardPath, "utf8"));
+      results.push({
+        id,
+        name:        card.identity?.name ?? id,
+        cardVersion: card.version ?? 1,
+        lastUpdated: card.created_at ?? "",
+        source:      "helix",
+      });
+    } catch { /* skip unreadable entries */ }
+  }
+
+  // 2. Extracted/test cards in api/data/cards/
   const files = await fs.readdir(CARDS).catch(() => [] as string[]);
-  // Group by base card id (strip version suffix), keep latest version per id
   const byId: Record<string, string> = {};
   for (const f of files.filter((f) => f.endsWith(".json"))) {
     const base = f.replace(/\.json$/, "").split("_v")[0];
     if (!byId[base] || f > byId[base]) byId[base] = f;
   }
-  const companies = await Promise.all(
-    Object.entries(byId).map(async ([, filename]) => {
-      try {
-        const raw = await fs.readFile(path.join(CARDS, filename), "utf8");
-        const card = JSON.parse(raw);
-        return {
-          id:          card.org_id ?? card.id,
-          name:        card.name?.value ?? card.org_id ?? card.id,
-          cardVersion: card.version ?? 1,
-          lastUpdated: card.updated_at ?? card.extracted_at ?? "",
-        };
-      } catch {
-        return null;
+  for (const [, filename] of Object.entries(byId)) {
+    try {
+      const card = JSON.parse(await fs.readFile(path.join(CARDS, filename), "utf8"));
+      const id = card.org_id ?? card.id;
+      if (!results.find((r: any) => r.id === id)) {
+        results.push({ id, name: card.identity?.name ?? id, cardVersion: card.version ?? 1, lastUpdated: card.created_at ?? "", source: "extracted" });
       }
-    })
-  );
-  return reply.code(200).send(companies.filter(Boolean));
+    } catch { /* skip */ }
+  }
+
+  return reply.code(200).send(results);
 });
 
 app.post("/cards/:id/compile", async (req, reply) => {
@@ -321,8 +338,6 @@ app.post("/voices/sample", async (req, reply) => {
 // ---------------------------------------------------------------------------
 // Changelog routes
 // ---------------------------------------------------------------------------
-
-const HELIX_COMPANIES = process.env.HELIX_CARD_ROOT ?? "/etc/helix/companies";
 
 // GET /changelog/:companyId — full changelog JSON
 app.get("/changelog/:companyId", async (req, reply) => {
