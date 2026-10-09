@@ -46,6 +46,21 @@ import {
   ChannelNotGranted,
 } from "./services/channelGrants";
 import { generateImage, getCompanyImages } from "./services/imageGenerator";
+import {
+  runBattleMode,
+  simulateBrand,
+  getTrendPulse,
+  type BrandSimulation,
+} from "./services/intelEngine";
+import {
+  logCall,
+  getAnalytics,
+  type CallLog,
+} from "./services/analytics";
+import {
+  initAccount,
+  getCreditSummary,
+} from "./services/metering";
 
 const app = Fastify({ logger: true });
 const ROOT = path.resolve(__dirname, "..", "..");
@@ -677,6 +692,148 @@ app.get("/images/:companyId", async (req, reply) => {
   const { companyId } = req.params as { companyId: string };
   const images = getCompanyImages(companyId);
   return reply.code(200).send(images);
+});
+
+// ---------------------------------------------------------------------------
+// Intel routes  (appendix-only — owner planning, never customer-visible)
+// ---------------------------------------------------------------------------
+
+// POST /intel/battle — compare two BrandDNA cards head-to-head
+app.post("/intel/battle", async (req, reply) => {
+  const body = (req.body ?? {}) as { cardIdA?: string; cardIdB?: string };
+  if (!body.cardIdA) return reply.code(400).send({ ok: false, error: "cardIdA required" });
+  if (!body.cardIdB) return reply.code(400).send({ ok: false, error: "cardIdB required" });
+
+  const [pathA, pathB] = await Promise.all([findCard(body.cardIdA), findCard(body.cardIdB)]);
+  if (!pathA) return reply.code(404).send({ ok: false, error: `card not found: ${body.cardIdA}` });
+  if (!pathB) return reply.code(404).send({ ok: false, error: `card not found: ${body.cardIdB}` });
+
+  try {
+    const [cardA, cardB] = await Promise.all([
+      fs.readFile(pathA, "utf8").then(JSON.parse),
+      fs.readFile(pathB, "utf8").then(JSON.parse),
+    ]);
+    const report = await runBattleMode(cardA, cardB);
+    return reply.code(200).send(report);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return reply.code(500).send({ ok: false, error: msg });
+  }
+});
+
+// POST /intel/simulate — test a brand variant and get simulated audience feedback
+app.post("/intel/simulate", async (req, reply) => {
+  const body = (req.body ?? {}) as {
+    cardId?: string;
+    variant?: BrandSimulation["variant"];
+    input?: string;
+  };
+  if (!body.cardId)  return reply.code(400).send({ ok: false, error: "cardId required" });
+  if (!body.variant) return reply.code(400).send({ ok: false, error: "variant required" });
+  if (!body.input)   return reply.code(400).send({ ok: false, error: "input required" });
+
+  const VALID_VARIANTS: BrandSimulation["variant"][] = ["design", "copy", "audience"];
+  if (!VALID_VARIANTS.includes(body.variant)) {
+    return reply.code(400).send({ ok: false, error: `invalid variant: ${body.variant}` });
+  }
+
+  const cardPath = await findCard(body.cardId);
+  if (!cardPath) return reply.code(404).send({ ok: false, error: "card not found" });
+
+  try {
+    const card = JSON.parse(await fs.readFile(cardPath, "utf8"));
+    const result = await simulateBrand(card, body.variant, body.input);
+    return reply.code(200).send(result);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return reply.code(500).send({ ok: false, error: msg });
+  }
+});
+
+// POST /intel/trends — industry trend pulse for the business
+app.post("/intel/trends", async (req, reply) => {
+  const body = (req.body ?? {}) as { cardId?: string };
+  if (!body.cardId) return reply.code(400).send({ ok: false, error: "cardId required" });
+
+  const cardPath = await findCard(body.cardId);
+  if (!cardPath) return reply.code(404).send({ ok: false, error: "card not found" });
+
+  try {
+    const card = JSON.parse(await fs.readFile(cardPath, "utf8"));
+    const pulse = await getTrendPulse(card);
+    return reply.code(200).send(pulse);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return reply.code(500).send({ ok: false, error: msg });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Analytics routes
+// ---------------------------------------------------------------------------
+
+// POST /analytics/call — log a call event
+app.post("/analytics/call", async (req, reply) => {
+  const body = (req.body ?? {}) as Partial<CallLog>;
+  if (!body.id)        return reply.code(400).send({ ok: false, error: "id required" });
+  if (!body.companyId) return reply.code(400).send({ ok: false, error: "companyId required" });
+  if (!body.timestamp) return reply.code(400).send({ ok: false, error: "timestamp required" });
+
+  const VALID_OUTCOMES: CallLog["outcome"][] = ["answered", "transferred", "voicemail", "abandoned"];
+  if (!body.outcome || !VALID_OUTCOMES.includes(body.outcome)) {
+    return reply.code(400).send({ ok: false, error: "valid outcome required" });
+  }
+
+  const log: CallLog = {
+    id:                body.id,
+    companyId:         body.companyId,
+    timestamp:         body.timestamp,
+    durationSeconds:   typeof body.durationSeconds === "number" ? body.durationSeconds : 0,
+    outcome:           body.outcome,
+    gateTriggered:     body.gateTriggered === true,
+    transcriptSummary: body.transcriptSummary,
+    topicTags:         Array.isArray(body.topicTags) ? body.topicTags : [],
+    converted:         body.converted === true,
+  };
+
+  logCall(log);
+  return reply.code(200).send({ ok: true });
+});
+
+// GET /analytics/:companyId — analytics summary for a period
+app.get("/analytics/:companyId", async (req, reply) => {
+  const { companyId } = req.params as { companyId: string };
+  const { period = "week" } = req.query as { period?: string };
+
+  const VALID_PERIODS = ["day", "week", "month"] as const;
+  if (!VALID_PERIODS.includes(period as "day" | "week" | "month")) {
+    return reply.code(400).send({ ok: false, error: "period must be day|week|month" });
+  }
+
+  try {
+    const summary = await getAnalytics(companyId, period as "day" | "week" | "month");
+    return reply.code(200).send(summary);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return reply.code(500).send({ ok: false, error: msg });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Metering routes
+// ---------------------------------------------------------------------------
+
+// GET /metering/:companyId — credit account summary
+app.get("/metering/:companyId", async (req, reply) => {
+  const { companyId } = req.params as { companyId: string };
+  return reply.code(200).send(getCreditSummary(companyId));
+});
+
+// POST /metering/init/:companyId — initialize a free-tier account
+app.post("/metering/init/:companyId", async (req, reply) => {
+  const { companyId } = req.params as { companyId: string };
+  const account = initAccount(companyId);
+  return reply.code(200).send(account);
 });
 
 async function main() {
