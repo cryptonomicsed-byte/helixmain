@@ -57,7 +57,9 @@ export function DashboardPage() {
   const [healthMap, setHealthMap] = useState<Record<string, HealthResult>>({})
   const [analytics, setAnalytics] = useState<AnalyticsSummary | null>(null)
   const [adminHealth, setAdminHealth] = useState<AdminHealth | null>(null)
-  const [metering, setMetering] = useState<MeteringAccount | null>(null)
+  const [credits, setCredits]         = useState<number | null>(null)
+  const [tier, setTier]               = useState<string | null>(null)
+  const [scope, setScope]             = useState<string>('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -88,23 +90,51 @@ export function DashboardPage() {
   }, [setCompanies, setBuildStatus])
 
   useEffect(() => {
-    if (!currentCompany) return
+    if (companies.length === 0) return
     let live = true
-    async function loadCompanyData() {
-      if (!currentCompany) return
+    async function loadMetrics() {
       try {
-        const [a, m] = await Promise.allSettled([
-          fetch(`/api/analytics/${currentCompany.id}/enriched`).then((r) => r.json()) as Promise<AnalyticsSummary>,
-          fetch(`/api/metering/${currentCompany.id}`).then((r) => r.json()) as Promise<MeteringAccount>,
-        ])
-        if (!live) return
-        if (a.status === 'fulfilled') setAnalytics(a.value)
-        if (m.status === 'fulfilled') setMetering(m.value)
+        if (currentCompany) {
+          const [a, m] = await Promise.allSettled([
+            fetch(`/api/analytics/${currentCompany.id}/enriched`).then((r) => r.json()) as Promise<AnalyticsSummary>,
+            fetch(`/api/metering/${currentCompany.id}`).then((r) => r.json()) as Promise<MeteringAccount>,
+          ])
+          if (!live) return
+          if (a.status === 'fulfilled') setAnalytics(a.value)
+          if (m.status === 'fulfilled') { setCredits(m.value.balance); setTier(m.value.tier) }
+          setScope(currentCompany.name)
+        } else {
+          // No company selected → workspace totals. These are real sums over the
+          // per-company endpoints, never fabricated; a company that fails to
+          // respond simply contributes nothing.
+          const pairs = await Promise.allSettled(
+            companies.flatMap((c) => [
+              fetch(`/api/analytics/${c.id}/enriched`).then((r) => r.json()) as Promise<AnalyticsSummary>,
+              fetch(`/api/metering/${c.id}`).then((r) => r.json()) as Promise<MeteringAccount>,
+            ]),
+          )
+          if (!live) return
+          let leads = 0, conv = 0, campaigns = 0, calls = 0, cr = 0, any = false
+          pairs.forEach((res, i) => {
+            if (res.status !== 'fulfilled') return
+            any = true
+            if (i % 2 === 0) {
+              const a = res.value as AnalyticsSummary
+              leads += a.leadsTotal ?? 0; conv += a.leadsConverted ?? 0
+              campaigns += a.campaignsSent ?? 0; calls += a.callVolume ?? 0
+            } else {
+              cr += (res.value as MeteringAccount).balance ?? 0
+            }
+          })
+          setAnalytics({ callVolume: calls, leadsTotal: leads, leadsConverted: conv, campaignsSent: campaigns })
+          setCredits(cr); setTier(null)
+          setScope(any ? `${companies.length} companies` : '')
+        }
       } catch { /* non-fatal */ }
     }
-    loadCompanyData()
+    loadMetrics()
     return () => { live = false }
-  }, [currentCompany])
+  }, [currentCompany, companies])
 
   const buildOk = !buildStatus || buildStatus.status === 'ok'
 
@@ -120,7 +150,7 @@ export function DashboardPage() {
     )
   }
 
-  const hasMetrics = analytics || adminHealth || metering
+  const hasMetrics = analytics || adminHealth || credits != null
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
@@ -144,12 +174,14 @@ export function DashboardPage() {
       {hasMetrics && (
         <div className="bento">
           <StatCard delay="reveal-1" icon="coin" label="Credits" tone="var(--violet)"
-            value={metering ? metering.balance.toLocaleString() : '—'}
-            sub={metering && (
-              <span className="pill" style={{ color: TIER_COLOR[metering.tier], borderColor: TIER_COLOR[metering.tier] + '55', background: TIER_COLOR[metering.tier] + '18' }}>
-                {metering.tier.toUpperCase()}
+            value={credits != null ? credits.toLocaleString() : '—'}
+            sub={tier ? (
+              <span className="pill" style={{ color: TIER_COLOR[tier], borderColor: TIER_COLOR[tier] + '55', background: TIER_COLOR[tier] + '18' }}>
+                {tier.toUpperCase()}
               </span>
-            )} />
+            ) : scope ? (
+              <span className="sub">{scope}</span>
+            ) : undefined} />
           <StatCard delay="reveal-2" icon="pin" label="Leads" tone="var(--info)"
             value={analytics?.leadsTotal != null ? String(analytics.leadsTotal) : '—'}
             sub={analytics && typeof analytics.leadsConverted === 'number' && (

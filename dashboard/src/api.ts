@@ -259,9 +259,10 @@ export const api = {
     return { pending, audit: [] as AuditEntry[] }
   },
 
-  /** Step 1 of approval: fetch the WebAuthn assertion challenge for a hold. */
+  /** Step 1 of approval: fetch the WebAuthn assertion challenge for a hold.
+   *  POST, not GET — the gatekeeper route is post(held_challenge). */
   gkChallenge: (id: string) =>
-    request<any>('GET', `/held/${id}/challenge`, undefined, GK_BASE),
+    request<any>('POST', `/held/${id}/challenge`, undefined, GK_BASE),
 
   /** Step 2 of approval: post the WebAuthn assertion. The gatekeeper verifies
    *  it server-side; a missing/invalid credential is refused (fail-closed). */
