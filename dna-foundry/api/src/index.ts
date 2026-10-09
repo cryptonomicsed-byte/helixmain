@@ -26,6 +26,19 @@ import {
   type Channel,
   type CampaignPRD,
 } from "./services/contentPipeline";
+import {
+  huntLeadsApollo,
+  huntLeadsHunter,
+  qualifyLead,
+  generateOutreach,
+  submitOutreachForApproval,
+  updateLeadStatus,
+  addNote,
+  getLeadsByCompany,
+  getPipelineSummary,
+  leadStore,
+  type LeadStatus,
+} from "./services/salesPipeline";
 
 const app = Fastify({ logger: true });
 const ROOT = path.resolve(__dirname, "..", "..");
@@ -385,6 +398,143 @@ app.post("/content/approve/:assetId", async (req, reply) => {
     // 503 signals upstream gatekeeper failure — never silently drop
     return reply.code(503).send({ ok: false, error: msg });
   }
+});
+
+// ---------------------------------------------------------------------------
+// Sales pipeline routes  (outreach H-gated via SparkGatekeeper)
+// ---------------------------------------------------------------------------
+
+// POST /sales/hunt — Apollo.io lead hunting for a company's target profile
+app.post("/sales/hunt", async (req, reply) => {
+  const body = (req.body ?? {}) as {
+    cardId?: string;
+    companyId?: string;
+    filters?: { industry?: string; location?: string; size?: string; keywords?: string[] };
+  };
+  if (!body.cardId)    return reply.code(400).send({ ok: false, error: "cardId required" });
+  if (!body.companyId) return reply.code(400).send({ ok: false, error: "companyId required" });
+
+  const cardPath = await findCard(body.cardId);
+  if (!cardPath) return reply.code(404).send({ ok: false, error: "card not found" });
+
+  try {
+    const card  = JSON.parse(await fs.readFile(cardPath, "utf8"));
+    const leads = await huntLeadsApollo(body.companyId, card, body.filters ?? {});
+    return reply.code(200).send({ ok: true, leads });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return reply.code(500).send({ ok: false, error: msg });
+  }
+});
+
+// POST /sales/qualify/:leadId — score + qualify a lead against the company card
+app.post("/sales/qualify/:leadId", async (req, reply) => {
+  const { leadId } = req.params as { leadId: string };
+  const body = (req.body ?? {}) as { cardId?: string };
+  if (!body.cardId) return reply.code(400).send({ ok: false, error: "cardId required" });
+
+  const lead = leadStore.get(leadId);
+  if (!lead) return reply.code(404).send({ ok: false, error: "lead not found" });
+
+  const cardPath = await findCard(body.cardId);
+  if (!cardPath) return reply.code(404).send({ ok: false, error: "card not found" });
+
+  try {
+    const card    = JSON.parse(await fs.readFile(cardPath, "utf8"));
+    const updated = await qualifyLead(lead, card);
+    return reply.code(200).send({ ok: true, lead: updated });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return reply.code(500).send({ ok: false, error: msg });
+  }
+});
+
+// POST /sales/outreach/:leadId — generate personalized outreach draft
+app.post("/sales/outreach/:leadId", async (req, reply) => {
+  const { leadId } = req.params as { leadId: string };
+  const body = (req.body ?? {}) as { cardId?: string };
+  if (!body.cardId) return reply.code(400).send({ ok: false, error: "cardId required" });
+
+  const lead = leadStore.get(leadId);
+  if (!lead) return reply.code(404).send({ ok: false, error: "lead not found" });
+
+  const cardPath = await findCard(body.cardId);
+  if (!cardPath) return reply.code(404).send({ ok: false, error: "card not found" });
+
+  try {
+    const card  = JSON.parse(await fs.readFile(cardPath, "utf8"));
+    const draft = await generateOutreach(lead, card);
+    return reply.code(200).send({ ok: true, draft });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return reply.code(500).send({ ok: false, error: msg });
+  }
+});
+
+// POST /sales/submit/:leadId — submit outreach draft to SparkGatekeeper hold queue
+app.post("/sales/submit/:leadId", async (req, reply) => {
+  const { leadId } = req.params as { leadId: string };
+  const body = (req.body ?? {}) as {
+    companyId?: string;
+    draft?: {
+      leadId: string;
+      subjectLine: string;
+      emailBody: string;
+      closingScript: string;
+      objectionRebuttals: Record<string, string>;
+      followUpSequence: string[];
+      holdQueueId?: string;
+    };
+  };
+  if (!body.companyId) return reply.code(400).send({ ok: false, error: "companyId required" });
+  if (!body.draft)     return reply.code(400).send({ ok: false, error: "draft required" });
+
+  const lead = leadStore.get(leadId);
+  if (!lead) return reply.code(404).send({ ok: false, error: "lead not found" });
+
+  try {
+    const holdQueueId = await submitOutreachForApproval(body.draft, lead, body.companyId);
+    return reply.code(200).send({ ok: true, holdQueueId });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return reply.code(503).send({ ok: false, error: msg });
+  }
+});
+
+// GET /sales/pipeline/:companyId — CRM pipeline summary
+app.get("/sales/pipeline/:companyId", async (req, reply) => {
+  const { companyId } = req.params as { companyId: string };
+  const summary = getPipelineSummary(companyId);
+  return reply.code(200).send({ ok: true, companyId, ...summary });
+});
+
+// GET /sales/leads/:companyId — all leads for a company
+app.get("/sales/leads/:companyId", async (req, reply) => {
+  const { companyId } = req.params as { companyId: string };
+  const leads = getLeadsByCompany(companyId);
+  return reply.code(200).send({ ok: true, leads });
+});
+
+// PATCH /sales/leads/:leadId — update status and/or add a note
+app.patch("/sales/leads/:leadId", async (req, reply) => {
+  const { leadId } = req.params as { leadId: string };
+  const body = (req.body ?? {}) as { status?: string; note?: string };
+
+  let lead = leadStore.get(leadId);
+  if (!lead) return reply.code(404).send({ ok: false, error: "lead not found" });
+
+  const VALID_STATUSES: LeadStatus[] = ["new", "contacted", "qualified", "converted", "lost"];
+
+  if (body.status) {
+    if (!VALID_STATUSES.includes(body.status as LeadStatus)) {
+      return reply.code(400).send({ ok: false, error: `invalid status: ${body.status}` });
+    }
+    lead = updateLeadStatus(lead, body.status as LeadStatus, body.note);
+  } else if (body.note) {
+    lead = addNote(lead, body.note);
+  }
+
+  return reply.code(200).send({ ok: true, lead });
 });
 
 async function main() {
