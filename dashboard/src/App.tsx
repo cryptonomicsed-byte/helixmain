@@ -14,6 +14,7 @@ import { SchedulePage }      from './pages/SchedulePage'
 import { VoiceStudioPage }   from './pages/VoiceStudioPage'
 import { PortfolioPage }     from './pages/PortfolioPage'
 import { BillingPage }       from './pages/BillingPage'
+import { SettingsPage }      from './pages/SettingsPage'
 
 export default function App() {
   return (
@@ -33,6 +34,7 @@ export default function App() {
         <Route path="voice-studio"     element={<VoiceStudioPage />} />
         <Route path="portfolio"        element={<PortfolioPage />} />
         <Route path="billing"          element={<BillingPage />} />
+        <Route path="settings"         element={<SettingsPage />} />
       </Route>
     </Routes>
   )

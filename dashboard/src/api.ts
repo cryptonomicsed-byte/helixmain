@@ -168,6 +168,20 @@ export interface CompileResult {
   out_dir: string
 }
 
+/** Runtime provider/model settings. Keys are never returned — only presence. */
+export interface ProviderInfo {
+  hasKey: boolean
+  source: 'settings' | 'env' | null
+  hint: string
+  models: string[]
+}
+export interface SettingsResponse {
+  ok: boolean
+  provider: string
+  model: string
+  providers: Record<string, ProviderInfo>
+}
+
 // ---------------------------------------------------------------------------
 // API surface
 // ---------------------------------------------------------------------------
@@ -377,4 +391,9 @@ export const api = {
 
   listSites: () =>
     get<{ ok: boolean; companies: string[] }>('/sites'),
+
+  // Runtime settings — provider / model / API keys
+  getSettings: () => get<SettingsResponse>('/settings'),
+  saveSettings: (body: { provider?: string; model?: string; keys?: Record<string, string> }) =>
+    request<SettingsResponse>('PUT', '/settings', body),
 }

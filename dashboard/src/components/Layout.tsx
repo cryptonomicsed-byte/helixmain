@@ -25,6 +25,7 @@ const NAV: { group: string; items: { to: string; label: string; icon: string }[]
     { to: '/intel',     label: 'Intel',     icon: 'intel' },
     { to: '/portfolio', label: 'Portfolio', icon: 'folder' },
     { to: '/billing',   label: 'Billing',   icon: 'card' },
+    { to: '/settings',  label: 'Settings',  icon: 'settings' },
   ]},
 ]
 
@@ -33,6 +34,7 @@ const TITLES: Record<string, string> = {
   '/playground': 'Playground', '/leads': 'Lead Hunter', '/pipeline': 'Sales Pipeline',
   '/intel': 'Intel', '/campaigns': 'Campaigns', '/schedule': 'Schedule',
   '/voice-studio': 'Voice Studio', '/portfolio': 'Portfolio', '/billing': 'Billing',
+  '/settings': 'Settings',
 }
 
 export function Layout() {

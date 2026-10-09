@@ -14,6 +14,7 @@ import { createHash } from "crypto";
 import * as fs from "fs/promises";
 import * as path from "path";
 import { CostEntry, costLog } from "./costLog";
+import { keyFor, providerForEnv, getSettings } from "./settings";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -117,8 +118,9 @@ function cacheSet(key: string, response: AiResponse): void {
 }
 
 function makeCacheKey(req: AiRequest): string {
-  const provider = req.provider ?? "deepseek";
-  const model = req.model ?? "deepseek-chat";
+  const s = getSettings();
+  const provider = req.provider ?? s.provider ?? "deepseek";
+  const model = req.model ?? s.model ?? "deepseek-chat";
   const raw = `${provider}:${model}:${req.prompt}:${req.systemPrompt ?? ""}`;
   return createHash("sha256").update(raw).digest("hex");
 }
@@ -323,7 +325,10 @@ async function callGemini(
 // ---------------------------------------------------------------------------
 
 function getEnvKey(name: string): string {
-  const val = process.env[name];
+  // Keys set from the dashboard (runtime settings) take precedence over env.
+  const provider = providerForEnv(name);
+  const fromSettings = provider ? keyFor(provider) : undefined;
+  const val = fromSettings || process.env[name];
   if (!val) throw new Error(`Missing environment variable: ${name}`);
   return val;
 }

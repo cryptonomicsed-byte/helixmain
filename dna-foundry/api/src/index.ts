@@ -12,6 +12,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import Fastify from "fastify";
 import { extractor } from "./services/extractor";
+import { loadSettings, saveSettings, getSettings, publicSettings, PROVIDERS } from "./services/settings";
 import { agentCompiler, AgentRole } from "./services/agentCompiler";
 import { compileGreeting } from "./services/greetingCompiler";
 import {
@@ -172,6 +173,41 @@ async function findCard(cardId: string): Promise<string | null> {
 }
 
 app.get("/health", async () => ({ ok: true, service: "dna-foundry" }));
+
+// ---------------------------------------------------------------------------
+// Runtime settings — provider / model / API keys set from the dashboard.
+// Secrets are never returned; GET exposes only presence + a short hint.
+// ---------------------------------------------------------------------------
+app.get("/settings", async () => publicSettings());
+
+app.put("/settings", async (req, reply) => {
+  const body = (req.body ?? {}) as {
+    provider?: string; model?: string; keys?: Record<string, string>;
+  };
+  const cur = getSettings();
+  const next = { ...cur } as typeof cur;
+
+  if (body.provider) {
+    if (!PROVIDERS.includes(body.provider as (typeof PROVIDERS)[number])) {
+      return reply.code(400).send({ ok: false, error: `unknown provider: ${body.provider}` });
+    }
+    next.provider = body.provider as (typeof PROVIDERS)[number];
+  }
+  if (typeof body.model === "string") next.model = body.model;
+
+  if (body.keys && typeof body.keys === "object") {
+    const keys: Record<string, string> = { ...(cur.keys ?? {}) };
+    for (const [p, v] of Object.entries(body.keys)) {
+      if (!PROVIDERS.includes(p as (typeof PROVIDERS)[number])) continue;
+      if (!v) delete keys[p];        // empty string clears the key
+      else keys[p] = v;
+    }
+    next.keys = keys as typeof cur.keys;
+  }
+
+  await saveSettings(next);
+  return publicSettings();
+});
 
 app.post("/extract", async (req, reply) => {
   const body = (req.body ?? {}) as { url?: string; orgId?: string; companyId?: string };
@@ -2151,6 +2187,7 @@ async function main() {
     }
   }, 60_000);
 
+  await loadSettings();
   await app.listen({ port: 3101, host: "127.0.0.1" });
 }
 
