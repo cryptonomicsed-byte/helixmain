@@ -32,6 +32,8 @@ import { scoreCard } from "./services/cardHealth";
 import {
   generateCampaignPRD,
   generateCampaignAssets,
+  generateVariants,
+  compareVariants,
   submitForApproval,
   scheduleAsset,
   getScheduledAssets,
@@ -75,8 +77,13 @@ import {
 import {
   logCall,
   getAnalytics,
+  logEvent,
   type CallLog,
+  type EventEntry,
 } from "./services/analytics";
+import { getCacheStats } from "./services/aiGateway";
+import { costLog } from "./services/costLog";
+import { buildPortfolio } from "./services/portfolio";
 import {
   initAccount,
   getCreditSummary,
@@ -84,6 +91,7 @@ import {
   refundCredits,
   topUpCredits,
   loadAccountStore,
+  getAccountStoreSize,
   QuotaExceeded,
   type UsageEntry,
 } from "./services/metering";
@@ -1655,6 +1663,226 @@ app.get("/crm/summary/:companyId", async (req, reply) => {
 
   const summary = crmSummary(companyId, card);
   return reply.code(200).send(summary);
+});
+
+// ---------------------------------------------------------------------------
+// Analytics — enriched summary, event log, cache-stats
+// ---------------------------------------------------------------------------
+
+// GET /analytics/:companyId — enriched with cross-store fields
+app.get("/analytics/:companyId/enriched", async (req, reply) => {
+  const { companyId } = req.params as { companyId: string };
+  const { period = "week" } = req.query as { period?: string };
+
+  const VALID_PERIODS = ["day", "week", "month"] as const;
+  if (!VALID_PERIODS.includes(period as "day" | "week" | "month")) {
+    return reply.code(400).send({ ok: false, error: "period must be day|week|month" });
+  }
+
+  try {
+    const summary = await getAnalytics(companyId, period as "day" | "week" | "month");
+
+    // Enrich — count approved/published campaign assets for this company
+    const companyPrdIds = new Set<string>();
+    for (const [prdId, prd] of prdStore.entries()) {
+      if (prd.companyId === companyId) companyPrdIds.add(prdId);
+    }
+    let campaignsSent = 0;
+    for (const asset of assetStore.values()) {
+      if (companyPrdIds.has(asset.campaignId) &&
+          (asset.status === "approved" || asset.status === "published")) {
+        campaignsSent++;
+      }
+    }
+
+    // Leads (all companies — system total)
+    let leadsTotal = 0;
+    let leadsConverted = 0;
+    for (const lead of leadStore.values()) {
+      leadsTotal++;
+      if (lead.status === "converted") leadsConverted++;
+    }
+
+    // Credits used from account usage log
+    const account = getCreditSummary(companyId);
+    const creditsUsed = account.usageLog
+      .filter((e) => !e.refunded && e.creditsDeducted > 0)
+      .reduce((sum, e) => sum + e.creditsDeducted, 0);
+
+    // Sites generated
+    const sitesGenerated = listSites().length;
+
+    return reply.code(200).send({
+      ...summary,
+      campaignsSent,
+      leadsTotal,
+      leadsConverted,
+      creditsUsed,
+      sitesGenerated,
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return reply.code(500).send({ ok: false, error: msg });
+  }
+});
+
+// POST /analytics/event — log a generic event
+app.post("/analytics/event", async (req, reply) => {
+  const body = (req.body ?? {}) as Partial<EventEntry>;
+  if (!body.companyId)  return reply.code(400).send({ ok: false, error: "companyId required" });
+  if (!body.eventType)  return reply.code(400).send({ ok: false, error: "eventType required" });
+
+  const entry: EventEntry = {
+    companyId: body.companyId,
+    eventType: body.eventType,
+    assetId:   body.assetId,
+    leadId:    body.leadId,
+    metadata:  body.metadata,
+    timestamp: new Date().toISOString(),
+  };
+  logEvent(entry);
+  return reply.code(200).send({ ok: true });
+});
+
+// GET /analytics/cache-stats — neural cache stats + cost log
+app.get("/analytics/cache-stats", async (_req, reply) => {
+  const cacheStats = getCacheStats();
+  const costSummary = costLog.getCostSummary();
+  return reply.code(200).send({
+    neuralCacheSize: cacheStats.size,
+    costLog: {
+      totalUsd:   Math.round(costSummary.totalUsd * 10000) / 10000,
+      byProvider: Object.fromEntries(
+        Object.entries(costSummary.byProvider).map(([k, v]) => [k, Math.round(v * 10000) / 10000]),
+      ),
+    },
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Content — A/B variant routes
+// ---------------------------------------------------------------------------
+
+// POST /content/variants — generate A/B variants for a single user story
+app.post("/content/variants", async (req, reply) => {
+  const body = (req.body ?? {}) as {
+    prdId?: string;
+    storyId?: string;
+    companyId?: string;
+    cardId?: string;
+    count?: number;
+  };
+  if (!body.prdId)     return reply.code(400).send({ ok: false, error: "prdId required" });
+  if (!body.storyId)   return reply.code(400).send({ ok: false, error: "storyId required" });
+  if (!body.companyId) return reply.code(400).send({ ok: false, error: "companyId required" });
+  if (!body.cardId)    return reply.code(400).send({ ok: false, error: "cardId required" });
+
+  const prd = prdStore.get(body.prdId);
+  if (!prd) return reply.code(404).send({ ok: false, error: "PRD not found" });
+
+  const companyId = body.companyId;
+  let usageEntry: UsageEntry | null = null;
+  try {
+    usageEntry = await deductCredits(companyId, "campaign_assets");
+  } catch (e) {
+    if (e instanceof QuotaExceeded) return reply.code(402).send({ error: e.message });
+    throw e;
+  }
+
+  const cardPath = await findCard(body.cardId);
+  if (!cardPath) {
+    if (usageEntry) await refundCredits(usageEntry.id).catch(() => {});
+    return reply.code(404).send({ ok: false, error: "card not found" });
+  }
+
+  try {
+    const card     = JSON.parse(await fs.readFile(cardPath, "utf8"));
+    const count    = typeof body.count === "number" && body.count > 0 ? Math.min(body.count, 4) : 2;
+    const variants = await generateVariants(prd, card, body.storyId, count);
+    return reply.code(200).send({ ok: true, variants });
+  } catch (e) {
+    if (usageEntry) await refundCredits(usageEntry.id).catch(() => {});
+    const msg = e instanceof Error ? e.message : String(e);
+    return reply.code(500).send({ ok: false, error: msg });
+  }
+});
+
+// POST /content/variants/compare — compare a set of variant asset ids
+app.post("/content/variants/compare", async (req, reply) => {
+  const body = (req.body ?? {}) as { variantIds?: string[] };
+  if (!Array.isArray(body.variantIds) || body.variantIds.length === 0) {
+    return reply.code(400).send({ ok: false, error: "variantIds[] required" });
+  }
+  const result = compareVariants(body.variantIds);
+  return reply.code(200).send({ ok: true, ...result });
+});
+
+// ---------------------------------------------------------------------------
+// Portfolio
+// ---------------------------------------------------------------------------
+
+// GET /portfolio/:companyId — all assets produced for a company
+app.get("/portfolio/:companyId", async (req, reply) => {
+  const { companyId } = req.params as { companyId: string };
+  try {
+    const items = buildPortfolio(companyId);
+    return reply.code(200).send(items);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return reply.code(500).send({ ok: false, error: msg });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Admin
+// ---------------------------------------------------------------------------
+
+// GET /admin/health — system health snapshot (no auth — PIN enforced client-side)
+app.get("/admin/health", async (_req, reply) => {
+  const cacheStats = getCacheStats();
+  return reply.code(200).send({
+    api: {
+      status: "ok",
+      uptime: process.uptime(),
+    },
+    stores: {
+      leads:    leadStore.size,
+      assets:   assetStore.size,
+      prds:     prdStore.size,
+      accounts: getAccountStoreSize(),
+    },
+    cache: {
+      neural: cacheStats.size,
+    },
+  });
+});
+
+// GET /admin/sessions — all playground sessions across all companies
+app.get("/admin/sessions", async (_req, reply) => {
+  // getSessions filters by companyId — use empty string to get all
+  // Instead, call it without filter by gathering from all known companies
+  const companyIds = Array.from(
+    new Set([
+      ...Array.from(leadStore.values()).map((l) => l.companyId),
+      ...Array.from(assetStore.values()).map((a) => {
+        const prd = prdStore.get(a.campaignId);
+        return prd?.companyId ?? "";
+      }),
+    ].filter(Boolean)),
+  );
+
+  const allSessions: ReturnType<typeof getSessions> = [];
+  const seen = new Set<string>();
+  for (const cid of companyIds) {
+    for (const s of getSessions(cid)) {
+      if (!seen.has(s.id)) {
+        seen.add(s.id);
+        allSessions.push(s);
+      }
+    }
+  }
+
+  return reply.code(200).send({ ok: true, sessions: allSessions, total: allSessions.length });
 });
 
 async function main() {

@@ -239,6 +239,10 @@ export async function refundCredits(usageEntryId: string): Promise<void> {
   throw new Error(`UsageEntry not found: ${usageEntryId}`);
 }
 
+export function getAccountStoreSize(): number {
+  return accountStore.size;
+}
+
 export async function topUpCredits(
   companyId: string,
   credits: number,

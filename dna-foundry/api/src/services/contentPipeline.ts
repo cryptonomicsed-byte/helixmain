@@ -636,6 +636,105 @@ export function cancelSchedule(assetId: string): boolean {
   return true;
 }
 
+// ---------------------------------------------------------------------------
+// A/B variant generation
+// ---------------------------------------------------------------------------
+
+/**
+ * Generate `count` independent content variants for a single UserStory.
+ * Each variant is an independent aiGateway.call() at a slightly different
+ * temperature so outputs differ meaningfully.
+ */
+export async function generateVariants(
+  prd: CampaignPRD,
+  card: any,
+  storyId: string,
+  count = 2,
+): Promise<CampaignAsset[]> {
+  const story = prd.userStories.find((s) => s.id === storyId);
+  if (!story) throw new Error(`UserStory not found: ${storyId}`);
+
+  const name        = cardName(card);
+  const tone        = cardTone(card);
+  const personality = cardPersonality(card);
+
+  const temperatures = [0.7, 0.85, 0.9, 0.95];
+
+  const prompt = `Write a ${story.assetType} for ${story.channel} for ${name}.
+Voice: ${tone}${personality ? `, ${personality}` : ""}
+Brief: ${story.brief}${story.audiencePersona ? `\nAudience: ${story.audiencePersona}` : ""}
+
+Return JSON only:
+{
+  "text": "the full content",
+  "hashtags": ["array", "of", "relevant", "hashtags"],
+  "mediaDescription": "description of accompanying image or video"
+}`;
+
+  const calls = Array.from({ length: count }, (_, i) =>
+    aiGateway.call({
+      prompt,
+      systemPrompt: "You are a social media copywriter. Return valid JSON only.",
+      jsonMode: true,
+      temperature: temperatures[i] ?? 0.85 + i * 0.05,
+    }),
+  );
+
+  const results = await Promise.all(calls);
+  const assets: CampaignAsset[] = [];
+
+  for (const res of results) {
+    let raw: any;
+    try { raw = JSON.parse(res.text); } catch { raw = {}; }
+
+    const asset: CampaignAsset = {
+      id:               randomUUID(),
+      campaignId:       prd.id,
+      storyId:          story.id,
+      channel:          story.channel,
+      assetType:        story.assetType,
+      text:             String(raw.text ?? ""),
+      hashtags:         Array.isArray(raw.hashtags) ? raw.hashtags.map(String) : [],
+      mediaDescription: String(raw.mediaDescription ?? ""),
+      qualityScore:     70,
+      status:           "draft",
+      createdAt:        now(),
+      updatedAt:        now(),
+    };
+
+    const validation = await validateContent(asset.text, card);
+    asset.qualityScore   = validation.score;
+    asset.voiceValidation = { passed: validation.passed, violations: validation.violations };
+
+    assetStore.set(asset.id, asset);
+    saveContentStores().catch(() => {});
+    assets.push(asset);
+  }
+
+  return assets;
+}
+
+/**
+ * Look up variant assets by id and return a comparison summary.
+ */
+export function compareVariants(variantIds: string[]): {
+  variants: CampaignAsset[];
+  comparison: { id: string; qualityScore: number; textLength: number; hashtagCount: number }[];
+} {
+  const variants: CampaignAsset[] = [];
+  for (const id of variantIds) {
+    const asset = assetStore.get(id);
+    if (asset) variants.push(asset);
+  }
+  const comparison = variants.map((v) => ({
+    id:            v.id,
+    qualityScore:  v.qualityScore,
+    textLength:    v.text.length,
+    hashtagCount:  v.hashtags.length,
+  }));
+  return { variants, comparison };
+}
+
 export function getDueAssets(): ScheduledAsset[] {
   const nowMs = Date.now();
   return Array.from(scheduleStore.values()).filter(

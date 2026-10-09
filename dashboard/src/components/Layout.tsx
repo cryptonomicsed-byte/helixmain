@@ -14,6 +14,7 @@ const NAV_LINKS = [
   { to: '/campaigns',     label: 'Campaigns',    icon: '📣' },
   { to: '/schedule',      label: 'Schedule',     icon: '📅' },
   { to: '/voice-studio',  label: 'Voice Studio', icon: '🎙' },
+  { to: '/portfolio',     label: 'Portfolio',    icon: '🗂' },
 ]
 
 const sidebarStyle: React.CSSProperties = {

@@ -12,6 +12,7 @@ import { IntelPage }         from './pages/IntelPage'
 import { CampaignPage }      from './pages/CampaignPage'
 import { SchedulePage }      from './pages/SchedulePage'
 import { VoiceStudioPage }   from './pages/VoiceStudioPage'
+import { PortfolioPage }     from './pages/PortfolioPage'
 
 export default function App() {
   return (
@@ -29,6 +30,7 @@ export default function App() {
         <Route path="campaigns"        element={<CampaignPage />} />
         <Route path="schedule"         element={<SchedulePage />} />
         <Route path="voice-studio"     element={<VoiceStudioPage />} />
+        <Route path="portfolio"        element={<PortfolioPage />} />
       </Route>
     </Routes>
   )

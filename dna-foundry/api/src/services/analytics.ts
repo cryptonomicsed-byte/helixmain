@@ -33,13 +33,40 @@ export interface AnalyticsSummary {
   conversionRate: number;
   topTopics: Array<{ topic: string; count: number }>;
   insights: string[]; // LLM-generated insights from the data
+  // Enrichment fields — populated by route handler from other stores
+  campaignsSent?: number;
+  leadsTotal?: number;
+  leadsConverted?: number;
+  creditsUsed?: number;
+  sitesGenerated?: number;
 }
 
 // ---------------------------------------------------------------------------
-// In-memory store
+// In-memory stores
 // ---------------------------------------------------------------------------
 
 const callStore = new Map<string, CallLog[]>();
+
+export interface EventEntry {
+  companyId: string;
+  eventType: string;
+  assetId?: string;
+  leadId?: string;
+  metadata?: Record<string, unknown>;
+  timestamp: string;
+}
+
+const eventStore = new Map<string, EventEntry[]>();
+
+export function logEvent(entry: EventEntry): void {
+  const list = eventStore.get(entry.companyId) ?? [];
+  list.push(entry);
+  eventStore.set(entry.companyId, list);
+}
+
+export function getEvents(companyId: string): EventEntry[] {
+  return eventStore.get(companyId) ?? [];
+}
 
 function getCompanyLogs(companyId: string): CallLog[] {
   if (!callStore.has(companyId)) callStore.set(companyId, []);

@@ -581,6 +581,7 @@ export class AiGateway {
     const cacheKey = req.cacheKey ?? makeCacheKey({ ...req, provider, model });
     const cached = cacheGet(cacheKey);
     if (cached) {
+      _recordCall(true);
       return { ...cached, cached: true };
     }
 
@@ -588,8 +589,11 @@ export class AiGateway {
     const diskCached = await diskCacheGet(cacheKey);
     if (diskCached) {
       cacheSet(cacheKey, diskCached);
+      _recordCall(true);
       return { ...diskCached, cached: true };
     }
+
+    _recordCall(false);
 
     // Dispatch call (with fallback)
     let fallbackTriggered = false;
@@ -687,3 +691,22 @@ export class AiGateway {
 }
 
 export const aiGateway = new AiGateway();
+
+// ---------------------------------------------------------------------------
+// Cache stats (module-level counters — incremented by cacheGet / cacheSet)
+// ---------------------------------------------------------------------------
+
+let _totalCalls = 0;
+let _cacheHits  = 0;
+
+export function _recordCall(hit: boolean): void {
+  _totalCalls++;
+  if (hit) _cacheHits++;
+}
+
+export function getCacheStats(): { size: number; hitRate: number } {
+  return {
+    size:    neuralCache.size,
+    hitRate: _totalCalls > 0 ? Math.round((_cacheHits / _totalCalls) * 1000) / 10 : 0,
+  };
+}

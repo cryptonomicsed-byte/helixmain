@@ -4,11 +4,44 @@ import { api } from '../api'
 import { CompanyCard } from '../components/CompanyCard'
 import type { HealthResult } from '../api'
 
+interface AnalyticsSummary {
+  callVolume: number
+  leadsTotal?: number
+  leadsConverted?: number
+  campaignsSent?: number
+}
+
+interface AdminHealth {
+  api: { status: string; uptime: number }
+  stores: { leads: number; assets: number; prds: number; accounts: number }
+  cache: { neural: number }
+}
+
+interface MeteringAccount {
+  balance: number
+  tier: 'free' | 'pro' | 'agency'
+}
+
+function formatUptime(seconds: number): string {
+  const h = Math.floor(seconds / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  return `${h}h ${m}m`
+}
+
+const TIER_COLORS: Record<string, string> = {
+  free:   '#64748b',
+  pro:    '#6366f1',
+  agency: '#f59e0b',
+}
+
 export function DashboardPage() {
-  const { companies, buildStatus, setCompanies, setBuildStatus } = useHelixStore()
-  const [healthMap, setHealthMap] = useState<Record<string, HealthResult>>({})
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const { companies, buildStatus, setCompanies, setBuildStatus, currentCompany } = useHelixStore()
+  const [healthMap, setHealthMap]     = useState<Record<string, HealthResult>>({})
+  const [analytics, setAnalytics]     = useState<AnalyticsSummary | null>(null)
+  const [adminHealth, setAdminHealth] = useState<AdminHealth | null>(null)
+  const [metering, setMetering]       = useState<MeteringAccount | null>(null)
+  const [loading, setLoading]         = useState(true)
+  const [error, setError]             = useState<string | null>(null)
 
   useEffect(() => {
     let live = true
@@ -29,6 +62,13 @@ export function DashboardPage() {
           if (r.status === 'fulfilled') map[c.id] = r.value
         })
         if (live) setHealthMap(map)
+
+        // Admin health (best-effort)
+        try {
+          const ah = await fetch('/api/admin/health').then((r) => r.json()) as AdminHealth
+          if (live) setAdminHealth(ah)
+        } catch { /* non-fatal */ }
+
       } catch (e) {
         if (live) setError(e instanceof Error ? e.message : String(e))
       } finally {
@@ -38,6 +78,28 @@ export function DashboardPage() {
     load()
     return () => { live = false }
   }, [setCompanies, setBuildStatus])
+
+  // When currentCompany changes, fetch per-company data
+  useEffect(() => {
+    if (!currentCompany) return
+    let live = true
+
+    async function loadCompanyData() {
+      if (!currentCompany) return
+      try {
+        const [analyticsRes, meteringRes] = await Promise.allSettled([
+          fetch(`/api/analytics/${currentCompany.id}/enriched`).then((r) => r.json()) as Promise<AnalyticsSummary>,
+          fetch(`/api/metering/${currentCompany.id}`).then((r) => r.json()) as Promise<MeteringAccount>,
+        ])
+        if (!live) return
+        if (analyticsRes.status === 'fulfilled') setAnalytics(analyticsRes.value)
+        if (meteringRes.status === 'fulfilled')  setMetering(meteringRes.value)
+      } catch { /* non-fatal */ }
+    }
+
+    loadCompanyData()
+    return () => { live = false }
+  }, [currentCompany])
 
   const buildOk = !buildStatus || buildStatus.status === 'ok'
 
@@ -57,6 +119,17 @@ export function DashboardPage() {
     )
   }
 
+  const metricCardStyle: React.CSSProperties = {
+    background: '#1e2433', borderRadius: 10, padding: '1rem 1.25rem',
+    border: '1px solid #2d3748', display: 'flex', flexDirection: 'column', gap: '0.25rem',
+  }
+  const metricLabelStyle: React.CSSProperties = {
+    fontSize: '0.72rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em',
+  }
+  const metricValueStyle: React.CSSProperties = {
+    fontSize: '1.5rem', fontWeight: 700, color: '#f1f5f9', lineHeight: 1.2,
+  }
+
   return (
     <div>
       <div style={{ marginBottom: '1.5rem' }}>
@@ -67,6 +140,70 @@ export function DashboardPage() {
           {companies.length} business{companies.length !== 1 ? 'es' : ''} onboarded
         </p>
       </div>
+
+      {/* Metrics grid */}
+      {(analytics || adminHealth || metering) && (
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+          gap: '0.75rem',
+          marginBottom: '1.75rem',
+        }}>
+          {/* Credits Remaining */}
+          <div style={metricCardStyle}>
+            <span style={metricLabelStyle}>Credits Remaining</span>
+            <span style={metricValueStyle}>
+              {metering ? metering.balance.toLocaleString() : '—'}
+            </span>
+            {metering && (
+              <span style={{
+                fontSize: '0.7rem', fontWeight: 600, padding: '0.15rem 0.5rem',
+                background: TIER_COLORS[metering.tier] + '22',
+                color: TIER_COLORS[metering.tier],
+                borderRadius: 4, alignSelf: 'flex-start', marginTop: '0.2rem',
+              }}>
+                {metering.tier.toUpperCase()}
+              </span>
+            )}
+          </div>
+
+          {/* Leads */}
+          <div style={metricCardStyle}>
+            <span style={metricLabelStyle}>Leads</span>
+            <span style={metricValueStyle}>
+              {analytics?.leadsTotal ?? '—'}
+            </span>
+            {analytics && typeof analytics.leadsConverted === 'number' && (
+              <span style={{ fontSize: '0.75rem', color: '#22c55e' }}>
+                {analytics.leadsConverted} converted
+              </span>
+            )}
+          </div>
+
+          {/* Campaigns */}
+          <div style={metricCardStyle}>
+            <span style={metricLabelStyle}>Campaigns Sent</span>
+            <span style={metricValueStyle}>
+              {analytics?.campaignsSent ?? '—'}
+            </span>
+          </div>
+
+          {/* API Uptime */}
+          <div style={metricCardStyle}>
+            <span style={metricLabelStyle}>API Uptime</span>
+            <span style={metricValueStyle}>
+              {adminHealth ? formatUptime(adminHealth.api.uptime) : '—'}
+            </span>
+            {adminHealth && (
+              <span style={{
+                fontSize: '0.7rem', color: adminHealth.api.status === 'ok' ? '#22c55e' : '#ef4444',
+              }}>
+                {adminHealth.api.status}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       {companies.length === 0 ? (
         <div style={{
