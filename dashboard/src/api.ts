@@ -240,4 +240,38 @@ export const api = {
 
   playgroundSessions: (companyId: string) =>
     get<PlaygroundSession[]>(`/playground/sessions/${companyId}`),
+
+  // Content pipeline
+  contentPrd: (companyId: string, cardId: string, goal: string, channels: string[]) =>
+    post<{ ok: boolean; prd: any }>('/content/prd', { companyId, cardId, goal, channels }),
+
+  contentGenerate: (companyId: string, cardId: string, prd: any) =>
+    post<{ ok: boolean; assets: any[] }>('/content/generate', { companyId, cardId, prd }),
+
+  contentApprove: (assetId: string, companyId: string) =>
+    post<{ ok: boolean; holdQueueId: string }>(`/content/approve/${assetId}`, { companyId }),
+
+  getAsset: (assetId: string) =>
+    get<any>(`/content/assets/${assetId}`),
+
+  // Scheduling
+  scheduleAsset: (assetId: string, companyId: string, publishAt: string) =>
+    post<{ ok: boolean; scheduled: any }>(`/content/schedule/${assetId}`, { companyId, publishAt }),
+
+  getScheduled: (companyId: string) =>
+    get<{ ok: boolean; scheduled: any[] }>(`/content/schedule/${companyId}`),
+
+  cancelSchedule: (assetId: string) =>
+    request<{ ok: boolean }>('DELETE', `/content/schedule/${assetId}`),
+
+  // Campaign export
+  campaignExport: (campaignId: string) =>
+    get<any>(`/content/campaign/${campaignId}/zip`),
+
+  // Site generator
+  generateSite: (companyId: string) =>
+    post<{ ok: boolean; companyId: string; generatedAt: string }>('/site/generate', { companyId }),
+
+  listSites: () =>
+    get<{ ok: boolean; companies: string[] }>('/sites'),
 }

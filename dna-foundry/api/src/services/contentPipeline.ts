@@ -18,7 +18,7 @@ import { validateContent } from "./brandVoiceValidator";
 
 export type AssetStatus = "draft" | "healing" | "approved" | "published";
 export type AssetType = "post" | "email" | "ad" | "blog" | "caption" | "video_script";
-export type Channel = "instagram" | "facebook" | "x" | "linkedin" | "email" | "sms";
+export type Channel = "instagram" | "facebook" | "x" | "linkedin" | "email" | "sms" | "tiktok";
 
 export interface CampaignPRD {
   id: string;
@@ -53,6 +53,8 @@ export interface CampaignAsset {
   status: AssetStatus;
   voiceValidation?: { passed: boolean; violations: string[] };
   holdQueueId?: string;       // set when submitted to SparkGatekeeper
+  audioSuggestion?: string;   // TikTok: trending sound description
+  emailMetadata?: { subject: string; preheader: string; cta: string };
   createdAt: string;
   updatedAt: string;
 }
@@ -61,15 +63,28 @@ export interface CampaignAsset {
 // In-memory stores (keyed by id)
 // ---------------------------------------------------------------------------
 
-export const prdStore   = new Map<string, CampaignPRD>();
-export const assetStore = new Map<string, CampaignAsset>();
+export const prdStore      = new Map<string, CampaignPRD>();
+export const assetStore    = new Map<string, CampaignAsset>();
+export const scheduleStore = new Map<string, ScheduledAsset>();
+
+// ---------------------------------------------------------------------------
+// Scheduling types
+// ---------------------------------------------------------------------------
+
+export interface ScheduledAsset {
+  assetId: string;
+  companyId: string;
+  publishAt: string;    // ISO8601
+  scheduledAt: string;  // ISO8601
+}
 
 // ---------------------------------------------------------------------------
 // Disk persistence
 // ---------------------------------------------------------------------------
 
-const PRD_PATH   = process.env.HELIX_PRD_PATH   ?? "/etc/helix/data/prds.json";
-const ASSETS_PATH = process.env.HELIX_ASSETS_PATH ?? "/etc/helix/data/assets.json";
+const PRD_PATH      = process.env.HELIX_PRD_PATH      ?? "/etc/helix/data/prds.json";
+const ASSETS_PATH   = process.env.HELIX_ASSETS_PATH   ?? "/etc/helix/data/assets.json";
+const SCHEDULE_PATH = process.env.HELIX_SCHEDULE_PATH ?? "/etc/helix/data/schedule.json";
 
 export async function loadContentStores(): Promise<void> {
   try {
@@ -83,6 +98,13 @@ export async function loadContentStores(): Promise<void> {
     const rawAssets = await fs.readFile(ASSETS_PATH, "utf8");
     const assets = JSON.parse(rawAssets) as Array<[string, CampaignAsset]>;
     for (const [id, asset] of assets) assetStore.set(id, asset);
+  } catch {
+    // file may not exist on first run — silently skip
+  }
+  try {
+    const rawSchedule = await fs.readFile(SCHEDULE_PATH, "utf8");
+    const schedule = JSON.parse(rawSchedule) as Array<[string, ScheduledAsset]>;
+    for (const [id, entry] of schedule) scheduleStore.set(id, entry);
   } catch {
     // file may not exist on first run — silently skip
   }
@@ -100,6 +122,13 @@ async function saveContentStores(): Promise<void> {
     const dir = path.dirname(ASSETS_PATH);
     await fs.mkdir(dir, { recursive: true });
     await fs.writeFile(ASSETS_PATH, JSON.stringify(Array.from(assetStore.entries()), null, 2));
+  } catch {
+    // never throw to caller
+  }
+  try {
+    const dir = path.dirname(SCHEDULE_PATH);
+    await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(SCHEDULE_PATH, JSON.stringify(Array.from(scheduleStore.entries()), null, 2));
   } catch {
     // never throw to caller
   }
@@ -265,7 +294,48 @@ export async function generateCampaignAssets(
   const assets: CampaignAsset[] = [];
 
   for (const story of prd.userStories) {
-    const prompt = `Write a ${story.assetType} for ${story.channel} for ${name}.
+    let prompt: string;
+
+    if (story.channel === "tiktok") {
+      prompt = `Write a TikTok video script for ${name}.
+Voice: ${tone}${personality ? `, ${personality}` : ""}
+Brief: ${story.brief}${story.audiencePersona ? `\nAudience: ${story.audiencePersona}` : ""}
+
+Return JSON only:
+{
+  "text": "the on-screen text / caption for the TikTok",
+  "hashtags": ["array", "of", "trending", "hashtags"],
+  "mediaDescription": "description of what should happen on screen (visuals, actions, transitions)",
+  "audioSuggestion": "description of a trending sound or music style that fits this content"
+}`;
+    } else if (story.channel === "linkedin" && story.assetType === "post") {
+      prompt = `Write a LinkedIn post for ${name}.
+Voice: ${tone}${personality ? `, ${personality}` : ""}
+Brief: ${story.brief}${story.audiencePersona ? `\nAudience: ${story.audiencePersona}` : ""}
+
+Return JSON only:
+{
+  "headline": "attention-grabbing opening line",
+  "hook": "second paragraph that deepens interest",
+  "body": "main value proposition or story (2-3 paragraphs)",
+  "cta": "clear call-to-action closing line",
+  "hashtags": ["array", "of", "professional", "hashtags"],
+  "mediaDescription": "description of accompanying image or document for the creative team"
+}`;
+    } else if (story.assetType === "email") {
+      prompt = `Write a marketing email for ${name}.
+Voice: ${tone}${personality ? `, ${personality}` : ""}
+Brief: ${story.brief}${story.audiencePersona ? `\nAudience: ${story.audiencePersona}` : ""}
+
+Return JSON only:
+{
+  "subject": "email subject line",
+  "preheader": "preview text shown in inbox (max 90 chars)",
+  "bodyHtml": "full HTML email body with inline styles, professional layout",
+  "cta": "call-to-action button text"
+}`;
+    } else {
+      prompt = `Write a ${story.assetType} for ${story.channel} for ${name}.
 Voice: ${tone}${personality ? `, ${personality}` : ""}
 Brief: ${story.brief}${story.audiencePersona ? `\nAudience: ${story.audiencePersona}` : ""}
 
@@ -275,6 +345,7 @@ Return JSON only:
   "hashtags": ["array", "of", "relevant", "hashtags"],
   "mediaDescription": "description of accompanying image or video for the creative team"
 }`;
+    }
 
     const res = await aiGateway.call({
       prompt,
@@ -290,17 +361,55 @@ Return JSON only:
       raw = {};
     }
 
+    // Build text field and channel-specific extras
+    let assetText: string;
+    let assetHashtags: string[];
+    let audioSuggestion: string | undefined;
+    let emailMetadata: { subject: string; preheader: string; cta: string } | undefined;
+
+    if (story.channel === "tiktok") {
+      assetText        = String(raw.text ?? "");
+      assetHashtags    = Array.isArray(raw.hashtags) ? raw.hashtags.map(String) : [];
+      audioSuggestion  = raw.audioSuggestion ? String(raw.audioSuggestion) : undefined;
+    } else if (story.channel === "linkedin" && story.assetType === "post") {
+      const headline = String(raw.headline ?? "");
+      const hook     = String(raw.hook ?? "");
+      const body     = String(raw.body ?? "");
+      const cta      = String(raw.cta ?? "");
+      assetText     = [headline, hook, body, cta].filter(Boolean).join("\n\n");
+      assetHashtags = Array.isArray(raw.hashtags) ? raw.hashtags.map(String) : [];
+    } else if (story.assetType === "email") {
+      // Store full email structure as JSON string in text; no public hashtags
+      assetText     = JSON.stringify({
+        subject:   raw.subject   ?? "",
+        preheader: raw.preheader ?? "",
+        bodyHtml:  raw.bodyHtml  ?? "",
+        cta:       raw.cta       ?? "",
+      });
+      assetHashtags = [];
+      emailMetadata = {
+        subject:   String(raw.subject   ?? ""),
+        preheader: String(raw.preheader ?? ""),
+        cta:       String(raw.cta       ?? ""),
+      };
+    } else {
+      assetText     = String(raw.text ?? "");
+      assetHashtags = Array.isArray(raw.hashtags) ? raw.hashtags.map(String) : [];
+    }
+
     const asset: CampaignAsset = {
       id:               randomUUID(),
       campaignId:       prd.id,
       storyId:          story.id,
       channel:          story.channel,
       assetType:        story.assetType,
-      text:             String(raw.text ?? ""),
-      hashtags:         Array.isArray(raw.hashtags) ? raw.hashtags.map(String) : [],
+      text:             assetText,
+      hashtags:         assetHashtags,
       mediaDescription: String(raw.mediaDescription ?? ""),
       qualityScore:     70,
       status:           "draft",
+      ...(audioSuggestion !== undefined && { audioSuggestion }),
+      ...(emailMetadata   !== undefined && { emailMetadata }),
       createdAt:        now(),
       updatedAt:        now(),
     };
@@ -481,4 +590,55 @@ Return JSON only:
   assetStore.set(healed.id, healed);
   saveContentStores().catch(() => {});
   return healed;
+}
+
+// ---------------------------------------------------------------------------
+// Social scheduling
+// ---------------------------------------------------------------------------
+
+export function scheduleAsset(
+  assetId: string,
+  companyId: string,
+  publishAt: string,
+): ScheduledAsset {
+  const entry: ScheduledAsset = {
+    assetId,
+    companyId,
+    publishAt,
+    scheduledAt: now(),
+  };
+  // Mark asset as approved (it has been scheduled for publish)
+  const asset = assetStore.get(assetId);
+  if (asset) {
+    asset.status    = "approved";
+    asset.updatedAt = now();
+    assetStore.set(assetId, asset);
+  }
+  scheduleStore.set(assetId, entry);
+  saveContentStores().catch(() => {});
+  return entry;
+}
+
+export function getScheduledAssets(companyId: string): ScheduledAsset[] {
+  return Array.from(scheduleStore.values()).filter((e) => e.companyId === companyId);
+}
+
+export function cancelSchedule(assetId: string): boolean {
+  if (!scheduleStore.has(assetId)) return false;
+  scheduleStore.delete(assetId);
+  const asset = assetStore.get(assetId);
+  if (asset) {
+    asset.status    = "draft";
+    asset.updatedAt = now();
+    assetStore.set(assetId, asset);
+  }
+  saveContentStores().catch(() => {});
+  return true;
+}
+
+export function getDueAssets(): ScheduledAsset[] {
+  const nowMs = Date.now();
+  return Array.from(scheduleStore.values()).filter(
+    (e) => new Date(e.publishAt).getTime() <= nowMs,
+  );
 }

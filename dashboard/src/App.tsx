@@ -9,6 +9,8 @@ import { PlaygroundPage }    from './pages/PlaygroundPage'
 import { LeadHunterPage }    from './pages/LeadHunterPage'
 import { SalesPipelinePage } from './pages/SalesPipelinePage'
 import { IntelPage }         from './pages/IntelPage'
+import { CampaignPage }      from './pages/CampaignPage'
+import { SchedulePage }      from './pages/SchedulePage'
 
 export default function App() {
   return (
@@ -23,6 +25,8 @@ export default function App() {
         <Route path="leads"            element={<LeadHunterPage />} />
         <Route path="pipeline"         element={<SalesPipelinePage />} />
         <Route path="intel"            element={<IntelPage />} />
+        <Route path="campaigns"        element={<CampaignPage />} />
+        <Route path="schedule"         element={<SchedulePage />} />
       </Route>
     </Routes>
   )

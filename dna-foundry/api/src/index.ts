@@ -21,6 +21,10 @@ import {
   generateCampaignPRD,
   generateCampaignAssets,
   submitForApproval,
+  scheduleAsset,
+  getScheduledAssets,
+  cancelSchedule,
+  getDueAssets,
   prdStore,
   assetStore,
   loadContentStores,
@@ -83,6 +87,12 @@ import {
   exportToPdf,
   planStore,
 } from "./services/businessPlan";
+import {
+  generateWebsite,
+  getWebsite,
+  listSites,
+  loadSiteStore,
+} from "./services/siteGenerator";
 import {
   createContact,
   updateContact,
@@ -518,6 +528,61 @@ app.post("/content/approve/:assetId", async (req, reply) => {
     // 503 signals upstream gatekeeper failure — never silently drop
     return reply.code(503).send({ ok: false, error: msg });
   }
+});
+
+// GET /content/assets/:assetId — fetch a single asset by id
+app.get("/content/assets/:assetId", async (req, reply) => {
+  const { assetId } = req.params as { assetId: string };
+  const asset = assetStore.get(assetId);
+  if (!asset) return reply.code(404).send({ ok: false, error: "asset not found" });
+  return reply.code(200).send(asset);
+});
+
+// POST /content/schedule/:assetId — schedule an asset for future publishing
+app.post("/content/schedule/:assetId", async (req, reply) => {
+  const { assetId } = req.params as { assetId: string };
+  const body = (req.body ?? {}) as { companyId?: string; publishAt?: string };
+  if (!body.companyId) return reply.code(400).send({ ok: false, error: "companyId required" });
+  if (!body.publishAt) return reply.code(400).send({ ok: false, error: "publishAt required" });
+
+  const asset = assetStore.get(assetId);
+  if (!asset) return reply.code(404).send({ ok: false, error: "asset not found" });
+
+  const entry = scheduleAsset(assetId, body.companyId, body.publishAt);
+  return reply.code(200).send({ ok: true, scheduled: entry });
+});
+
+// GET /content/schedule/:companyId — list all scheduled assets for a company
+app.get("/content/schedule/:companyId", async (req, reply) => {
+  const { companyId } = req.params as { companyId: string };
+  const scheduled = getScheduledAssets(companyId);
+  return reply.code(200).send({ ok: true, scheduled });
+});
+
+// DELETE /content/schedule/:assetId — cancel a scheduled asset
+app.delete("/content/schedule/:assetId", async (req, reply) => {
+  const { assetId } = req.params as { assetId: string };
+  const removed = cancelSchedule(assetId);
+  if (!removed) return reply.code(404).send({ ok: false, error: "no schedule found for asset" });
+  return reply.code(200).send({ ok: true });
+});
+
+// GET /content/campaign/:campaignId/zip — export campaign assets as JSON bundle download
+app.get("/content/campaign/:campaignId/zip", async (req, reply) => {
+  const { campaignId } = req.params as { campaignId: string };
+  const prd = prdStore.get(campaignId);
+  if (!prd) return reply.code(404).send({ ok: false, error: "campaign not found" });
+
+  const assets = Array.from(assetStore.values()).filter(
+    (a) => a.campaignId === campaignId,
+  );
+
+  const bundle = { campaignId, prd, assets };
+  return reply
+    .code(200)
+    .header("Content-Type", "application/json")
+    .header("Content-Disposition", `attachment; filename="campaign-${campaignId}.json"`)
+    .send(JSON.stringify(bundle, null, 2));
 });
 
 // ---------------------------------------------------------------------------
@@ -1226,6 +1291,18 @@ app.get("/plan/:companyId", async (req, reply) => {
   return reply.code(200).send(plan);
 });
 
+// GET /plan/:companyId/export — download plan as JSON attachment
+app.get("/plan/:companyId/export", async (req, reply) => {
+  const { companyId } = req.params as { companyId: string };
+  const plan = planStore.get(`latest:${companyId}`);
+  if (!plan) return reply.code(404).send({ ok: false, error: "no plan found for company" });
+  return reply
+    .code(200)
+    .header("Content-Type", "application/json")
+    .header("Content-Disposition", `attachment; filename="plan-${companyId}.json"`)
+    .send(JSON.stringify(plan, null, 2));
+});
+
 // GET /plan/:companyId/html — HTML string for print-to-PDF
 app.get("/plan/:companyId/html", async (req, reply) => {
   const { companyId } = req.params as { companyId: string };
@@ -1247,6 +1324,57 @@ app.get("/plan/:companyId/html", async (req, reply) => {
     .code(200)
     .header("Content-Type", "text/html; charset=utf-8")
     .send(html);
+});
+
+// ---------------------------------------------------------------------------
+// Site generator routes
+// ---------------------------------------------------------------------------
+
+// POST /site/generate — generate a single-file HTML landing page from a card
+app.post("/site/generate", async (req, reply) => {
+  const body = (req.body ?? {}) as { companyId?: string };
+  if (!body.companyId) return reply.code(400).send({ ok: false, error: "companyId required" });
+
+  const companyId = body.companyId;
+  let usageEntry: UsageEntry | null = null;
+  try {
+    usageEntry = await deductCredits(companyId, "site_generate");
+  } catch (e) {
+    if (e instanceof QuotaExceeded) return reply.code(402).send({ error: (e as Error).message });
+    throw e;
+  }
+
+  const cardPath = await findCard(companyId);
+  if (!cardPath) {
+    if (usageEntry) await refundCredits(usageEntry.id).catch(() => {});
+    return reply.code(404).send({ ok: false, error: "card not found" });
+  }
+
+  try {
+    const card   = JSON.parse(await fs.readFile(cardPath, "utf8"));
+    const result = await generateWebsite(card, companyId);
+    return reply.code(200).send({ ok: true, companyId, generatedAt: result.generatedAt });
+  } catch (e) {
+    if (usageEntry) await refundCredits(usageEntry.id).catch(() => {});
+    const msg = e instanceof Error ? e.message : String(e);
+    return reply.code(500).send({ ok: false, error: msg });
+  }
+});
+
+// GET /site/:companyId — serve the generated HTML landing page
+app.get("/site/:companyId", async (req, reply) => {
+  const { companyId } = req.params as { companyId: string };
+  const site = getWebsite(companyId);
+  if (!site) return reply.code(404).send({ ok: false, error: "no site generated for company" });
+  return reply
+    .code(200)
+    .header("Content-Type", "text/html; charset=utf-8")
+    .send(site.html);
+});
+
+// GET /sites — list all company IDs that have a generated site
+app.get("/sites", async (_req, reply) => {
+  return reply.code(200).send({ ok: true, companies: listSites() });
 });
 
 // ---------------------------------------------------------------------------
@@ -1345,6 +1473,23 @@ async function main() {
   await loadAccountStore();
   await loadLeadStore();
   await loadContentStores();
+  await loadSiteStore();
+
+  // Scheduler loop — check for due assets every 60s and submit to SparkGatekeeper
+  setInterval(async () => {
+    const due = getDueAssets();
+    for (const s of due) {
+      const asset = assetStore.get(s.assetId);
+      if (!asset) continue;
+      try {
+        await submitForApproval(asset, s.companyId);
+        cancelSchedule(s.assetId);
+      } catch {
+        // GK unreachable — keep in schedule, try next interval
+      }
+    }
+  }, 60_000);
+
   await app.listen({ port: 3101, host: "127.0.0.1" });
 }
 
