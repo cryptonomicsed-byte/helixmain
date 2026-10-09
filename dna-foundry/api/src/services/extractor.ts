@@ -92,8 +92,10 @@ export interface ExtractedCard {
   customers: {
     personas: Array<{
       name: string;
+      age_range?: string;
       role: string;
       pain_points: string[];
+      channels?: string[];
       source: string;
     }>;
   };
@@ -146,12 +148,23 @@ interface LlmExtraction {
   key_messaging: string[];
   strengths: string[];
   weaknesses: string[];
-  persona_name: string | null;
-  persona_role: string | null;
-  persona_pain_points: string[];
+  opportunities: string[];
+  threats: string[];
+  personas: Array<{
+    name: string;
+    age_range: string;
+    role: string;
+    pain_points: string[];
+    channels: string[];
+  }>;
   competitors: string[];
   confidence: number;
 }
+
+const VALID_TONES = [
+  "bold", "warm", "playful", "authoritative", "minimal",
+  "urgent", "calm", "luxurious", "friendly", "technical",
+] as const;
 
 // ---------------------------------------------------------------------------
 // 1. fetchPage
@@ -358,7 +371,7 @@ Return ONLY this JSON structure:
   "location": "full address",
   "phone": "phone number",
   "values": ["value1", "value2"],
-  "tone": ["tone1", "tone2", "tone3"],
+  "tone": ["exactly 5 tones from this list only: bold, warm, playful, authoritative, minimal, urgent, calm, luxurious, friendly, technical — ranked by fit, most fitting first"],
   "personality": "one sentence personality description",
   "donts": ["never do 1", "never do 2"],
   "hours": "hours string",
@@ -368,9 +381,12 @@ Return ONLY this JSON structure:
   "key_messaging": ["msg1", "msg2"],
   "strengths": ["..."],
   "weaknesses": ["..."],
-  "persona_name": "typical customer persona name",
-  "persona_role": "persona description",
-  "persona_pain_points": ["pain point 1"],
+  "opportunities": ["market opportunities"],
+  "threats": ["competitive threats"],
+  "personas": [
+    {"name": "persona name", "age_range": "25-35", "role": "description", "pain_points": ["..."], "channels": ["instagram","google","word_of_mouth"]},
+    {"name": "second persona", "age_range": "35-50", "role": "description", "pain_points": ["..."], "channels": ["facebook","email"]}
+  ],
   "competitors": ["competitor name 1", "competitor name 2"],
   "confidence": 0.7
 }`;
@@ -388,6 +404,28 @@ async function callLlm(url: string, dom: ParsedDom): Promise<LlmExtraction | nul
 
     const parsed = JSON.parse(res.text) as Partial<LlmExtraction>;
 
+    // Normalize tone: filter to valid list, pad to 5, slice to 5
+    const rawTone = Array.isArray(parsed.tone) ? parsed.tone : [];
+    const filteredTone = rawTone.filter((t) =>
+      VALID_TONES.includes(t as typeof VALID_TONES[number]),
+    );
+    while (filteredTone.length < 5) {
+      const fallback = VALID_TONES.find((t) => !filteredTone.includes(t));
+      if (!fallback) break;
+      filteredTone.push(fallback);
+    }
+    const normalizedTone = filteredTone.slice(0, 5);
+
+    // Normalize personas array
+    const rawPersonas = Array.isArray(parsed.personas) ? parsed.personas : [];
+    const personas = rawPersonas.map((p: any) => ({
+      name:        String(p.name ?? ""),
+      age_range:   String(p.age_range ?? ""),
+      role:        String(p.role ?? ""),
+      pain_points: Array.isArray(p.pain_points) ? p.pain_points.map(String) : [],
+      channels:    Array.isArray(p.channels) ? p.channels.map(String) : [],
+    }));
+
     return {
       name: parsed.name ?? null,
       elevator_pitch: parsed.elevator_pitch ?? null,
@@ -395,7 +433,7 @@ async function callLlm(url: string, dom: ParsedDom): Promise<LlmExtraction | nul
       location: parsed.location ?? null,
       phone: parsed.phone ?? null,
       values: Array.isArray(parsed.values) ? parsed.values : [],
-      tone: Array.isArray(parsed.tone) ? parsed.tone : [],
+      tone: normalizedTone,
       personality: parsed.personality ?? null,
       donts: Array.isArray(parsed.donts) ? parsed.donts : [],
       hours: parsed.hours ?? null,
@@ -405,11 +443,9 @@ async function callLlm(url: string, dom: ParsedDom): Promise<LlmExtraction | nul
       key_messaging: Array.isArray(parsed.key_messaging) ? parsed.key_messaging : [],
       strengths: Array.isArray(parsed.strengths) ? parsed.strengths : [],
       weaknesses: Array.isArray(parsed.weaknesses) ? parsed.weaknesses : [],
-      persona_name: parsed.persona_name ?? null,
-      persona_role: parsed.persona_role ?? null,
-      persona_pain_points: Array.isArray(parsed.persona_pain_points)
-        ? parsed.persona_pain_points
-        : [],
+      opportunities: Array.isArray(parsed.opportunities) ? parsed.opportunities : [],
+      threats: Array.isArray(parsed.threats) ? parsed.threats : [],
+      personas,
       competitors: Array.isArray(parsed.competitors) ? parsed.competitors : [],
       confidence: typeof parsed.confidence === "number" ? parsed.confidence : 0.5,
     };
@@ -629,18 +665,15 @@ export async function extractCard(req: ExtractionRequest): Promise<ExtractedCard
     positioning: `inferred from category — confirm with owner`,
   }));
 
-  // Persona
-  const personas =
-    llm.persona_name
-      ? [
-          {
-            name: llm.persona_name,
-            role: llm.persona_role ?? "",
-            pain_points: llm.persona_pain_points,
-            source: `category:inference — confirm with owner`,
-          },
-        ]
-      : [];
+  // Personas — map multi-persona array from LLM
+  const personas = llm.personas.map((p) => ({
+    name:        p.name,
+    age_range:   p.age_range,
+    role:        p.role,
+    pain_points: p.pain_points,
+    channels:    p.channels,
+    source:      `category:inference — confirm with owner`,
+  }));
 
   const card: ExtractedCard = {
     id,
@@ -684,8 +717,10 @@ export async function extractCard(req: ExtractionRequest): Promise<ExtractedCard
     ],
     strategy: {
       swot: {
-        strengths: llm.strengths,
-        weaknesses: llm.weaknesses,
+        strengths:     llm.strengths,
+        weaknesses:    llm.weaknesses,
+        opportunities: llm.opportunities,
+        threats:       llm.threats,
       },
       positioning: llm.positioning ?? "",
       key_messaging: llm.key_messaging,

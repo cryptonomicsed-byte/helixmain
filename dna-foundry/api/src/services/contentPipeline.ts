@@ -7,6 +7,8 @@
  */
 
 import { randomUUID } from "crypto";
+import * as fs from "fs/promises";
+import * as path from "path";
 import { aiGateway } from "./aiGateway";
 import { validateContent } from "./brandVoiceValidator";
 
@@ -61,6 +63,47 @@ export interface CampaignAsset {
 
 export const prdStore   = new Map<string, CampaignPRD>();
 export const assetStore = new Map<string, CampaignAsset>();
+
+// ---------------------------------------------------------------------------
+// Disk persistence
+// ---------------------------------------------------------------------------
+
+const PRD_PATH   = process.env.HELIX_PRD_PATH   ?? "/etc/helix/data/prds.json";
+const ASSETS_PATH = process.env.HELIX_ASSETS_PATH ?? "/etc/helix/data/assets.json";
+
+export async function loadContentStores(): Promise<void> {
+  try {
+    const rawPrds = await fs.readFile(PRD_PATH, "utf8");
+    const prds = JSON.parse(rawPrds) as Array<[string, CampaignPRD]>;
+    for (const [id, prd] of prds) prdStore.set(id, prd);
+  } catch {
+    // file may not exist on first run — silently skip
+  }
+  try {
+    const rawAssets = await fs.readFile(ASSETS_PATH, "utf8");
+    const assets = JSON.parse(rawAssets) as Array<[string, CampaignAsset]>;
+    for (const [id, asset] of assets) assetStore.set(id, asset);
+  } catch {
+    // file may not exist on first run — silently skip
+  }
+}
+
+async function saveContentStores(): Promise<void> {
+  try {
+    const dir = path.dirname(PRD_PATH);
+    await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(PRD_PATH, JSON.stringify(Array.from(prdStore.entries()), null, 2));
+  } catch {
+    // never throw to caller
+  }
+  try {
+    const dir = path.dirname(ASSETS_PATH);
+    await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(ASSETS_PATH, JSON.stringify(Array.from(assetStore.entries()), null, 2));
+  } catch {
+    // never throw to caller
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -198,6 +241,7 @@ Include channelStrategies for every channel listed. Include 2-3 userStories per 
   };
 
   prdStore.set(prd.id, prd);
+  saveContentStores().catch(() => {});
   return prd;
 }
 
@@ -279,6 +323,7 @@ Return JSON only:
         : asset;
 
     assetStore.set(healed.id, healed);
+    saveContentStores().catch(() => {});
     assets.push(healed);
   }
 
@@ -357,6 +402,7 @@ export async function submitForApproval(
     stored.holdQueueId = json.id;
     stored.status = "approved";
     stored.updatedAt = now();
+    saveContentStores().catch(() => {});
   }
 
   return json.id;
@@ -383,6 +429,7 @@ export async function healAsset(
     updatedAt: now(),
   };
   assetStore.set(healing.id, healing);
+  saveContentStores().catch(() => {});
 
   const name        = cardName(card);
   const tone        = cardTone(card);
@@ -432,5 +479,6 @@ Return JSON only:
   };
 
   assetStore.set(healed.id, healed);
+  saveContentStores().catch(() => {});
   return healed;
 }

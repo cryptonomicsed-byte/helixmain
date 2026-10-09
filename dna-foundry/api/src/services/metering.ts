@@ -7,6 +7,8 @@
  */
 
 import { randomUUID } from "crypto";
+import * as fs from "fs/promises";
+import * as path from "path";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -34,14 +36,23 @@ export interface UsageEntry {
 // ---------------------------------------------------------------------------
 
 const CREDIT_COSTS: Record<string, number> = {
-  extraction:           10,
+  extraction:           50,
   compilation:           5,
-  content_generation:    8,
+  campaign_prd:         30,
+  campaign_assets:      30,
+  content_generation:   30,
   image_generation:     15,
-  sales_lead_hunt:      20,
-  outreach_generation:  10,
-  intel_battle:         12,
+  voice_sample:         15,
+  voice_jingle:         25,
   greeting_compile:      3,
+  sales_lead_hunt:      20,
+  sales_qualify:        10,
+  sales_outreach:       10,
+  sales_close:          15,
+  intel_battle:         12,
+  playground_message:    5,
+  site_generate:        40,
+  plan_generate:        20,
 };
 
 // USD cost-per-credit (rough: $0.01 / credit)
@@ -54,6 +65,35 @@ const TIER_LIMITS: Record<CreditAccount["tier"], { monthly: number; daily: numbe
 };
 
 const FREE_STARTER_BALANCE = 50;
+
+// ---------------------------------------------------------------------------
+// Disk persistence
+// ---------------------------------------------------------------------------
+
+const ACCOUNTS_PATH = process.env.HELIX_ACCOUNTS_PATH ?? "/etc/helix/data/accounts.json";
+
+export async function loadAccountStore(): Promise<void> {
+  try {
+    const raw = await fs.readFile(ACCOUNTS_PATH, "utf8");
+    const data = JSON.parse(raw) as Array<[string, CreditAccount]>;
+    for (const [id, account] of data) {
+      accountStore.set(id, account);
+    }
+  } catch {
+    // file may not exist on first run — silently skip
+  }
+}
+
+async function saveAccountStore(): Promise<void> {
+  try {
+    const dir = path.dirname(ACCOUNTS_PATH);
+    await fs.mkdir(dir, { recursive: true });
+    const data = Array.from(accountStore.entries());
+    await fs.writeFile(ACCOUNTS_PATH, JSON.stringify(data, null, 2));
+  } catch {
+    // never throw to caller
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Custom error
@@ -114,6 +154,7 @@ export function initAccount(companyId: string): CreditAccount {
     usageLog: [],
   };
   accountStore.set(companyId, account);
+  saveAccountStore().catch(() => {});
   return account;
 }
 
@@ -179,6 +220,7 @@ export async function deductCredits(
 
   account.balance -= creditsDeducted;
   account.usageLog.push(entry);
+  saveAccountStore().catch(() => {});
   return entry;
 }
 
@@ -190,8 +232,32 @@ export async function refundCredits(usageEntryId: string): Promise<void> {
       entry.refunded = true;
       entry.refundReason = "operation_failed";
       account.balance += entry.creditsDeducted;
+      saveAccountStore().catch(() => {});
       return;
     }
   }
   throw new Error(`UsageEntry not found: ${usageEntryId}`);
+}
+
+export async function topUpCredits(
+  companyId: string,
+  credits: number,
+  reason: string,
+): Promise<UsageEntry> {
+  const account = getAccount(companyId) ?? initAccount(companyId);
+
+  const entry: UsageEntry = {
+    id: randomUUID(),
+    timestamp: new Date().toISOString(),
+    operationType: "top_up",
+    creditsDeducted: -credits,   // negative = credit added
+    costUsd: 0,
+    refunded: false,
+    refundReason: reason,
+  };
+
+  account.balance += credits;
+  account.usageLog.push(entry);
+  saveAccountStore().catch(() => {});
+  return entry;
 }

@@ -23,19 +23,23 @@ import {
   submitForApproval,
   prdStore,
   assetStore,
+  loadContentStores,
   type Channel,
   type CampaignPRD,
 } from "./services/contentPipeline";
 import {
   huntLeadsApollo,
   huntLeadsHunter,
+  huntLeadsOSM,
   qualifyLead,
   generateOutreach,
+  generateClosingScript,
   submitOutreachForApproval,
   updateLeadStatus,
   addNote,
   getLeadsByCompany,
   getPipelineSummary,
+  loadLeadStore,
   leadStore,
   type LeadStatus,
 } from "./services/salesPipeline";
@@ -60,6 +64,12 @@ import {
 import {
   initAccount,
   getCreditSummary,
+  deductCredits,
+  refundCredits,
+  topUpCredits,
+  loadAccountStore,
+  QuotaExceeded,
+  type UsageEntry,
 } from "./services/metering";
 import {
   createSession,
@@ -121,17 +131,29 @@ async function findCard(cardId: string): Promise<string | null> {
 app.get("/health", async () => ({ ok: true, service: "dna-foundry" }));
 
 app.post("/extract", async (req, reply) => {
-  const body = (req.body ?? {}) as { url?: string; orgId?: string };
+  const body = (req.body ?? {}) as { url?: string; orgId?: string; companyId?: string };
   if (!body.url) return reply.code(400).send({ ok: false, error: "url required" });
   if (!body.orgId) return reply.code(400).send({ ok: false, error: "orgId required" });
 
-  const card = await extractor.extractCard({ url: body.url, orgId: body.orgId });
+  const companyId = body.companyId ?? body.orgId ?? "default";
+  let usageEntry: UsageEntry | null = null;
+  try {
+    usageEntry = await deductCredits(companyId, "extraction");
+  } catch (e) {
+    if (e instanceof QuotaExceeded) return reply.code(402).send({ error: e.message });
+    throw e;
+  }
 
-  await ensureDirs();
-  const cardFile = path.join(CARDS, `${card.id}.json`);
-  await fs.writeFile(cardFile, JSON.stringify(card, null, 2));
-
-  return reply.code(200).send(card);
+  try {
+    const card = await extractor.extractCard({ url: body.url, orgId: body.orgId });
+    await ensureDirs();
+    const cardFile = path.join(CARDS, `${card.id}.json`);
+    await fs.writeFile(cardFile, JSON.stringify(card, null, 2));
+    return reply.code(200).send(card);
+  } catch (e) {
+    if (usageEntry) await refundCredits(usageEntry.id).catch(() => {});
+    throw e;
+  }
 });
 
 app.post("/jobs", async (req, reply) => {
@@ -274,13 +296,26 @@ app.post("/greeting", async (req, reply) => {
   if (!body.cardId)    return reply.code(400).send({ ok: false, error: "cardId required" });
   if (!body.companyId) return reply.code(400).send({ ok: false, error: "companyId required" });
 
+  const companyId = body.companyId;
+  let usageEntry: UsageEntry | null = null;
+  try {
+    usageEntry = await deductCredits(companyId, "greeting_compile");
+  } catch (e) {
+    if (e instanceof QuotaExceeded) return reply.code(402).send({ error: e.message });
+    throw e;
+  }
+
   const cardPath = await findCard(body.cardId);
-  if (!cardPath) return reply.code(404).send({ ok: false, error: "card not found" });
+  if (!cardPath) {
+    if (usageEntry) await refundCredits(usageEntry.id).catch(() => {});
+    return reply.code(404).send({ ok: false, error: "card not found" });
+  }
 
   try {
     const greeting = await compileGreeting({ cardPath, role: "front-desk" });
     return reply.code(200).send(greeting);
   } catch (e) {
+    if (usageEntry) await refundCredits(usageEntry.id).catch(() => {});
     const msg = e instanceof Error ? e.message : String(e);
     return reply.code(500).send({ ok: false, error: msg });
   }
@@ -402,20 +437,33 @@ app.get("/health/:companyId", async (req, reply) => {
 
 // POST /content/prd — generate a campaign PRD from a card + goal
 app.post("/content/prd", async (req, reply) => {
-  const body = (req.body ?? {}) as { cardId?: string; goal?: string; channels?: string[] };
+  const body = (req.body ?? {}) as { cardId?: string; goal?: string; channels?: string[]; companyId?: string };
   if (!body.cardId)   return reply.code(400).send({ ok: false, error: "cardId required" });
   if (!body.goal)     return reply.code(400).send({ ok: false, error: "goal required" });
   if (!Array.isArray(body.channels) || body.channels.length === 0)
     return reply.code(400).send({ ok: false, error: "channels[] required" });
 
+  const companyId = body.companyId ?? "default";
+  let usageEntry: UsageEntry | null = null;
+  try {
+    usageEntry = await deductCredits(companyId, "campaign_prd");
+  } catch (e) {
+    if (e instanceof QuotaExceeded) return reply.code(402).send({ error: e.message });
+    throw e;
+  }
+
   const cardPath = await findCard(body.cardId);
-  if (!cardPath) return reply.code(404).send({ ok: false, error: "card not found" });
+  if (!cardPath) {
+    if (usageEntry) await refundCredits(usageEntry.id).catch(() => {});
+    return reply.code(404).send({ ok: false, error: "card not found" });
+  }
 
   try {
     const card = JSON.parse(await fs.readFile(cardPath, "utf8"));
     const prd  = await generateCampaignPRD(card, body.goal, body.channels as Channel[]);
     return reply.code(200).send({ ok: true, prd });
   } catch (e) {
+    if (usageEntry) await refundCredits(usageEntry.id).catch(() => {});
     const msg = e instanceof Error ? e.message : String(e);
     return reply.code(500).send({ ok: false, error: msg });
   }
@@ -423,18 +471,31 @@ app.post("/content/prd", async (req, reply) => {
 
 // POST /content/generate — generate assets for all user stories in a PRD
 app.post("/content/generate", async (req, reply) => {
-  const body = (req.body ?? {}) as { cardId?: string; prd?: CampaignPRD };
+  const body = (req.body ?? {}) as { cardId?: string; prd?: CampaignPRD; companyId?: string };
   if (!body.cardId) return reply.code(400).send({ ok: false, error: "cardId required" });
   if (!body.prd)    return reply.code(400).send({ ok: false, error: "prd required" });
 
+  const companyId = body.companyId ?? "default";
+  let usageEntry: UsageEntry | null = null;
+  try {
+    usageEntry = await deductCredits(companyId, "campaign_assets");
+  } catch (e) {
+    if (e instanceof QuotaExceeded) return reply.code(402).send({ error: e.message });
+    throw e;
+  }
+
   const cardPath = await findCard(body.cardId);
-  if (!cardPath) return reply.code(404).send({ ok: false, error: "card not found" });
+  if (!cardPath) {
+    if (usageEntry) await refundCredits(usageEntry.id).catch(() => {});
+    return reply.code(404).send({ ok: false, error: "card not found" });
+  }
 
   try {
     const card   = JSON.parse(await fs.readFile(cardPath, "utf8"));
     const assets = await generateCampaignAssets(body.prd, card);
     return reply.code(200).send({ ok: true, assets });
   } catch (e) {
+    if (usageEntry) await refundCredits(usageEntry.id).catch(() => {});
     const msg = e instanceof Error ? e.message : String(e);
     return reply.code(500).send({ ok: false, error: msg });
   }
@@ -473,12 +534,54 @@ app.post("/sales/hunt", async (req, reply) => {
   if (!body.cardId)    return reply.code(400).send({ ok: false, error: "cardId required" });
   if (!body.companyId) return reply.code(400).send({ ok: false, error: "companyId required" });
 
+  const companyId = body.companyId;
+  let usageEntry: UsageEntry | null = null;
+  try {
+    usageEntry = await deductCredits(companyId, "sales_lead_hunt");
+  } catch (e) {
+    if (e instanceof QuotaExceeded) return reply.code(402).send({ error: e.message });
+    throw e;
+  }
+
   const cardPath = await findCard(body.cardId);
-  if (!cardPath) return reply.code(404).send({ ok: false, error: "card not found" });
+  if (!cardPath) {
+    if (usageEntry) await refundCredits(usageEntry.id).catch(() => {});
+    return reply.code(404).send({ ok: false, error: "card not found" });
+  }
 
   try {
     const card  = JSON.parse(await fs.readFile(cardPath, "utf8"));
     const leads = await huntLeadsApollo(body.companyId, card, body.filters ?? {});
+    return reply.code(200).send({ ok: true, leads });
+  } catch (e) {
+    if (usageEntry) await refundCredits(usageEntry.id).catch(() => {});
+    const msg = e instanceof Error ? e.message : String(e);
+    return reply.code(500).send({ ok: false, error: msg });
+  }
+});
+
+// POST /sales/hunt/gps — OSM/Overpass lead hunting by GPS coordinates
+app.post("/sales/hunt/gps", async (req, reply) => {
+  const body = (req.body ?? {}) as {
+    lat?: number;
+    lng?: number;
+    industry?: string;
+    radiusMeters?: number;
+    companyId?: string;
+  };
+  if (typeof body.lat !== "number") return reply.code(400).send({ ok: false, error: "lat required" });
+  if (typeof body.lng !== "number") return reply.code(400).send({ ok: false, error: "lng required" });
+  if (!body.industry)   return reply.code(400).send({ ok: false, error: "industry required" });
+  if (!body.companyId)  return reply.code(400).send({ ok: false, error: "companyId required" });
+
+  try {
+    const leads = await huntLeadsOSM({
+      lat: body.lat,
+      lng: body.lng,
+      industry: body.industry,
+      radiusMeters: body.radiusMeters,
+      companyId: body.companyId,
+    });
     return reply.code(200).send({ ok: true, leads });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -489,20 +592,33 @@ app.post("/sales/hunt", async (req, reply) => {
 // POST /sales/qualify/:leadId — score + qualify a lead against the company card
 app.post("/sales/qualify/:leadId", async (req, reply) => {
   const { leadId } = req.params as { leadId: string };
-  const body = (req.body ?? {}) as { cardId?: string };
+  const body = (req.body ?? {}) as { cardId?: string; companyId?: string };
   if (!body.cardId) return reply.code(400).send({ ok: false, error: "cardId required" });
 
   const lead = leadStore.get(leadId);
   if (!lead) return reply.code(404).send({ ok: false, error: "lead not found" });
 
+  const companyId = body.companyId ?? lead.companyId ?? "default";
+  let usageEntry: UsageEntry | null = null;
+  try {
+    usageEntry = await deductCredits(companyId, "sales_qualify");
+  } catch (e) {
+    if (e instanceof QuotaExceeded) return reply.code(402).send({ error: e.message });
+    throw e;
+  }
+
   const cardPath = await findCard(body.cardId);
-  if (!cardPath) return reply.code(404).send({ ok: false, error: "card not found" });
+  if (!cardPath) {
+    if (usageEntry) await refundCredits(usageEntry.id).catch(() => {});
+    return reply.code(404).send({ ok: false, error: "card not found" });
+  }
 
   try {
     const card    = JSON.parse(await fs.readFile(cardPath, "utf8"));
     const updated = await qualifyLead(lead, card);
     return reply.code(200).send({ ok: true, lead: updated });
   } catch (e) {
+    if (usageEntry) await refundCredits(usageEntry.id).catch(() => {});
     const msg = e instanceof Error ? e.message : String(e);
     return reply.code(500).send({ ok: false, error: msg });
   }
@@ -511,20 +627,68 @@ app.post("/sales/qualify/:leadId", async (req, reply) => {
 // POST /sales/outreach/:leadId — generate personalized outreach draft
 app.post("/sales/outreach/:leadId", async (req, reply) => {
   const { leadId } = req.params as { leadId: string };
-  const body = (req.body ?? {}) as { cardId?: string };
+  const body = (req.body ?? {}) as { cardId?: string; companyId?: string };
   if (!body.cardId) return reply.code(400).send({ ok: false, error: "cardId required" });
 
   const lead = leadStore.get(leadId);
   if (!lead) return reply.code(404).send({ ok: false, error: "lead not found" });
 
+  const companyId = body.companyId ?? lead.companyId ?? "default";
+  let usageEntry: UsageEntry | null = null;
+  try {
+    usageEntry = await deductCredits(companyId, "sales_outreach");
+  } catch (e) {
+    if (e instanceof QuotaExceeded) return reply.code(402).send({ error: e.message });
+    throw e;
+  }
+
   const cardPath = await findCard(body.cardId);
-  if (!cardPath) return reply.code(404).send({ ok: false, error: "card not found" });
+  if (!cardPath) {
+    if (usageEntry) await refundCredits(usageEntry.id).catch(() => {});
+    return reply.code(404).send({ ok: false, error: "card not found" });
+  }
 
   try {
     const card  = JSON.parse(await fs.readFile(cardPath, "utf8"));
     const draft = await generateOutreach(lead, card);
     return reply.code(200).send({ ok: true, draft });
   } catch (e) {
+    if (usageEntry) await refundCredits(usageEntry.id).catch(() => {});
+    const msg = e instanceof Error ? e.message : String(e);
+    return reply.code(500).send({ ok: false, error: msg });
+  }
+});
+
+// POST /sales/close/:leadId — generate full closing script + proposal tiers
+app.post("/sales/close/:leadId", async (req, reply) => {
+  const { leadId } = req.params as { leadId: string };
+  const body = (req.body ?? {}) as { cardId?: string; companyId?: string };
+  if (!body.cardId) return reply.code(400).send({ ok: false, error: "cardId required" });
+
+  const lead = leadStore.get(leadId);
+  if (!lead) return reply.code(404).send({ ok: false, error: "lead not found" });
+
+  const companyId = body.companyId ?? lead.companyId ?? "default";
+  let usageEntry: UsageEntry | null = null;
+  try {
+    usageEntry = await deductCredits(companyId, "sales_close");
+  } catch (e) {
+    if (e instanceof QuotaExceeded) return reply.code(402).send({ error: e.message });
+    throw e;
+  }
+
+  const cardPath = await findCard(body.cardId);
+  if (!cardPath) {
+    if (usageEntry) await refundCredits(usageEntry.id).catch(() => {});
+    return reply.code(404).send({ ok: false, error: "card not found" });
+  }
+
+  try {
+    const card   = JSON.parse(await fs.readFile(cardPath, "utf8"));
+    const result = await generateClosingScript(lead, card);
+    return reply.code(200).send({ ok: true, ...result });
+  } catch (e) {
+    if (usageEntry) await refundCredits(usageEntry.id).catch(() => {});
     const msg = e instanceof Error ? e.message : String(e);
     return reply.code(500).send({ ok: false, error: msg });
   }
@@ -572,6 +736,14 @@ app.get("/sales/leads/:companyId", async (req, reply) => {
   const { companyId } = req.params as { companyId: string };
   const leads = getLeadsByCompany(companyId);
   return reply.code(200).send({ ok: true, leads });
+});
+
+// GET /sales/leads/:leadId/activity — activity log for a single lead
+app.get("/sales/leads/:leadId/activity", async (req, reply) => {
+  const { leadId } = req.params as { leadId: string };
+  const lead = leadStore.get(leadId);
+  if (!lead) return reply.code(404).send({ ok: false, error: "lead not found" });
+  return reply.code(200).send({ ok: true, leadId, activityLog: lead.activityLog });
 });
 
 // PATCH /sales/leads/:leadId — update status and/or add a note
@@ -737,13 +909,28 @@ app.get("/images/:companyId", async (req, reply) => {
 
 // POST /intel/battle — compare two BrandDNA cards head-to-head
 app.post("/intel/battle", async (req, reply) => {
-  const body = (req.body ?? {}) as { cardIdA?: string; cardIdB?: string };
+  const body = (req.body ?? {}) as { cardIdA?: string; cardIdB?: string; companyId?: string };
   if (!body.cardIdA) return reply.code(400).send({ ok: false, error: "cardIdA required" });
   if (!body.cardIdB) return reply.code(400).send({ ok: false, error: "cardIdB required" });
 
+  const companyId = body.companyId ?? "default";
+  let usageEntry: UsageEntry | null = null;
+  try {
+    usageEntry = await deductCredits(companyId, "intel_battle");
+  } catch (e) {
+    if (e instanceof QuotaExceeded) return reply.code(402).send({ error: e.message });
+    throw e;
+  }
+
   const [pathA, pathB] = await Promise.all([findCard(body.cardIdA), findCard(body.cardIdB)]);
-  if (!pathA) return reply.code(404).send({ ok: false, error: `card not found: ${body.cardIdA}` });
-  if (!pathB) return reply.code(404).send({ ok: false, error: `card not found: ${body.cardIdB}` });
+  if (!pathA) {
+    if (usageEntry) await refundCredits(usageEntry.id).catch(() => {});
+    return reply.code(404).send({ ok: false, error: `card not found: ${body.cardIdA}` });
+  }
+  if (!pathB) {
+    if (usageEntry) await refundCredits(usageEntry.id).catch(() => {});
+    return reply.code(404).send({ ok: false, error: `card not found: ${body.cardIdB}` });
+  }
 
   try {
     const [cardA, cardB] = await Promise.all([
@@ -753,6 +940,7 @@ app.post("/intel/battle", async (req, reply) => {
     const report = await runBattleMode(cardA, cardB);
     return reply.code(200).send(report);
   } catch (e) {
+    if (usageEntry) await refundCredits(usageEntry.id).catch(() => {});
     const msg = e instanceof Error ? e.message : String(e);
     return reply.code(500).send({ ok: false, error: msg });
   }
@@ -873,6 +1061,43 @@ app.post("/metering/init/:companyId", async (req, reply) => {
   return reply.code(200).send(account);
 });
 
+// GET /metering/:companyId/history — usage log with optional from/to filters
+app.get("/metering/:companyId/history", async (req, reply) => {
+  const { companyId } = req.params as { companyId: string };
+  const { from, to } = req.query as { from?: string; to?: string };
+
+  const account = getCreditSummary(companyId);
+  let log = account.usageLog;
+
+  if (from) {
+    const fromDate = new Date(from);
+    log = log.filter((e) => new Date(e.timestamp) >= fromDate);
+  }
+  if (to) {
+    const toDate = new Date(to);
+    log = log.filter((e) => new Date(e.timestamp) <= toDate);
+  }
+
+  return reply.code(200).send({ ok: true, companyId, total: log.length, entries: log });
+});
+
+// POST /metering/topup/:companyId — admin top-up credits
+app.post("/metering/topup/:companyId", async (req, reply) => {
+  const { companyId } = req.params as { companyId: string };
+  const body = (req.body ?? {}) as { credits?: number; reason?: string };
+
+  if (typeof body.credits !== "number" || body.credits <= 0)
+    return reply.code(400).send({ ok: false, error: "credits (positive number) required" });
+
+  try {
+    const entry = await topUpCredits(companyId, body.credits, body.reason ?? "admin_topup");
+    return reply.code(200).send({ ok: true, entry });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return reply.code(500).send({ ok: false, error: msg });
+  }
+});
+
 // ---------------------------------------------------------------------------
 // Playground routes  (isolated test environment — no writes to live agent dirs)
 // ---------------------------------------------------------------------------
@@ -894,14 +1119,24 @@ app.post("/playground/session", async (req, reply) => {
 
 // POST /playground/message — send a message in an existing session
 app.post("/playground/message", async (req, reply) => {
-  const body = (req.body ?? {}) as { sessionId?: string; message?: string };
+  const body = (req.body ?? {}) as { sessionId?: string; message?: string; companyId?: string };
   if (!body.sessionId) return reply.code(400).send({ ok: false, error: "sessionId required" });
   if (!body.message)   return reply.code(400).send({ ok: false, error: "message required" });
+
+  const companyId = body.companyId ?? "default";
+  let usageEntry: UsageEntry | null = null;
+  try {
+    usageEntry = await deductCredits(companyId, "playground_message");
+  } catch (e) {
+    if (e instanceof QuotaExceeded) return reply.code(402).send({ error: e.message });
+    throw e;
+  }
 
   try {
     const msg = await sendMessage(body.sessionId, body.message);
     return reply.code(200).send(msg);
   } catch (e) {
+    if (usageEntry) await refundCredits(usageEntry.id).catch(() => {});
     const msg = e instanceof Error ? e.message : String(e);
     const code = msg.includes("not found") ? 404 : 500;
     return reply.code(code).send({ ok: false, error: msg });
@@ -947,14 +1182,27 @@ app.post("/plan/generate", async (req, reply) => {
   if (!body.cardId)    return reply.code(400).send({ ok: false, error: "cardId required" });
   if (!body.companyId) return reply.code(400).send({ ok: false, error: "companyId required" });
 
+  const companyId = body.companyId;
+  let usageEntry: UsageEntry | null = null;
+  try {
+    usageEntry = await deductCredits(companyId, "plan_generate");
+  } catch (e) {
+    if (e instanceof QuotaExceeded) return reply.code(402).send({ error: e.message });
+    throw e;
+  }
+
   const cardPath = await findCard(body.cardId);
-  if (!cardPath) return reply.code(404).send({ ok: false, error: "card not found" });
+  if (!cardPath) {
+    if (usageEntry) await refundCredits(usageEntry.id).catch(() => {});
+    return reply.code(404).send({ ok: false, error: "card not found" });
+  }
 
   try {
     const card = JSON.parse(await fs.readFile(cardPath, "utf8"));
     const plan = await generateBusinessPlan(body.cardId, card);
     return reply.code(200).send(plan);
   } catch (e) {
+    if (usageEntry) await refundCredits(usageEntry.id).catch(() => {});
     const msg = e instanceof Error ? e.message : String(e);
     return reply.code(500).send({ ok: false, error: msg });
   }
@@ -1084,6 +1332,9 @@ app.get("/crm/summary/:companyId", async (req, reply) => {
 
 async function main() {
   await ensureDirs();
+  await loadAccountStore();
+  await loadLeadStore();
+  await loadContentStores();
   await app.listen({ port: 3101, host: "127.0.0.1" });
 }
 

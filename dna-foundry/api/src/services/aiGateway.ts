@@ -1,9 +1,9 @@
 /**
  * aiGateway — multi-LLM gateway with:
- *   - neuralCache (SHA-256, 5-minute TTL, in-memory)
+ *   - neuralCache (SHA-256, 5-minute TTL, in-memory + on-disk)
  *   - JSON repair (up to 2 attempts)
  *   - cost calculation + logging
- *   - fallback chain (primary → deepseek)
+ *   - fallback chain (primary → openrouter → deepseek)
  *   - inference strategies: standard | cot | self_consistency
  *
  * No external LLM SDK dependencies — raw fetch only.
@@ -11,13 +11,15 @@
  */
 
 import { createHash } from "crypto";
+import * as fs from "fs/promises";
+import * as path from "path";
 import { CostEntry, costLog } from "./costLog";
 
 // ---------------------------------------------------------------------------
 // Public types
 // ---------------------------------------------------------------------------
 
-export type Provider = "deepseek" | "openai" | "anthropic" | "gemini" | "groq";
+export type Provider = "deepseek" | "openai" | "anthropic" | "gemini" | "groq" | "openrouter" | "mistral";
 export type InferenceStrategy = "standard" | "cot" | "self_consistency";
 
 export interface AiRequest {
@@ -61,6 +63,8 @@ const COST_TABLE: Record<string, ModelPricing> = {
   "claude-haiku-4-5":            { inPer1M: 0.80,  outPer1M: 4.00 },
   "gemini-1.5-flash":            { inPer1M: 0.075, outPer1M: 0.30 },
   "llama-3.1-70b-versatile":     { inPer1M: 0.59,  outPer1M: 0.79 },
+  "mistral-large-latest":        { inPer1M: 3.00,  outPer1M: 9.00 },
+  "openrouter/auto":             { inPer1M: 1.00,  outPer1M: 3.00 },
 };
 const DEFAULT_PRICING: ModelPricing = { inPer1M: 1.00, outPer1M: 3.00 };
 
@@ -87,7 +91,7 @@ function calcCost(
 }
 
 // ---------------------------------------------------------------------------
-// neuralCache
+// neuralCache — in-memory
 // ---------------------------------------------------------------------------
 
 interface CacheEntry {
@@ -120,6 +124,45 @@ function makeCacheKey(req: AiRequest): string {
 }
 
 // ---------------------------------------------------------------------------
+// neuralCache — on-disk layer
+// ---------------------------------------------------------------------------
+
+const NEURAL_CACHE_DIR = process.env.NEURAL_CACHE_DIR ?? "/etc/helix/cache/neural";
+const NEURAL_CACHE_TTL_MS =
+  (parseInt(process.env.NEURAL_CACHE_TTL_SECONDS ?? "300", 10)) * 1000;
+
+interface DiskCacheFile {
+  response: AiResponse;
+  expiresAt: number;
+}
+
+async function diskCacheGet(key: string): Promise<AiResponse | null> {
+  try {
+    const filePath = path.join(NEURAL_CACHE_DIR, `${key}.json`);
+    const raw = await fs.readFile(filePath, "utf8");
+    const data = JSON.parse(raw) as DiskCacheFile;
+    if (Date.now() > data.expiresAt) return null;
+    return data.response;
+  } catch {
+    return null;
+  }
+}
+
+function diskCacheSet(key: string, response: AiResponse): void {
+  // fire-and-forget
+  (async () => {
+    try {
+      await fs.mkdir(NEURAL_CACHE_DIR, { recursive: true });
+      const filePath = path.join(NEURAL_CACHE_DIR, `${key}.json`);
+      const data: DiskCacheFile = { response, expiresAt: Date.now() + NEURAL_CACHE_TTL_MS };
+      await fs.writeFile(filePath, JSON.stringify(data));
+    } catch {
+      // never throw
+    }
+  })();
+}
+
+// ---------------------------------------------------------------------------
 // Provider implementations
 // ---------------------------------------------------------------------------
 
@@ -129,7 +172,7 @@ interface ProviderResult {
   tokensOut: number;
 }
 
-// OpenAI-compatible shape (deepseek / openai / groq)
+// OpenAI-compatible shape (deepseek / openai / groq / openrouter / mistral)
 async function callOpenAICompat(
   url: string,
   apiKey: string,
@@ -346,6 +389,28 @@ async function callProvider(
         temperature,
         maxTokens,
       );
+    case "openrouter":
+      return callOpenAICompat(
+        "https://openrouter.ai/api/v1/chat/completions",
+        getEnvKey("OPENROUTER_API_KEY"),
+        model,
+        systemPrompt,
+        userPrompt,
+        temperature,
+        maxTokens,
+        jsonMode,
+      );
+    case "mistral":
+      return callOpenAICompat(
+        "https://api.mistral.ai/v1/chat/completions",
+        getEnvKey("MISTRAL_API_KEY"),
+        model,
+        systemPrompt,
+        userPrompt,
+        temperature,
+        maxTokens,
+        jsonMode,
+      );
     default: {
       // exhaustive check
       const _: never = provider;
@@ -512,11 +577,18 @@ export class AiGateway {
         : "Think step by step.";
     }
 
-    // neuralCache check
+    // neuralCache check — in-memory first
     const cacheKey = req.cacheKey ?? makeCacheKey({ ...req, provider, model });
     const cached = cacheGet(cacheKey);
     if (cached) {
       return { ...cached, cached: true };
+    }
+
+    // Disk cache check
+    const diskCached = await diskCacheGet(cacheKey);
+    if (diskCached) {
+      cacheSet(cacheKey, diskCached);
+      return { ...diskCached, cached: true };
     }
 
     // Dispatch call (with fallback)
@@ -533,6 +605,8 @@ export class AiGateway {
       return callProvider(prov, mod, systemPrompt, req.prompt, temperature, maxTokens, jsonMode);
     };
 
+    let effectiveProvider: Provider = provider;
+    let effectiveModel: string = model;
     let result: ProviderResult;
     try {
       result = await doCall(provider, model);
@@ -541,8 +615,25 @@ export class AiGateway {
         // Already deepseek — nothing to fall back to
         throw primaryErr;
       }
-      fallbackTriggered = true;
-      result = await doCall(DEFAULT_PROVIDER, DEFAULT_MODEL);
+      // Try openrouter before deepseek if key is available
+      let openRouterResult: ProviderResult | null = null;
+      try {
+        getEnvKey("OPENROUTER_API_KEY"); // throws if missing
+        openRouterResult = await doCall("openrouter", "openrouter/auto");
+      } catch {
+        // openrouter key missing or call failed — fall through to deepseek
+      }
+      if (openRouterResult !== null) {
+        fallbackTriggered = true;
+        effectiveProvider = "openrouter";
+        effectiveModel = "openrouter/auto";
+        result = openRouterResult;
+      } else {
+        fallbackTriggered = true;
+        effectiveProvider = DEFAULT_PROVIDER;
+        effectiveModel = DEFAULT_MODEL;
+        result = await doCall(DEFAULT_PROVIDER, DEFAULT_MODEL);
+      }
     }
 
     text = result.text;
@@ -551,8 +642,6 @@ export class AiGateway {
 
     // JSON repair
     let repairAttempts = 0;
-    const effectiveProvider = fallbackTriggered ? DEFAULT_PROVIDER : provider;
-    const effectiveModel = fallbackTriggered ? DEFAULT_MODEL : model;
 
     if (jsonMode) {
       const repaired = await repairJson(
@@ -592,6 +681,7 @@ export class AiGateway {
     };
 
     cacheSet(cacheKey, response);
+    diskCacheSet(cacheKey, response);
     return response;
   }
 }

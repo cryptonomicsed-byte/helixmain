@@ -8,10 +8,13 @@
  * Sources:
  *   - Apollo.io (POST /api/v1/mixed_companies/search)
  *   - hunter.io  (GET /v2/domain-search) — requires HUNTER_API_KEY
+ *   - OSM/Overpass  (POST https://overpass-api.de/api/interpreter)
  *   - places / manual — caller-supplied leads
  */
 
 import { randomUUID } from "crypto";
+import * as fs from "fs/promises";
+import * as path from "path";
 import { aiGateway } from "./aiGateway";
 
 // ---------------------------------------------------------------------------
@@ -28,7 +31,7 @@ export interface Lead {
   phone?: string;
   company?: string;
   website?: string;
-  source: "apollo" | "hunter" | "places" | "manual";
+  source: "apollo" | "hunter" | "places" | "manual" | "osm";
   status: LeadStatus;
   score: number;              // 0-100
   signals: string[];          // qualification signals
@@ -59,6 +62,35 @@ export interface OutreachDraft {
 // ---------------------------------------------------------------------------
 
 const leadStore = new Map<string, Lead>();
+
+// ---------------------------------------------------------------------------
+// Disk persistence
+// ---------------------------------------------------------------------------
+
+const LEADS_PATH = process.env.HELIX_LEADS_PATH ?? "/etc/helix/data/leads.json";
+
+export async function loadLeadStore(): Promise<void> {
+  try {
+    const raw = await fs.readFile(LEADS_PATH, "utf8");
+    const data = JSON.parse(raw) as Array<[string, Lead]>;
+    for (const [id, lead] of data) {
+      leadStore.set(id, lead);
+    }
+  } catch {
+    // file may not exist on first run — silently skip
+  }
+}
+
+async function saveLeadStore(): Promise<void> {
+  try {
+    const dir = path.dirname(LEADS_PATH);
+    await fs.mkdir(dir, { recursive: true });
+    const data = Array.from(leadStore.entries());
+    await fs.writeFile(LEADS_PATH, JSON.stringify(data, null, 2));
+  } catch {
+    // never throw to caller
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -146,6 +178,7 @@ export async function huntLeadsApollo(
       updatedAt: now(),
     };
     leadStore.set(lead.id, lead);
+    saveLeadStore().catch(() => {});
     return lead;
   });
 
@@ -203,8 +236,138 @@ export async function huntLeadsHunter(
       updatedAt: now(),
     };
     leadStore.set(lead.id, lead);
+    saveLeadStore().catch(() => {});
     return lead;
   });
+
+  return leads;
+}
+
+// ---------------------------------------------------------------------------
+// Lead hunting — OpenStreetMap / Overpass API
+// ---------------------------------------------------------------------------
+
+export interface OsmFilters {
+  lat: number;
+  lng: number;
+  industry: string;
+  radiusMeters?: number;
+  companyId: string;
+}
+
+export async function huntLeadsOSM(filters: OsmFilters): Promise<Lead[]> {
+  const radius = filters.radiusMeters ?? 5000;
+  const { lat, lng, industry, companyId } = filters;
+
+  const query = `[out:json][timeout:25];
+(
+  node["amenity"~"${industry}",i](around:${radius},${lat},${lng});
+  way["amenity"~"${industry}",i](around:${radius},${lat},${lng});
+  node["shop"~"${industry}",i](around:${radius},${lat},${lng});
+  node["name"~"${industry}",i](around:${radius},${lat},${lng});
+);
+out body;`;
+
+  let elements: any[] = [];
+  try {
+    const res = await fetch("https://overpass-api.de/api/interpreter", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: `data=${encodeURIComponent(query)}`,
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      console.warn(`[salesPipeline] Overpass API ${res.status}: ${text.slice(0, 300)}`);
+      return [];
+    }
+    const json = (await res.json()) as { elements?: any[] };
+    elements = json.elements ?? [];
+  } catch (err) {
+    console.warn("[salesPipeline] Overpass fetch error:", err);
+    return [];
+  }
+
+  const leads: Lead[] = [];
+
+  for (const el of elements) {
+    const tags = el.tags ?? {};
+    const name: string = tags.name ?? `OSM element ${el.id}`;
+    const website: string | undefined =
+      tags["contact:website"] ?? tags.website ?? undefined;
+    const phone: string | undefined =
+      tags["contact:phone"] ?? tags.phone ?? undefined;
+    const email: string =
+      tags["contact:email"] ?? tags.email ?? "";
+
+    // Compute digital footprint score
+    let digitalFootprintScore = 0;
+    const signals: string[] = [];
+
+    if (website) {
+      try {
+        const headRes = await fetch(website, {
+          method: "HEAD",
+          signal: AbortSignal.timeout(5000),
+        });
+        if (headRes.ok) {
+          // Try to detect social links in HTML
+          let hasSocial = false;
+          try {
+            const getRes = await fetch(website, {
+              method: "GET",
+              signal: AbortSignal.timeout(8000),
+              headers: { "User-Agent": "HelixMain/1.0" },
+            });
+            if (getRes.ok) {
+              const html = await getRes.text();
+              hasSocial =
+                /instagram\.com|facebook\.com|twitter\.com|x\.com|tiktok\.com|linkedin\.com/i.test(
+                  html,
+                );
+            }
+          } catch {
+            // GET failed after HEAD succeeded — treat as live no social
+          }
+          digitalFootprintScore = hasSocial ? 100 : 60;
+        } else {
+          digitalFootprintScore = 30;
+        }
+      } catch {
+        digitalFootprintScore = 30;
+      }
+    } else {
+      digitalFootprintScore = 0;
+    }
+
+    signals.push(`digitalFootprintScore:${digitalFootprintScore}`);
+
+    const lead: Lead = {
+      id: randomUUID(),
+      companyId,
+      name,
+      email,
+      phone,
+      company: name,
+      website,
+      source: "osm",
+      status: "new",
+      score: 0,
+      signals,
+      notes: [],
+      activityLog: [
+        makeActivity(
+          "created",
+          `Hunted via OSM/Overpass — industry: ${industry}, lat: ${lat}, lng: ${lng}`,
+        ),
+      ],
+      createdAt: now(),
+      updatedAt: now(),
+    };
+
+    leadStore.set(lead.id, lead);
+    saveLeadStore().catch(() => {});
+    leads.push(lead);
+  }
 
   return leads;
 }
@@ -253,6 +416,7 @@ Return JSON: {"score": <number>, "signals": [<string>,...], "tier": "hot"|"warm"
   };
 
   leadStore.set(updated.id, updated);
+  saveLeadStore().catch(() => {});
   return updated;
 }
 
@@ -320,8 +484,79 @@ Write personalized outreach. Return JSON: {
     ],
   };
   leadStore.set(updated.id, updated);
+  saveLeadStore().catch(() => {});
 
   return draft;
+}
+
+// ---------------------------------------------------------------------------
+// Closing script generator
+// ---------------------------------------------------------------------------
+
+export interface ClosingScriptResult {
+  closingScript: string;
+  objectionHandlers: Record<string, string>;
+  urgencyTriggers: string[];
+  proposalTiers: {
+    starter: { name: string; price: string; features: string[] };
+    growth:  { name: string; price: string; features: string[] };
+    dominate: { name: string; price: string; features: string[] };
+  };
+}
+
+export async function generateClosingScript(
+  lead: Lead,
+  card: any,
+): Promise<ClosingScriptResult> {
+  const businessName = card?.identity?.name ?? "the business";
+  const pitch        = card?.identity?.elevator_pitch ?? "";
+  const offerings: string = Array.isArray(card?.offerings)
+    ? (card.offerings as any[]).map((o: any) => o.name).join(", ")
+    : "";
+
+  const prompt = `You are a master sales closer. Generate a full closing package for this lead.
+Business: ${businessName} — ${pitch}
+Offerings: ${offerings}
+Lead: ${lead.name}, ${lead.company ?? "unknown"}, score: ${lead.score}, signals: ${lead.signals.join(", ")}
+
+Return JSON:
+{
+  "closingScript": "<full phone/meeting closing script>",
+  "objectionHandlers": {
+    "too expensive": "<rebuttal>",
+    "not the right time": "<rebuttal>",
+    "need to think about it": "<rebuttal>",
+    "already have a solution": "<rebuttal>"
+  },
+  "urgencyTriggers": ["<trigger 1>", "<trigger 2>", "<trigger 3>"],
+  "proposalTiers": {
+    "starter": { "name": "<tier name>", "price": "<price string>", "features": ["<feature>"] },
+    "growth":  { "name": "<tier name>", "price": "<price string>", "features": ["<feature>"] },
+    "dominate": { "name": "<tier name>", "price": "<price string>", "features": ["<feature>"] }
+  }
+}`;
+
+  const resp = await aiGateway.call({ prompt, jsonMode: true, maxTokens: 2048 });
+
+  let parsed: Partial<ClosingScriptResult> = {};
+  try {
+    parsed = JSON.parse(resp.text) as Partial<ClosingScriptResult>;
+  } catch {
+    console.warn("[salesPipeline] generateClosingScript JSON parse failed:", resp.text.slice(0, 200));
+  }
+
+  const defaultTier = { name: "", price: "", features: [] };
+
+  return {
+    closingScript:    parsed.closingScript    ?? "",
+    objectionHandlers: parsed.objectionHandlers ?? {},
+    urgencyTriggers:  Array.isArray(parsed.urgencyTriggers) ? parsed.urgencyTriggers : [],
+    proposalTiers: {
+      starter:  parsed.proposalTiers?.starter  ?? defaultTier,
+      growth:   parsed.proposalTiers?.growth   ?? defaultTier,
+      dominate: parsed.proposalTiers?.dominate ?? defaultTier,
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -367,6 +602,7 @@ export async function submitOutreachForApproval(
       makeActivity("outreach_draft", `Submitted to hold queue — id: ${holdQueueId}`),
     );
     leadStore.set(stored.id, stored);
+    saveLeadStore().catch(() => {});
   }
 
   return holdQueueId;
@@ -392,6 +628,7 @@ export function updateLeadStatus(
     notes: note ? [...lead.notes, note] : lead.notes,
   };
   leadStore.set(updated.id, updated);
+  saveLeadStore().catch(() => {});
   return updated;
 }
 
@@ -406,6 +643,7 @@ export function addNote(lead: Lead, note: string): Lead {
     ],
   };
   leadStore.set(updated.id, updated);
+  saveLeadStore().catch(() => {});
   return updated;
 }
 
