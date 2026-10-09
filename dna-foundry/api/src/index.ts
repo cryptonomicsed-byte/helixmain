@@ -13,6 +13,7 @@ import path from "path";
 import Fastify from "fastify";
 import { extractor } from "./services/extractor";
 import { agentCompiler, AgentRole } from "./services/agentCompiler";
+import { compileGreeting } from "./services/greetingCompiler";
 
 const app = Fastify({ logger: true });
 const ROOT = path.resolve(__dirname, "..", "..");
@@ -151,6 +152,23 @@ app.get("/cards/:a/diff/:b", async (req, reply) => {
   const { code, out, err } = await run("node", [COMPILER_CLI, "--card", pa, "--diff", pb]);
   if (code !== 0) return reply.code(500).send({ ok: false, error: err.slice(-2000) });
   return JSON.parse(out);
+});
+
+app.post("/greeting", async (req, reply) => {
+  const body = (req.body ?? {}) as { cardId?: string; companyId?: string };
+  if (!body.cardId)    return reply.code(400).send({ ok: false, error: "cardId required" });
+  if (!body.companyId) return reply.code(400).send({ ok: false, error: "companyId required" });
+
+  const cardPath = await findCard(body.cardId);
+  if (!cardPath) return reply.code(404).send({ ok: false, error: "card not found" });
+
+  try {
+    const greeting = await compileGreeting({ cardPath, role: "front-desk" });
+    return reply.code(200).send(greeting);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return reply.code(500).send({ ok: false, error: msg });
+  }
 });
 
 async function main() {

@@ -3,10 +3,11 @@
  *
  * Reads a card.json and emits four role-specific directories:
  *   {outputDir}/{companyId}/{role}/
- *     soul.md          — personality + behavioural constraints
- *     memory.md        — knowledge base
- *     tool-grants.json — MCP tool allowlist scoped by role
- *     greeting.txt     — compiled call-open greeting (runtime fills {timeOfDay})
+ *     soul.md           — personality + behavioural constraints
+ *     memory.md         — knowledge base
+ *     tool-grants.json  — MCP tool allowlist scoped by role
+ *     greeting.txt      — compiled call-open greeting (runtime fills {timeOfDay})
+ *     greeting-full.json — full CompiledGreeting object (variants, specials, voiceProfile)
  *
  * Roles: front-desk | sales | content | owner-manager
  */
@@ -14,6 +15,7 @@
 import * as fs from "fs/promises";
 import * as path from "path";
 import { compileGuardrails, CompiledGuardrails } from "./guardrailCompiler";
+import { compileGreeting } from "./greetingCompiler";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -33,6 +35,7 @@ export interface RoleOutputPaths {
   memory: string;
   toolGrants: string;
   greeting: string;
+  greetingFull: string;
 }
 
 export interface CompileResult {
@@ -591,10 +594,11 @@ export async function compileCard(req: CompileRequest): Promise<CompileResult> {
     const roleDir = path.join(companyDir, role);
     await fs.mkdir(roleDir, { recursive: true });
 
-    const soulPath      = path.join(roleDir, "soul.md");
-    const memoryPath    = path.join(roleDir, "memory.md");
-    const toolGrantPath = path.join(roleDir, "tool-grants.json");
-    const greetingPath  = path.join(roleDir, "greeting.txt");
+    const soulPath          = path.join(roleDir, "soul.md");
+    const memoryPath        = path.join(roleDir, "memory.md");
+    const toolGrantPath     = path.join(roleDir, "tool-grants.json");
+    const greetingPath      = path.join(roleDir, "greeting.txt");
+    const greetingFullPath  = path.join(roleDir, "greeting-full.json");
 
     // soul.md — append behavioral constraints section from guardrails
     const soulBase = buildSoul(role, card);
@@ -615,13 +619,23 @@ export async function compileCard(req: CompileRequest): Promise<CompileResult> {
     }
     await fs.writeFile(toolGrantPath, JSON.stringify(grants, null, 2), "utf8");
 
-    await fs.writeFile(greetingPath, buildGreeting(role, card), "utf8");
+    // greeting — use greetingCompiler for call/sales roles; fall back to basic for internal roles
+    if (role === "front-desk" || role === "sales") {
+      const compiled = await compileGreeting({ cardPath: req.cardPath, role });
+      await fs.writeFile(greetingPath, compiled.text, "utf8");
+      await fs.writeFile(greetingFullPath, JSON.stringify(compiled, null, 2), "utf8");
+    } else {
+      // content / owner-manager: use legacy basic greeting, no greeting-full.json
+      await fs.writeFile(greetingPath, buildGreeting(role, card), "utf8");
+      await fs.writeFile(greetingFullPath, JSON.stringify({ text: buildGreeting(role, card), voiceProfile: "default", tone: card.voice?.tone ?? [], variants: {}, activeSpecials: [], responseSla: card.operations?.response_sla ?? "as soon as possible" }, null, 2), "utf8");
+    }
 
     outputPaths[role] = {
-      soul:       soulPath,
-      memory:     memoryPath,
-      toolGrants: toolGrantPath,
-      greeting:   greetingPath,
+      soul:         soulPath,
+      memory:       memoryPath,
+      toolGrants:   toolGrantPath,
+      greeting:     greetingPath,
+      greetingFull: greetingFullPath,
     };
   }
 
