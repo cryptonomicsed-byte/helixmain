@@ -312,69 +312,118 @@ async function scoreDigitalFootprint(website: string): Promise<number> {
 }
 
 export async function huntLeadsOSM(filters: OsmFilters): Promise<Lead[]> {
-  const radius = filters.radiusMeters ?? 5000;
+  const radiusMeters = filters.radiusMeters ?? 5000;
   const { lat, lng, industry, companyId } = filters;
 
-  // Build Overpass union clauses from tag map, or fall back to name search
-  const key = industry.toLowerCase();
-  const tags = OSM_TAG_MAP[key] ?? [];
+  // Convert radius to approximate degree offset for Nominatim bounding box
+  // 1 degree lat ≈ 111km, 1 degree lon ≈ 111km * cos(lat)
+  const latDelta = radiusMeters / 111_000;
+  const lngDelta = radiusMeters / (111_000 * Math.cos((lat * Math.PI) / 180));
+  const viewbox = `${lng - lngDelta},${lat + latDelta},${lng + lngDelta},${lat - latDelta}`;
 
-  let unionClauses: string;
-  if (tags.length > 0) {
-    const lines: string[] = [];
-    for (const tag of tags) {
-      const [k, v] = tag.split("=");
-      const valueClause = v === "*" ? "" : `="${v}"`;
-      lines.push(`  node["${k}"${valueClause}](around:${radius},${lat},${lng});`);
-      lines.push(`  way["${k}"${valueClause}](around:${radius},${lat},${lng});`);
-    }
-    unionClauses = lines.join("\n");
-  } else {
-    // Fallback: name search
-    unionClauses = [
-      `  node["name"~"${industry}",i](around:${radius},${lat},${lng});`,
-      `  way["name"~"${industry}",i](around:${radius},${lat},${lng});`,
-    ].join("\n");
+  // Map industry to OSM amenity/shop tags for Nominatim
+  const key = industry.toLowerCase();
+  const osmTags = OSM_TAG_MAP[key] ?? [];
+
+  // Extract unique amenity/shop values to query Nominatim
+  const amenityValues = osmTags
+    .filter((t) => t.startsWith("amenity="))
+    .map((t) => t.split("=")[1])
+    .filter((v) => v && v !== "*");
+  const shopValues = osmTags
+    .filter((t) => t.startsWith("shop="))
+    .map((t) => t.split("=")[1])
+    .filter((v) => v && v !== "*");
+  const leisureValues = osmTags
+    .filter((t) => t.startsWith("leisure="))
+    .map((t) => t.split("=")[1])
+    .filter((v) => v && v !== "*");
+  const craftValues = osmTags
+    .filter((t) => t.startsWith("craft="))
+    .map((t) => t.split("=")[1])
+    .filter((v) => v && v !== "*");
+
+  // Build Nominatim queries — one per tag type, collect all results
+  interface NominatimResult {
+    place_id: number;
+    display_name: string;
+    lat: string;
+    lon: string;
+    type: string;
+    class: string;
+    address?: Record<string, string>;
+    extratags?: Record<string, string>;
   }
 
-  const query = `[out:json][timeout:25];\n(\n${unionClauses}\n);\nout body;`;
+  const allResults: NominatimResult[] = [];
 
-  let elements: any[] = [];
-  try {
-    const res = await fetch("https://overpass-api.de/api/interpreter", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: `data=${encodeURIComponent(query)}`,
-    });
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      console.warn(`[salesPipeline] Overpass API ${res.status}: ${text.slice(0, 300)}`);
+  const nominatimFetch = async (params: string): Promise<NominatimResult[]> => {
+    const url = `https://nominatim.openstreetmap.org/search?${params}&format=json&limit=20&bounded=1&viewbox=${viewbox}&addressdetails=1&extratags=1`;
+    try {
+      const res = await fetch(url, {
+        headers: { "User-Agent": "HelixMain/1.0 (helixmain.duckdns.org)" },
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!res.ok) return [];
+      return (await res.json()) as NominatimResult[];
+    } catch {
       return [];
     }
-    const json = (await res.json()) as { elements?: any[] };
-    elements = json.elements ?? [];
-  } catch (err) {
-    console.warn("[salesPipeline] Overpass fetch error:", err);
-    return [];
+  };
+
+  // Fire queries in parallel
+  const queries: Promise<NominatimResult[]>[] = [];
+
+  if (amenityValues.length > 0) {
+    for (const v of amenityValues) queries.push(nominatimFetch(`amenity=${encodeURIComponent(v)}`));
+  }
+  if (shopValues.length > 0) {
+    for (const v of shopValues) queries.push(nominatimFetch(`shop=${encodeURIComponent(v)}`));
+  }
+  if (leisureValues.length > 0) {
+    for (const v of leisureValues) queries.push(nominatimFetch(`leisure=${encodeURIComponent(v)}`));
+  }
+  if (craftValues.length > 0) {
+    for (const v of craftValues) queries.push(nominatimFetch(`craft=${encodeURIComponent(v)}`));
+  }
+  // Always also do a keyword search as fallback
+  queries.push(nominatimFetch(`q=${encodeURIComponent(industry)}`));
+
+  const batchResults = await Promise.allSettled(queries);
+  const seen = new Set<number>();
+  for (const r of batchResults) {
+    if (r.status === "fulfilled") {
+      for (const item of r.value) {
+        if (!seen.has(item.place_id)) {
+          seen.add(item.place_id);
+          allResults.push(item);
+        }
+      }
+    }
   }
 
   // Build stub leads first, then score footprints in parallel
   type StubElement = {
-    el: any;
     name: string;
     website: string | undefined;
     phone: string | undefined;
     email: string;
+    address: string;
   };
 
-  const stubs: StubElement[] = elements.map((el: any) => {
-    const tags = el.tags ?? {};
+  const stubs: StubElement[] = allResults.map((r) => {
+    const addr = r.address ?? {};
+    const addressStr = [addr.road, addr.house_number, addr.city ?? addr.town ?? addr.village, addr.state]
+      .filter(Boolean).join(", ");
+    const tags = r.extratags ?? {};
+    // Extract display name (first segment before first comma is usually the business name)
+    const namePart = r.display_name.split(",")[0].trim();
     return {
-      el,
-      name:    tags.name ?? `OSM element ${el.id}` as string,
-      website: tags["contact:website"] ?? tags.website ?? undefined,
-      phone:   tags["contact:phone"]   ?? tags.phone   ?? undefined,
-      email:   tags["contact:email"]   ?? tags.email   ?? "",
+      name:    namePart || `${industry} at ${r.lat},${r.lon}`,
+      website: tags.website ?? tags["contact:website"] ?? undefined,
+      phone:   tags.phone ?? tags["contact:phone"] ?? undefined,
+      email:   tags.email ?? tags["contact:email"] ?? "",
+      address: addressStr,
     };
   });
 
