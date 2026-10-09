@@ -1,0 +1,17 @@
+[Unit]
+Description=HelixMain DNA API (Fastify)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/helixmain/dna-foundry/api
+ExecStart=/usr/local/bin/node dist/index.js
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target

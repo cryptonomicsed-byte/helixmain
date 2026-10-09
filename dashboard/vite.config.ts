@@ -8,7 +8,7 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:3101',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, '')
+        rewrite: (path) => path.replace(/^\/api/, ''),
       },
       '/queue': {
         target: 'http://localhost:9100',
