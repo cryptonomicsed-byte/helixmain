@@ -5,7 +5,7 @@
  */
 
 const BASE = '/api'
-const GK_BASE = 'http://localhost:9100'
+const GK_BASE = '/gk'
 
 async function request<T>(method: string, path: string, body?: unknown, base = BASE): Promise<T> {
   const res = await fetch(`${base}${path}`, {
@@ -223,6 +223,7 @@ export const api = {
 
   gkDeny: (id: string) =>
     request<{ ok: boolean }>('POST', '/deny', { id }, GK_BASE),
+
 
   // Playground
   playgroundCreate: (companyId: string, cardId: string, persona?: string) =>

@@ -11,17 +11,10 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
       },
-      '/queue': {
+      '/gk': {
         target: 'http://localhost:9100',
         changeOrigin: true,
-      },
-      '/approve': {
-        target: 'http://localhost:9100',
-        changeOrigin: true,
-      },
-      '/deny': {
-        target: 'http://localhost:9100',
-        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/gk/, ''),
       },
     }
   }
