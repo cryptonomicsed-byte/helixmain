@@ -189,6 +189,20 @@ app.post("/extract", async (req, reply) => {
 
   try {
     const card = await extractor.extractCard({ url: body.url, orgId: body.orgId });
+    // A fallback card means the crawl/LLM produced nothing — never charge for that.
+    const failed =
+      typeof card.identity?.elevatorPitch === "string" &&
+      card.identity.elevatorPitch.startsWith("Could not extract data automatically");
+    if (failed) {
+      if (usageEntry) await refundCredits(usageEntry.id).catch(() => {});
+      return reply.code(422).send({
+        ok: false,
+        error: "extraction_failed",
+        message:
+          "Could not extract data from that URL. Check the site is public and reachable, and that the API has an LLM key configured.",
+        url: extractor.normalizeUrl(body.url),
+      });
+    }
     await ensureDirs();
     const cardFile = path.join(CARDS, `${card.id}.json`);
     await fs.writeFile(cardFile, JSON.stringify(card, null, 2));

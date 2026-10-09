@@ -176,12 +176,28 @@ interface FetchResult {
   statusCode: number;
 }
 
+/** Accept a bare domain or brand word ("walmart") and turn it into a fetchable URL. */
+export function normalizeUrl(input: string): string {
+  let u = (input ?? "").trim();
+  if (!u) return u;
+  if (!/^https?:\/\//i.test(u)) u = `https://${u}`;
+  try {
+    const p = new URL(u);
+    // A bare single-label host ("walmart") is not resolvable → try .com
+    if (!p.hostname.includes(".")) p.hostname = `${p.hostname}.com`;
+    return p.toString();
+  } catch {
+    return u;
+  }
+}
+
 async function fetchPage(url: string): Promise<FetchResult> {
+  const target = normalizeUrl(url);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10_000);
 
   try {
-    const res = await fetch(url, {
+    const res = await fetch(target, {
       signal: controller.signal,
       redirect: "follow",
       headers: {
@@ -197,11 +213,11 @@ async function fetchPage(url: string): Promise<FetchResult> {
     const html = await res.text();
     return {
       html,
-      finalUrl: res.url ?? url,
+      finalUrl: res.url ?? target,
       statusCode: res.status,
     };
   } catch {
-    return { html: "", finalUrl: url, statusCode: 0 };
+    return { html: "", finalUrl: target, statusCode: 0 };
   } finally {
     clearTimeout(timeout);
   }
@@ -753,4 +769,4 @@ export async function extractCard(req: ExtractionRequest): Promise<ExtractedCard
   return card;
 }
 
-export const extractor = { extractCard };
+export const extractor = { extractCard, normalizeUrl };

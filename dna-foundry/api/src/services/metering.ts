@@ -36,7 +36,7 @@ export interface UsageEntry {
 // ---------------------------------------------------------------------------
 
 const CREDIT_COSTS: Record<string, number> = {
-  extraction:           50,
+  extraction:           5,
   compilation:           5,
   campaign_prd:         30,
   campaign_assets:      30,
@@ -64,7 +64,7 @@ const TIER_LIMITS: Record<CreditAccount["tier"], { monthly: number; daily: numbe
   agency: { monthly: 10000, daily: 500 },
 };
 
-const FREE_STARTER_BALANCE = 50;
+const FREE_STARTER_BALANCE = 100;
 
 // ---------------------------------------------------------------------------
 // Disk persistence
