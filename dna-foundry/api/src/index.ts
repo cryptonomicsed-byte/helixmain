@@ -14,7 +14,19 @@ import Fastify from "fastify";
 import { extractor } from "./services/extractor";
 import { agentCompiler, AgentRole } from "./services/agentCompiler";
 import { compileGreeting } from "./services/greetingCompiler";
-import { resolveVoice, getVoiceCatalog, synthesizeSample } from "./services/voiceResolver";
+import {
+  resolveVoice,
+  getVoiceCatalog,
+  getVoiceCatalogAsync,
+  synthesizeSample,
+  getElevenLabsVoices,
+} from "./services/voiceResolver";
+import {
+  generateJingle,
+  getJingle,
+  loadJingleStore,
+} from "./services/sonicBranding";
+import { aiGateway } from "./services/aiGateway";
 import { loadChangelog, verifyChain, changelogToMarkdown } from "./services/changelog";
 import { scoreCard } from "./services/cardHealth";
 import {
@@ -378,6 +390,183 @@ app.post("/voices/sample", async (req, reply) => {
   const resolved = resolveVoice(body.voiceProfile, {});
   const result = await synthesizeSample(resolved, body.text);
   return reply.code(200).send(result);
+});
+
+// GET /voices — async version that appends live ElevenLabs voices when key is set
+// (override the earlier sync route)
+app.get("/voices/catalog", async () => getVoiceCatalogAsync());
+
+// GET /voices/elevenlabs — live ElevenLabs voice list
+app.get("/voices/elevenlabs", async (_req, reply) => {
+  const apiKey = process.env.ELEVENLABS_API_KEY;
+  if (!apiKey) {
+    return reply.code(503).send({ ok: false, error: "ELEVENLABS_API_KEY not configured" });
+  }
+  try {
+    const voices = await getElevenLabsVoices();
+    return reply.code(200).send(voices);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return reply.code(503).send({ ok: false, error: msg });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Voice jingle routes
+// ---------------------------------------------------------------------------
+
+// POST /voice/jingle — generate (or regenerate) a brand jingle for a company
+app.post("/voice/jingle", async (req, reply) => {
+  const body = (req.body ?? {}) as { companyId?: string };
+  if (!body.companyId) return reply.code(400).send({ ok: false, error: "companyId required" });
+
+  const companyId = body.companyId;
+  let usageEntry: UsageEntry | null = null;
+  try {
+    usageEntry = await deductCredits(companyId, "voice_jingle");
+  } catch (e) {
+    if (e instanceof QuotaExceeded) return reply.code(402).send({ error: (e as Error).message });
+    throw e;
+  }
+
+  const cardPath = await findCard(companyId);
+  if (!cardPath) {
+    if (usageEntry) await refundCredits(usageEntry.id).catch(() => {});
+    return reply.code(404).send({ ok: false, error: "card not found" });
+  }
+
+  try {
+    const card   = JSON.parse(await fs.readFile(cardPath, "utf8"));
+    const jingle = await generateJingle(card, companyId);
+    return reply.code(200).send({ ok: true, jingle });
+  } catch (e) {
+    if (usageEntry) await refundCredits(usageEntry.id).catch(() => {});
+    const msg = e instanceof Error ? e.message : String(e);
+    return reply.code(500).send({ ok: false, error: msg });
+  }
+});
+
+// GET /voice/jingle/:companyId — fetch stored jingle
+app.get("/voice/jingle/:companyId", async (req, reply) => {
+  const { companyId } = req.params as { companyId: string };
+  const jingle = getJingle(companyId);
+  if (!jingle) return reply.code(404).send({ ok: false, error: "no jingle found for company" });
+  return reply.code(200).send(jingle);
+});
+
+// ---------------------------------------------------------------------------
+// Agent routes  (@fastify/websocket not available — using POST session instead)
+// ---------------------------------------------------------------------------
+
+// POST /agent/session — stateless agent turn: compile role config + call AI
+app.post("/agent/session", async (req, reply) => {
+  const body = (req.body ?? {}) as {
+    companyId?: string;
+    cardId?: string;
+    role?: string;
+    message?: string;
+  };
+  if (!body.companyId) return reply.code(400).send({ ok: false, error: "companyId required" });
+  if (!body.message)   return reply.code(400).send({ ok: false, error: "message required" });
+
+  const companyId = body.companyId;
+  let usageEntry: UsageEntry | null = null;
+  try {
+    usageEntry = await deductCredits(companyId, "playground_message");
+  } catch (e) {
+    if (e instanceof QuotaExceeded) return reply.code(402).send({ error: (e as Error).message });
+    throw e;
+  }
+
+  const cardId   = body.cardId ?? companyId;
+  const cardPath = await findCard(cardId);
+  if (!cardPath) {
+    if (usageEntry) await refundCredits(usageEntry.id).catch(() => {});
+    return reply.code(404).send({ ok: false, error: "card not found" });
+  }
+
+  try {
+    const card = JSON.parse(await fs.readFile(cardPath, "utf8"));
+
+    // Derive soul/system-prompt for the requested role by compiling the card in-memory
+    const VALID_ROLES: AgentRole[] = ["front-desk", "sales", "content", "owner-manager"];
+    const role: AgentRole = VALID_ROLES.includes(body.role as AgentRole)
+      ? (body.role as AgentRole)
+      : "front-desk";
+
+    // Build a lightweight agent config without writing to disk
+    const companyName  = card?.identity?.name ?? companyId;
+    const personality  = card?.voice?.personality ?? "Friendly and helpful.";
+    const tone         = (card?.voice?.tone as string[] | undefined ?? []).join(", ");
+    const systemPrompt =
+      `You are the ${role} agent for ${companyName}. ${personality}` +
+      (tone ? ` Tone: ${tone}.` : "") +
+      " Answer only based on the company information you know. Be concise.";
+
+    const agentConfig = {
+      role,
+      companyId,
+      companyName,
+      systemPrompt,
+      personality,
+      tone,
+    };
+
+    const sessionId = `ses_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+
+    const aiResp = await aiGateway.call({
+      prompt: body.message,
+      systemPrompt,
+      temperature: 0.65,
+      maxTokens: 512,
+      cacheKey: `agent:${companyId}:${role}:${body.message.slice(0, 80)}`,
+    });
+
+    return reply.code(200).send({
+      ok: true,
+      sessionId,
+      response: aiResp.text,
+      role,
+      agentConfig,
+    });
+  } catch (e) {
+    if (usageEntry) await refundCredits(usageEntry.id).catch(() => {});
+    const msg = e instanceof Error ? e.message : String(e);
+    return reply.code(500).send({ ok: false, error: msg });
+  }
+});
+
+// GET /agent/config/:companyId — compile + return agent config map for all roles (debug)
+app.get("/agent/config/:companyId", async (req, reply) => {
+  const { companyId } = req.params as { companyId: string };
+  const cardPath = await findCard(companyId);
+  if (!cardPath) return reply.code(404).send({ ok: false, error: "card not found" });
+
+  try {
+    const card = JSON.parse(await fs.readFile(cardPath, "utf8"));
+    const ALL_ROLES: AgentRole[] = ["front-desk", "sales", "content", "owner-manager"];
+    const companyName = card?.identity?.name ?? companyId;
+    const personality = card?.voice?.personality ?? "Friendly and helpful.";
+    const tone        = (card?.voice?.tone as string[] | undefined ?? []).join(", ");
+
+    const configs: Record<string, object> = {};
+    for (const role of ALL_ROLES) {
+      configs[role] = {
+        role,
+        companyId,
+        companyName,
+        personality,
+        tone,
+        systemPrompt:
+          `You are the ${role} agent for ${companyName}. ${personality}` +
+          (tone ? ` Tone: ${tone}.` : ""),
+      };
+    }
+    return reply.code(200).send({ ok: true, companyId, configs });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return reply.code(500).send({ ok: false, error: msg });
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -1474,6 +1663,7 @@ async function main() {
   await loadLeadStore();
   await loadContentStores();
   await loadSiteStore();
+  await loadJingleStore();
 
   // Scheduler loop — check for due assets every 60s and submit to SparkGatekeeper
   setInterval(async () => {

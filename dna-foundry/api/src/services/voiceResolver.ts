@@ -13,6 +13,7 @@
 
 import https from "https";
 import http from "http";
+import { URL as NodeURL } from "url";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -55,7 +56,8 @@ const KOKORO_VOICES: VoicePickerOption[] = [
   { id: "kokoro:bm_george",  provider: "kokoro", voiceName: "George",  language: "en-GB", gender: "male",   style: "professional", available: true },
 ];
 
-const ELEVENLABS_VOICES: VoicePickerOption[] = [
+/** Static fallback ElevenLabs catalog used when key is missing or API is unreachable */
+const ELEVENLABS_VOICES_STATIC: VoicePickerOption[] = [
   { id: "elevenlabs:21m00Tcm4TlvDq8ikWAM", provider: "elevenlabs", voiceName: "Rachel",  language: "en-US", gender: "female", style: "warm",         available: true },
   { id: "elevenlabs:AZnzlk1XvdvUeBnXmlld", provider: "elevenlabs", voiceName: "Domi",    language: "en-US", gender: "female", style: "casual",       available: true },
   { id: "elevenlabs:EXAVITQu4vr4xnSDxMaL", provider: "elevenlabs", voiceName: "Bella",   language: "en-US", gender: "female", style: "professional", available: true },
@@ -82,9 +84,9 @@ function elevenLabsEndpoint(voiceId: string): string {
   return `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`;
 }
 
-/** Find a voice option by full "provider:voiceId" id across both catalogs */
+/** Find a voice option by full "provider:voiceId" id across both static catalogs */
 function findVoiceOption(id: string): VoicePickerOption | undefined {
-  return [...KOKORO_VOICES, ...ELEVENLABS_VOICES].find((v) => v.id === id);
+  return [...KOKORO_VOICES, ...ELEVENLABS_VOICES_STATIC].find((v) => v.id === id);
 }
 
 /**
@@ -189,14 +191,131 @@ export function resolveVoice(voiceProfile: string, card: Record<string, unknown>
 }
 
 // ---------------------------------------------------------------------------
+// ElevenLabs API functions
+// ---------------------------------------------------------------------------
+
+/**
+ * Synthesize audio with ElevenLabs TTS.
+ * Throws `Error("ELEVENLABS_API_KEY not configured")` if key is absent.
+ * Uses eleven_turbo_v2 for fast synthesis.
+ */
+export async function synthesizeElevenLabs(voiceId: string, text: string): Promise<Buffer> {
+  const apiKey = process.env.ELEVENLABS_API_KEY;
+  if (!apiKey) throw new Error("ELEVENLABS_API_KEY not configured");
+
+  const url = elevenLabsEndpoint(voiceId);
+  const bodyObj = {
+    text,
+    model_id: "eleven_turbo_v2",
+    voice_settings: { stability: 0.5, similarity_boost: 0.75 },
+  };
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "xi-api-key": apiKey,
+  };
+  return httpPost(url, headers, JSON.stringify(bodyObj));
+}
+
+/**
+ * Fetch the live ElevenLabs voice list from the API.
+ * Returns `[]` if key is not set or the request fails — never throws.
+ */
+export async function getElevenLabsVoices(): Promise<
+  Array<{ voice_id: string; name: string; labels: Record<string, string> }>
+> {
+  const apiKey = process.env.ELEVENLABS_API_KEY;
+  if (!apiKey) return [];
+
+  try {
+    const parsed = new NodeURL("https://api.elevenlabs.io/v1/voices");
+    const lib = https;
+    const data = await new Promise<Buffer>((resolve, reject) => {
+      const req = lib.request(
+        {
+          hostname: parsed.hostname,
+          port: 443,
+          path: parsed.pathname,
+          method: "GET",
+          headers: { "xi-api-key": apiKey },
+        },
+        (res) => {
+          const chunks: Buffer[] = [];
+          res.on("data", (c: Buffer) => chunks.push(c));
+          res.on("end", () => {
+            const buf = Buffer.concat(chunks);
+            if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+              resolve(buf);
+            } else {
+              reject(new Error(`ElevenLabs voices HTTP ${res.statusCode}`));
+            }
+          });
+        },
+      );
+      req.on("error", reject);
+      req.end();
+    });
+
+    const json = JSON.parse(data.toString("utf8")) as {
+      voices?: Array<{ voice_id: string; name: string; labels?: Record<string, string> }>;
+    };
+    return (json.voices ?? []).map((v) => ({
+      voice_id: v.voice_id,
+      name: v.name,
+      labels: v.labels ?? {},
+    }));
+  } catch {
+    // API unreachable or malformed — fail open
+    return [];
+  }
+}
+
+// ---------------------------------------------------------------------------
 // getVoiceCatalog
 // ---------------------------------------------------------------------------
 
 /**
- * Returns all voices: Kokoro first (primary), ElevenLabs second (fallback/premium).
+ * Returns all voices: Kokoro first (primary), ElevenLabs static second.
+ * If ELEVENLABS_API_KEY is set, appends live ElevenLabs voices (deduplicated).
+ * This sync version returns the static catalog instantly;
+ * use getVoiceCatalogAsync() to include live ElevenLabs voices.
  */
 export function getVoiceCatalog(): VoicePickerOption[] {
-  return [...KOKORO_VOICES, ...ELEVENLABS_VOICES];
+  return [...KOKORO_VOICES, ...ELEVENLABS_VOICES_STATIC];
+}
+
+/**
+ * Async version — fetches live ElevenLabs voices when the key is configured.
+ * Never throws; falls back to static catalog on any failure.
+ */
+export async function getVoiceCatalogAsync(): Promise<VoicePickerOption[]> {
+  const base: VoicePickerOption[] = [...KOKORO_VOICES];
+
+  if (!process.env.ELEVENLABS_API_KEY) {
+    return [...base, ...ELEVENLABS_VOICES_STATIC];
+  }
+
+  try {
+    const live = await getElevenLabsVoices();
+    if (live.length === 0) {
+      return [...base, ...ELEVENLABS_VOICES_STATIC];
+    }
+    // Map live voices to VoicePickerOption; skip any that conflict with static IDs
+    const staticIds = new Set(ELEVENLABS_VOICES_STATIC.map((v) => v.id));
+    const liveOptions: VoicePickerOption[] = live
+      .filter((v) => !staticIds.has(`elevenlabs:${v.voice_id}`))
+      .map((v) => ({
+        id: `elevenlabs:${v.voice_id}`,
+        provider: "elevenlabs" as TtsProvider,
+        voiceName: v.name,
+        language: "en-US",
+        gender: (v.labels["gender"] as "male" | "female" | "neutral" | undefined) ?? "neutral",
+        style: v.labels["use_case"] ?? v.labels["accent"] ?? "general",
+        available: true,
+      }));
+    return [...base, ...ELEVENLABS_VOICES_STATIC, ...liveOptions];
+  } catch {
+    return [...base, ...ELEVENLABS_VOICES_STATIC];
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -268,18 +387,8 @@ export async function synthesizeSample(
       };
       audioBuf = await httpPost(voice.endpoint, headers, JSON.stringify(bodyObj));
     } else if (voice.provider === "elevenlabs") {
-      const apiKey = process.env[voice.apiKeyEnvVar] ?? "";
-      if (!apiKey) return EMPTY; // ElevenLabs always requires a key
-      const bodyObj = {
-        text,
-        model_id: "eleven_monolingual_v1",
-        voice_settings: { stability: 0.5, similarity_boost: 0.75 },
-      };
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-        "xi-api-key": apiKey,
-      };
-      audioBuf = await httpPost(voice.endpoint, headers, JSON.stringify(bodyObj));
+      // Delegate to synthesizeElevenLabs — it throws if key is missing
+      audioBuf = await synthesizeElevenLabs(voice.voiceId, text);
     } else {
       // openai-tts / browser — not implemented as server-side synthesis
       return EMPTY;

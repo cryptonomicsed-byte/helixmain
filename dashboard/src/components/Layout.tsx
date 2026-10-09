@@ -4,15 +4,16 @@ import { useHelixStore } from '../store'
 import { api } from '../api'
 
 const NAV_LINKS = [
-  { to: '/',           label: 'Dashboard',  icon: '⬛' },
-  { to: '/onboard',    label: 'Onboard',    icon: '➕' },
-  { to: '/approvals',  label: 'Approvals',  icon: '🔔' },
-  { to: '/playground', label: 'Playground', icon: '🧪' },
-  { to: '/leads',      label: 'Leads',      icon: '📍' },
-  { to: '/pipeline',   label: 'Pipeline',   icon: '📊' },
-  { to: '/intel',      label: 'Intel',      icon: '⚔' },
-  { to: '/campaigns',  label: 'Campaigns',  icon: '📣' },
-  { to: '/schedule',   label: 'Schedule',   icon: '📅' },
+  { to: '/',              label: 'Dashboard',    icon: '⬛' },
+  { to: '/onboard',       label: 'Onboard',      icon: '➕' },
+  { to: '/approvals',     label: 'Approvals',    icon: '🔔' },
+  { to: '/playground',    label: 'Playground',   icon: '🧪' },
+  { to: '/leads',         label: 'Leads',        icon: '📍' },
+  { to: '/pipeline',      label: 'Pipeline',     icon: '📊' },
+  { to: '/intel',         label: 'Intel',        icon: '⚔' },
+  { to: '/campaigns',     label: 'Campaigns',    icon: '📣' },
+  { to: '/schedule',      label: 'Schedule',     icon: '📅' },
+  { to: '/voice-studio',  label: 'Voice Studio', icon: '🎙' },
 ]
 
 const sidebarStyle: React.CSSProperties = {
