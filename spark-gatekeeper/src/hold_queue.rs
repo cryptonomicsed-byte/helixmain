@@ -13,6 +13,7 @@ pub struct HeldOperation {
     pub card_id: String,
     pub card_version: u32,
     pub acting_hash: String,
+    pub org_id: String,
     pub action_id: String,
     pub action_json: String,
     pub trail_json: String,
@@ -50,7 +51,8 @@ impl HoldQueue {
                 trail_json   TEXT NOT NULL,
                 proposed_at  TEXT NOT NULL,
                 expires_at   TEXT NOT NULL,
-                status       TEXT NOT NULL DEFAULT 'pending'
+                status       TEXT NOT NULL DEFAULT 'pending',
+                org_id       TEXT NOT NULL DEFAULT ''
             );
             CREATE TABLE IF NOT EXISTS receipts (
                 id                   TEXT PRIMARY KEY,
@@ -79,6 +81,7 @@ impl HoldQueue {
             "ALTER TABLE receipts ADD COLUMN signature TEXT",
             "ALTER TABLE receipts ADD COLUMN receipt_body_hash TEXT",
             "ALTER TABLE receipts ADD COLUMN parent_receipt_hash TEXT",
+            "ALTER TABLE held_operations ADD COLUMN org_id TEXT NOT NULL DEFAULT ''",
         ] {
             let _ = conn.execute(stmt, []);
         }
@@ -104,13 +107,14 @@ impl HoldQueue {
 
         self.conn.lock().unwrap().execute(
             "INSERT INTO held_operations
-             (id, card_id, card_version, acting_hash, action_id, action_json, trail_json, proposed_at, expires_at, status)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 'pending')",
+             (id, card_id, card_version, acting_hash, org_id, action_id, action_json, trail_json, proposed_at, expires_at, status)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 'pending')",
             params![
                 id,
                 ctx.card.id,
                 ctx.card.version,
                 ctx.card.acting_hash,
+                ctx.card.organization_id,
                 ctx.action.id,
                 action_json,
                 trail_json,
@@ -294,29 +298,42 @@ impl HoldQueue {
     }
 
     /// Return all pending operations (for the TS approval surface to display).
-    pub fn pending(&self) -> rusqlite::Result<Vec<HeldOperation>> {
+    /// If `org_id` is Some, only returns holds for that org.
+    pub fn pending(&self, org_id: Option<&str>) -> rusqlite::Result<Vec<HeldOperation>> {
         let conn = self.conn.lock().unwrap();
-        let mut stmt = conn.prepare(
-            "SELECT id, card_id, card_version, acting_hash, action_id, action_json, trail_json,
-                    proposed_at, expires_at, status
-             FROM held_operations WHERE status = 'pending' ORDER BY proposed_at ASC",
-        )?;
-        let rows = stmt.query_map([], |row| {
+        let map_row = |row: &rusqlite::Row| {
             Ok(HeldOperation {
                 id: row.get(0)?,
                 card_id: row.get(1)?,
                 card_version: row.get(2)?,
                 acting_hash: row.get(3)?,
-                action_id: row.get(4)?,
-                action_json: row.get(5)?,
-                trail_json: row.get(6)?,
-                proposed_at: row.get::<_, String>(7)?.parse().unwrap_or_else(|_| Utc::now()),
-                expires_at: row.get::<_, String>(8)?.parse().unwrap_or_else(|_| Utc::now()),
-                status: serde_json::from_str(&format!(r#""{}""#, row.get::<_, String>(9)?))
+                org_id: row.get(4)?,
+                action_id: row.get(5)?,
+                action_json: row.get(6)?,
+                trail_json: row.get(7)?,
+                proposed_at: row.get::<_, String>(8)?.parse().unwrap_or_else(|_| Utc::now()),
+                expires_at: row.get::<_, String>(9)?.parse().unwrap_or_else(|_| Utc::now()),
+                status: serde_json::from_str(&format!(r#""{}""#, row.get::<_, String>(10)?))
                     .unwrap_or(HoldStatus::Pending),
             })
-        })?;
-        rows.collect()
+        };
+        if let Some(oid) = org_id {
+            let mut stmt = conn.prepare(
+                "SELECT id, card_id, card_version, acting_hash, org_id, action_id, action_json,
+                        trail_json, proposed_at, expires_at, status
+                 FROM held_operations WHERE status = 'pending' AND org_id = ?1 ORDER BY proposed_at ASC",
+            )?;
+            let rows = stmt.query_map(params![oid], map_row)?;
+            rows.collect()
+        } else {
+            let mut stmt = conn.prepare(
+                "SELECT id, card_id, card_version, acting_hash, org_id, action_id, action_json,
+                        trail_json, proposed_at, expires_at, status
+                 FROM held_operations WHERE status = 'pending' ORDER BY proposed_at ASC",
+            )?;
+            let rows = stmt.query_map([], map_row)?;
+            rows.collect()
+        }
     }
 }
 

@@ -21,7 +21,7 @@ use crate::SparkGatekeeper;
 use chrono::Utc;
 use uuid::Uuid;
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::{get, post},
@@ -300,10 +300,16 @@ async fn forward_to_tool_bus(bus: &str, body: &str) -> Result<(), String> {
     Ok(())
 }
 
+#[derive(Deserialize)]
+pub struct HeldQuery {
+    pub org: Option<String>,
+}
+
 async fn list_held(
     State(state): State<Arc<AppState>>,
+    Query(q): Query<HeldQuery>,
 ) -> Result<impl IntoResponse, ApiError> {
-    let pending = state.gatekeeper.hold_queue.pending()?;
+    let pending = state.gatekeeper.hold_queue.pending(q.org.as_deref())?;
     Ok(Json(pending))
 }
 
@@ -311,7 +317,7 @@ async fn get_held(
     State(state): State<Arc<AppState>>,
     Path(hold_id): Path<String>,
 ) -> Result<impl IntoResponse, ApiError> {
-    let all = state.gatekeeper.hold_queue.pending()?;
+    let all = state.gatekeeper.hold_queue.pending(None)?;
     let item = all
         .into_iter()
         .find(|h| h.id == hold_id)
@@ -368,7 +374,7 @@ async fn held_challenge(
     Path(hold_id): Path<String>,
 ) -> Result<impl IntoResponse, ApiError> {
     // Verify the hold exists and is still pending.
-    let pending = state.gatekeeper.hold_queue.pending()?;
+    let pending = state.gatekeeper.hold_queue.pending(None)?;
     if !pending.iter().any(|h| h.id == hold_id) {
         return Err(ApiError::NotFound);
     }
