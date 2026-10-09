@@ -9,3 +9,8 @@ build/
 .DS_Store
 *.tmp
 tmp/
+
+# Swarm runtime exhaust
+dna-foundry/swarm/.venv/
+dna-foundry/swarm/a2a/run_*.jsonl
+dna-foundry/swarm/memory/
