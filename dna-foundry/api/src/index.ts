@@ -17,6 +17,15 @@ import { compileGreeting } from "./services/greetingCompiler";
 import { resolveVoice, getVoiceCatalog, synthesizeSample } from "./services/voiceResolver";
 import { loadChangelog, verifyChain, changelogToMarkdown } from "./services/changelog";
 import { scoreCard } from "./services/cardHealth";
+import {
+  generateCampaignPRD,
+  generateCampaignAssets,
+  submitForApproval,
+  prdStore,
+  assetStore,
+  type Channel,
+  type CampaignPRD,
+} from "./services/contentPipeline";
 
 const app = Fastify({ logger: true });
 const ROOT = path.resolve(__dirname, "..", "..");
@@ -312,6 +321,69 @@ app.get("/health/:companyId", async (req, reply) => {
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return reply.code(500).send({ ok: false, error: msg });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Content pipeline routes  (H-gated via SparkGatekeeper)
+// ---------------------------------------------------------------------------
+
+// POST /content/prd — generate a campaign PRD from a card + goal
+app.post("/content/prd", async (req, reply) => {
+  const body = (req.body ?? {}) as { cardId?: string; goal?: string; channels?: string[] };
+  if (!body.cardId)   return reply.code(400).send({ ok: false, error: "cardId required" });
+  if (!body.goal)     return reply.code(400).send({ ok: false, error: "goal required" });
+  if (!Array.isArray(body.channels) || body.channels.length === 0)
+    return reply.code(400).send({ ok: false, error: "channels[] required" });
+
+  const cardPath = await findCard(body.cardId);
+  if (!cardPath) return reply.code(404).send({ ok: false, error: "card not found" });
+
+  try {
+    const card = JSON.parse(await fs.readFile(cardPath, "utf8"));
+    const prd  = await generateCampaignPRD(card, body.goal, body.channels as Channel[]);
+    return reply.code(200).send({ ok: true, prd });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return reply.code(500).send({ ok: false, error: msg });
+  }
+});
+
+// POST /content/generate — generate assets for all user stories in a PRD
+app.post("/content/generate", async (req, reply) => {
+  const body = (req.body ?? {}) as { cardId?: string; prd?: CampaignPRD };
+  if (!body.cardId) return reply.code(400).send({ ok: false, error: "cardId required" });
+  if (!body.prd)    return reply.code(400).send({ ok: false, error: "prd required" });
+
+  const cardPath = await findCard(body.cardId);
+  if (!cardPath) return reply.code(404).send({ ok: false, error: "card not found" });
+
+  try {
+    const card   = JSON.parse(await fs.readFile(cardPath, "utf8"));
+    const assets = await generateCampaignAssets(body.prd, card);
+    return reply.code(200).send({ ok: true, assets });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return reply.code(500).send({ ok: false, error: msg });
+  }
+});
+
+// POST /content/approve/:assetId — submit an asset to SparkGatekeeper hold queue
+app.post("/content/approve/:assetId", async (req, reply) => {
+  const { assetId } = req.params as { assetId: string };
+  const body = (req.body ?? {}) as { companyId?: string };
+  if (!body.companyId) return reply.code(400).send({ ok: false, error: "companyId required" });
+
+  const asset = assetStore.get(assetId);
+  if (!asset) return reply.code(404).send({ ok: false, error: "asset not found" });
+
+  try {
+    const holdQueueId = await submitForApproval(asset, body.companyId);
+    return reply.code(200).send({ ok: true, holdQueueId });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    // 503 signals upstream gatekeeper failure — never silently drop
+    return reply.code(503).send({ ok: false, error: msg });
   }
 });
 
