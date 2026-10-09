@@ -1,196 +1,211 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../api'
+import { Icon } from '../components/Icon'
 import type { ApprovalItem, AuditEntry } from '../api'
 
 const POLL_MS = 5000
 
-const riskColor: Record<string, string> = {
-  low:    '#22c55e',
-  medium: '#f59e0b',
-  high:   '#ef4444',
+const RISK: Record<string, string> = { low: 'var(--ok)', medium: 'var(--warn)', high: 'var(--bad)' }
+
+/* ── WebAuthn helpers ─────────────────────────────────────────── */
+function b64urlToBuf(s: string): ArrayBuffer {
+  const pad = s.length % 4 === 0 ? '' : '='.repeat(4 - (s.length % 4))
+  const bin = atob(s.replace(/-/g, '+').replace(/_/g, '/') + pad)
+  const buf = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i)
+  return buf.buffer
+}
+function bufToB64url(buf: ArrayBuffer): string {
+  const b = new Uint8Array(buf); let s = ''
+  for (let i = 0; i < b.length; i++) s += String.fromCharCode(b[i])
+  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+/** Run the passkey assertion for a hold and return the credential the gatekeeper expects. */
+async function runAssertion(rcr: any): Promise<unknown> {
+  const pk = rcr.publicKey ?? rcr
+  const allow = (pk.allowCredentials ?? []).map((c: any) => ({
+    type: c.type ?? 'public-key', id: b64urlToBuf(c.id), transports: c.transports,
+  }))
+  const cred = await navigator.credentials.get({
+    publicKey: {
+      challenge: b64urlToBuf(pk.challenge),
+      rpId: pk.rpId,
+      allowCredentials: allow,
+      userVerification: pk.userVerification ?? 'preferred',
+      ...(pk.timeout ? { timeout: pk.timeout } : {}),
+    },
+  }) as PublicKeyCredential
+  const r: any = cred.response
+  return {
+    id: cred.id, rawId: bufToB64url(cred.rawId), type: cred.type,
+    response: {
+      authenticatorData: bufToB64url(r.authenticatorData),
+      clientDataJSON: bufToB64url(r.clientDataJSON),
+      signature: bufToB64url(r.signature),
+      userHandle: r.userHandle ? bufToB64url(r.userHandle) : null,
+    },
+    extensions: (cred as any).getClientExtensionResults?.() ?? {},
+  }
 }
 
-function RiskBadge({ level }: { level: string }) {
-  const c = riskColor[level] ?? '#94a3b8'
-  return (
-    <span style={{
-      fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase',
-      color: c, background: c + '18', borderRadius: 4, padding: '0.1rem 0.45rem',
-      border: `1px solid ${c}44`,
-    }}>
-      {level}
-    </span>
-  )
+function ago(ts: string): string {
+  if (!ts) return '—'
+  const t = new Date(ts).getTime(); if (Number.isNaN(t)) return '—'
+  const m = Math.floor((Date.now() - t) / 60000)
+  if (m < 1) return 'just now'
+  if (m < 60) return `${m}m ago`
+  const h = Math.floor(m / 60); if (h < 24) return `${h}h ago`
+  return `${Math.floor(h / 24)}d ago`
+}
+function expiresIn(ts?: string): string {
+  if (!ts) return ''
+  const t = new Date(ts).getTime(); if (Number.isNaN(t)) return ''
+  const m = Math.round((t - Date.now()) / 60000)
+  if (m <= 0) return 'expired'
+  if (m < 60) return `expires in ${m}m`
+  return `expires in ${Math.floor(m / 60)}h ${m % 60}m`
 }
 
 export function ApprovalsPage() {
-  const [pending, setPending]     = useState<ApprovalItem[]>([])
-  const [audit, setAudit]         = useState<AuditEntry[]>([])
+  const [pending, setPending] = useState<ApprovalItem[]>([])
+  const [audit] = useState<AuditEntry[]>([])
   const [reachable, setReachable] = useState(true)
-  const [acting, setActing]       = useState<Set<string>>(new Set())
+  const [acting, setActing] = useState<Set<string>>(new Set())
+  const [note, setNote] = useState<{ kind: 'ok' | 'bad'; text: string } | null>(null)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   async function poll() {
     try {
       const data = await api.gkQueue()
-      setPending(data.pending ?? [])
-      setAudit(data.audit ?? [])
-      setReachable(true)
-    } catch {
-      setReachable(false)
-    }
+      setPending(data.pending ?? []); setReachable(true)
+    } catch { setReachable(false) }
   }
-
   useEffect(() => {
     poll()
     timerRef.current = setInterval(poll, POLL_MS)
     return () => { if (timerRef.current) clearInterval(timerRef.current) }
   }, [])
 
-  async function decide(id: string, approve: boolean) {
-    setActing((s) => new Set([...s, id]))
-    try {
-      if (approve) await api.gkApprove(id)
-      else         await api.gkDeny(id)
-      await poll()
-    } catch (e) {
-      console.error('decision failed', e)
-    } finally {
-      setActing((s) => { const n = new Set(s); n.delete(id); return n })
-    }
+  async function deny(id: string) {
+    setActing((s) => new Set([...s, id])); setNote(null)
+    try { await api.gkDeny(id); setNote({ kind: 'ok', text: 'Denied — action blocked.' }); await poll() }
+    catch (e) { setNote({ kind: 'bad', text: `Deny failed: ${e instanceof Error ? e.message : String(e)}` }) }
+    finally { setActing((s) => { const n = new Set(s); n.delete(id); return n }) }
   }
 
-  function formatTime(ts: string) {
-    try { return new Date(ts).toLocaleTimeString() } catch { return ts }
+  async function approve(id: string) {
+    setActing((s) => new Set([...s, id])); setNote(null)
+    try {
+      const rcr = await api.gkChallenge(id)
+      const credential = await runAssertion(rcr)
+      await api.gkApprove(id, credential)
+      setNote({ kind: 'ok', text: 'Approved — receipt minted.' })
+      await poll()
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      setNote({ kind: 'bad', text: /NoPasskey|passkey/i.test(msg)
+        ? 'Approval needs a registered passkey on this gatekeeper (none registered yet).'
+        : `Approve failed: ${msg}` })
+    } finally { setActing((s) => { const n = new Set(s); n.delete(id); return n }) }
   }
 
   return (
-    <div style={{ maxWidth: 760, margin: '0 auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem' }}>
+    <div style={{ maxWidth: 820, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 18 }}>
+      <div className="reveal" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 12 }}>
         <div>
-          <h1 style={{ fontSize: '1.4rem', fontWeight: 700, color: '#f1f5f9', margin: 0 }}>
-            SparkGatekeeper
-          </h1>
-          <p style={{ color: '#64748b', fontSize: '0.875rem', marginTop: '0.35rem' }}>
-            Pending approvals · polls every 5s
-          </p>
+          <div className="h1">Approvals</div>
+          <div className="sub" style={{ marginTop: 4 }}>SparkGatekeeper hold queue · polls every 5s</div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-          <span style={{
-            width: 8, height: 8, borderRadius: '50%', display: 'inline-block',
-            background: reachable ? '#22c55e' : '#ef4444',
-          }} />
-          <span style={{ fontSize: '0.75rem', color: reachable ? '#22c55e' : '#ef4444' }}>
-            {reachable ? 'Connected' : 'Unreachable'}
-          </span>
-        </div>
+        <span className="pill" style={{ color: reachable ? 'var(--ok)' : 'var(--bad)',
+          borderColor: (reachable ? 'var(--ok)' : 'var(--bad)') + '55' }}>
+          <span className={`dot ${reachable ? '' : 'dot-bad'}`} style={{ color: reachable ? 'var(--ok)' : 'var(--bad)' }} />
+          {reachable ? 'Connected' : 'Unreachable'}
+        </span>
       </div>
 
-      {/* Pending queue */}
-      <section style={{ marginBottom: '2rem' }}>
-        <h2 style={{ fontSize: '0.85rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.75rem' }}>
-          Pending ({pending.length})
-        </h2>
+      {note && (
+        <div className="glass reveal" style={{ padding: '0.75rem 1rem', fontSize: '.85rem',
+          borderColor: (note.kind === 'ok' ? 'var(--ok)' : 'var(--bad)') + '55',
+          color: note.kind === 'ok' ? 'var(--ok)' : 'var(--bad)' }}>
+          {note.text}
+        </div>
+      )}
+
+      <section>
+        <div className="h2" style={{ marginBottom: 12 }}>Pending ({pending.length})</div>
 
         {!reachable && (
-          <div style={{
-            background: '#1e2433', borderRadius: 10, padding: '1.5rem', textAlign: 'center',
-            border: '1px solid #2d3748', color: '#64748b', fontSize: '0.875rem',
-          }}>
-            No pending approvals — SparkGatekeeper is unreachable at port 9100.
+          <div className="glass" style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--fg-3)', fontSize: '.875rem' }}>
+            No pending approvals — SparkGatekeeper is unreachable.
           </div>
         )}
 
         {reachable && pending.length === 0 && (
-          <div style={{
-            background: '#1e2433', borderRadius: 10, padding: '1.5rem', textAlign: 'center',
-            border: '1px solid #2d3748', color: '#64748b', fontSize: '0.875rem',
-          }}>
-            Queue is empty. All clear.
+          <div className="glass reveal" style={{ padding: '2.5rem', textAlign: 'center', display: 'flex',
+            flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+            <span style={{ color: 'var(--ok)' }}><Icon name="check" size={28} /></span>
+            <div style={{ fontWeight: 600 }}>Queue is clear</div>
+            <div className="sub">Nothing is waiting on your approval.</div>
           </div>
         )}
 
-        {pending.map((item) => (
-          <div key={item.id} style={{
-            background: '#1e2433', borderRadius: 10, padding: '1.1rem 1.25rem',
-            border: '1px solid #2d3748', marginBottom: '0.75rem',
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.6rem' }}>
-              <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                <RiskBadge level={item.risk_level} />
-                <span style={{ fontWeight: 600, fontSize: '0.9rem', color: '#e2e8f0' }}>{item.action}</span>
+        {pending.map((item, i) => {
+          const busy = acting.has(item.id)
+          const c = item.risk_level ? RISK[item.risk_level] : 'var(--fg-3)'
+          return (
+            <div key={item.id} className={`glass glass-hover reveal reveal-${Math.min(i + 1, 6)}`}
+              style={{ padding: '1.1rem 1.25rem', marginBottom: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 10 }}>
+                <div style={{ display: 'flex', gap: '.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                  {item.risk_level && (
+                    <span className="pill" style={{ color: c, borderColor: c + '55', background: c + '18' }}>
+                      {item.risk_level}
+                    </span>
+                  )}
+                  <span style={{ fontWeight: 650, fontSize: '.95rem' }}>{item.action}</span>
+                </div>
+                <span className="sub" style={{ whiteSpace: 'nowrap' }}>{ago(item.created_at)}</span>
               </div>
-              <span style={{ fontSize: '0.72rem', color: '#475569', whiteSpace: 'nowrap', marginLeft: '0.5rem' }}>
-                {formatTime(item.created_at)}
-              </span>
-            </div>
 
-            <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginBottom: '0.3rem' }}>
-              <strong style={{ color: '#64748b' }}>Agent:</strong> {item.agent}
-            </div>
+              <div className="sub" style={{ marginBottom: 8 }}>
+                agent <span className="mono" style={{ color: 'var(--fg-2)' }}>{item.agent}…</span>
+                {item.expires_at && <> · {expiresIn(item.expires_at)}</>}
+              </div>
 
-            <div style={{
-              fontSize: '0.82rem', color: '#cbd5e1', background: '#0f1117',
-              borderRadius: 6, padding: '0.5rem 0.7rem', marginBottom: '0.85rem',
-              borderLeft: '3px solid #6366f1',
-            }}>
-              {item.customer_context}
-            </div>
+              <div className="mono" style={{ fontSize: '.78rem', color: 'var(--fg-2)', background: 'rgba(0,0,0,.28)',
+                borderRadius: 8, padding: '.5rem .7rem', marginBottom: 12, borderLeft: '3px solid var(--brand-2)',
+                wordBreak: 'break-word' }}>
+                {item.customer_context}
+              </div>
 
-            <div style={{ display: 'flex', gap: '0.6rem' }}>
-              <button
-                onClick={() => decide(item.id, true)}
-                disabled={acting.has(item.id)}
-                style={{
-                  flex: 1, background: acting.has(item.id) ? '#374151' : '#22c55e',
-                  color: '#fff', border: 'none', borderRadius: 6,
-                  padding: '0.45rem', fontSize: '0.85rem', fontWeight: 700,
-                  cursor: acting.has(item.id) ? 'not-allowed' : 'pointer',
-                }}
-              >
-                {acting.has(item.id) ? '…' : 'Approve'}
-              </button>
-              <button
-                onClick={() => decide(item.id, false)}
-                disabled={acting.has(item.id)}
-                style={{
-                  flex: 1, background: 'transparent',
-                  color: '#ef4444', border: '1px solid #ef4444', borderRadius: 6,
-                  padding: '0.45rem', fontSize: '0.85rem', fontWeight: 700,
-                  cursor: acting.has(item.id) ? 'not-allowed' : 'pointer',
-                }}
-              >
-                {acting.has(item.id) ? '…' : 'Deny'}
-              </button>
+              <div style={{ display: 'flex', gap: '.6rem' }}>
+                <button className="btn btn-primary" disabled={busy} onClick={() => approve(item.id)}
+                  style={{ flex: 1, justifyContent: 'center' }}>
+                  {busy ? '…' : 'Approve'}
+                </button>
+                <button className="btn" disabled={busy} onClick={() => deny(item.id)}
+                  style={{ flex: 1, justifyContent: 'center', color: 'var(--bad)', borderColor: 'var(--bad)' }}>
+                  {busy ? '…' : 'Deny'}
+                </button>
+              </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
       </section>
 
-      {/* Audit log */}
       {audit.length > 0 && (
         <section>
-          <h2 style={{ fontSize: '0.85rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.75rem' }}>
-            Recent Decisions ({audit.length})
-          </h2>
-          <div style={{ background: '#1e2433', borderRadius: 10, border: '1px solid #2d3748', overflow: 'hidden' }}>
-            {audit.map((entry, i) => (
-              <div key={entry.id} style={{
-                display: 'flex', alignItems: 'center', gap: '0.75rem',
-                padding: '0.65rem 1rem',
-                borderBottom: i < audit.length - 1 ? '1px solid #2d3748' : 'none',
-              }}>
-                <span style={{
-                  fontSize: '0.72rem', fontWeight: 700,
-                  color: entry.decision === 'approved' ? '#22c55e' : '#ef4444',
-                  width: 52, flexShrink: 0,
-                }}>
-                  {entry.decision === 'approved' ? '✓ APPR' : '✗ DENY'}
+          <div className="h2" style={{ marginBottom: 12 }}>Recent Decisions ({audit.length})</div>
+          <div className="glass" style={{ overflow: 'hidden' }}>
+            {audit.map((e, i) => (
+              <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: '.75rem', padding: '.65rem 1rem',
+                borderBottom: i < audit.length - 1 ? '1px solid var(--line)' : 'none' }}>
+                <span style={{ fontSize: '.72rem', fontWeight: 700, width: 52, flexShrink: 0,
+                  color: e.decision === 'approved' ? 'var(--ok)' : 'var(--bad)' }}>
+                  {e.decision === 'approved' ? '✓ APPR' : '✗ DENY'}
                 </span>
-                <span style={{ flex: 1, fontSize: '0.82rem', color: '#cbd5e1' }}>{entry.action}</span>
-                <span style={{ fontSize: '0.72rem', color: '#475569', whiteSpace: 'nowrap' }}>
-                  {formatTime(entry.decided_at)}
-                </span>
+                <span style={{ flex: 1, fontSize: '.82rem' }}>{e.action}</span>
+                <span className="sub">{ago(e.decided_at)}</span>
               </div>
             ))}
           </div>

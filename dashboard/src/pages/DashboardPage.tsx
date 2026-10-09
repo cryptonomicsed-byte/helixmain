@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useHelixStore } from '../store'
 import { api } from '../api'
 import { CompanyCard } from '../components/CompanyCard'
+import { Icon } from '../components/Icon'
 import type { HealthResult } from '../api'
 
 interface AnalyticsSummary {
@@ -22,53 +23,60 @@ interface MeteringAccount {
   tier: 'free' | 'pro' | 'agency'
 }
 
-function formatUptime(seconds: number): string {
-  const h = Math.floor(seconds / 3600)
-  const m = Math.floor((seconds % 3600) / 60)
+const TIER_COLOR: Record<string, string> = { free: 'var(--fg-3)', pro: 'var(--brand)', agency: 'var(--warn)' }
+
+function formatUptime(s: number): string {
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60)
   return `${h}h ${m}m`
 }
 
-const TIER_COLORS: Record<string, string> = {
-  free:   '#64748b',
-  pro:    '#6366f1',
-  agency: '#f59e0b',
+function greeting(): string {
+  const h = new Date().getHours()
+  if (h < 12) return 'Good morning'
+  if (h < 18) return 'Good afternoon'
+  return 'Good evening'
+}
+
+function StatCard({ label, value, sub, tone, icon, delay }: {
+  label: string; value: string; sub?: React.ReactNode; tone?: string; icon: string; delay: string
+}) {
+  return (
+    <div className={`glass glass-hover reveal ${delay}`} style={{ gridColumn: 'span 3', padding: 'var(--pad)', display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ fontSize: '.7rem', textTransform: 'uppercase', letterSpacing: '.07em', color: 'var(--fg-3)', fontWeight: 600 }}>{label}</span>
+        <span style={{ color: tone ?? 'var(--brand)', opacity: .85 }}><Icon name={icon} size={16} /></span>
+      </div>
+      <div className="stat-val" style={{ color: value === '—' ? 'var(--fg-3)' : tone }}>{value}</div>
+      {sub && <div style={{ marginTop: -2 }}>{sub}</div>}
+    </div>
+  )
 }
 
 export function DashboardPage() {
   const { companies, buildStatus, setCompanies, setBuildStatus, currentCompany } = useHelixStore()
-  const [healthMap, setHealthMap]     = useState<Record<string, HealthResult>>({})
-  const [analytics, setAnalytics]     = useState<AnalyticsSummary | null>(null)
+  const [healthMap, setHealthMap] = useState<Record<string, HealthResult>>({})
+  const [analytics, setAnalytics] = useState<AnalyticsSummary | null>(null)
   const [adminHealth, setAdminHealth] = useState<AdminHealth | null>(null)
-  const [metering, setMetering]       = useState<MeteringAccount | null>(null)
-  const [loading, setLoading]         = useState(true)
-  const [error, setError]             = useState<string | null>(null)
+  const [metering, setMetering] = useState<MeteringAccount | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     let live = true
     async function load() {
-      setLoading(true)
-      setError(null)
+      setLoading(true); setError(null)
       try {
         const [list, bs] = await Promise.all([api.listCompanies(), api.buildStatus()])
         if (!live) return
-        setCompanies(list)
-        setBuildStatus(bs)
-
-        // Fetch health for each company in parallel (best-effort)
+        setCompanies(list); setBuildStatus(bs)
         const results = await Promise.allSettled(list.map((c) => api.health(c.id)))
         const map: Record<string, HealthResult> = {}
-        list.forEach((c, i) => {
-          const r = results[i]
-          if (r.status === 'fulfilled') map[c.id] = r.value
-        })
+        list.forEach((c, i) => { const r = results[i]; if (r.status === 'fulfilled') map[c.id] = r.value })
         if (live) setHealthMap(map)
-
-        // Admin health (best-effort)
         try {
           const ah = await fetch('/api/admin/health').then((r) => r.json()) as AdminHealth
           if (live) setAdminHealth(ah)
         } catch { /* non-fatal */ }
-
       } catch (e) {
         if (live) setError(e instanceof Error ? e.message : String(e))
       } finally {
@@ -79,24 +87,21 @@ export function DashboardPage() {
     return () => { live = false }
   }, [setCompanies, setBuildStatus])
 
-  // When currentCompany changes, fetch per-company data
   useEffect(() => {
     if (!currentCompany) return
     let live = true
-
     async function loadCompanyData() {
       if (!currentCompany) return
       try {
-        const [analyticsRes, meteringRes] = await Promise.allSettled([
+        const [a, m] = await Promise.allSettled([
           fetch(`/api/analytics/${currentCompany.id}/enriched`).then((r) => r.json()) as Promise<AnalyticsSummary>,
           fetch(`/api/metering/${currentCompany.id}`).then((r) => r.json()) as Promise<MeteringAccount>,
         ])
         if (!live) return
-        if (analyticsRes.status === 'fulfilled') setAnalytics(analyticsRes.value)
-        if (meteringRes.status === 'fulfilled')  setMetering(meteringRes.value)
+        if (a.status === 'fulfilled') setAnalytics(a.value)
+        if (m.status === 'fulfilled') setMetering(m.value)
       } catch { /* non-fatal */ }
     }
-
     loadCompanyData()
     return () => { live = false }
   }, [currentCompany])
@@ -104,142 +109,101 @@ export function DashboardPage() {
   const buildOk = !buildStatus || buildStatus.status === 'ok'
 
   if (loading) {
-    return (
-      <div style={{ color: '#94a3b8', padding: '2rem', textAlign: 'center' }}>
-        Loading companies…
-      </div>
-    )
+    return <div className="sub" style={{ padding: '3rem', textAlign: 'center' }}>Loading workspace…</div>
   }
-
   if (error) {
     return (
-      <div style={{ color: '#ef4444', padding: '2rem' }}>
-        <strong>Failed to load:</strong> {error}
+      <div className="glass" style={{ padding: '1.5rem', borderColor: 'rgba(248,113,113,.4)' }}>
+        <div style={{ color: 'var(--bad)', fontWeight: 700, marginBottom: 4 }}>Failed to load</div>
+        <div className="sub">{error}</div>
       </div>
     )
   }
 
-  const metricCardStyle: React.CSSProperties = {
-    background: '#1e2433', borderRadius: 10, padding: '1rem 1.25rem',
-    border: '1px solid #2d3748', display: 'flex', flexDirection: 'column', gap: '0.25rem',
-  }
-  const metricLabelStyle: React.CSSProperties = {
-    fontSize: '0.72rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em',
-  }
-  const metricValueStyle: React.CSSProperties = {
-    fontSize: '1.5rem', fontWeight: 700, color: '#f1f5f9', lineHeight: 1.2,
-  }
+  const hasMetrics = analytics || adminHealth || metering
 
   return (
-    <div>
-      <div style={{ marginBottom: '1.5rem' }}>
-        <h1 style={{ fontSize: '1.4rem', fontWeight: 700, color: '#f1f5f9', margin: 0 }}>
-          My Companies
-        </h1>
-        <p style={{ color: '#64748b', fontSize: '0.875rem', marginTop: '0.35rem' }}>
-          {companies.length} business{companies.length !== 1 ? 'es' : ''} onboarded
-        </p>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
+      {/* Hero */}
+      <div className="reveal" style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+        <div>
+          <div className="h1">
+            {greeting()} <span className="grad-text">✦</span>
+          </div>
+          <div className="sub" style={{ marginTop: 6, fontSize: '.86rem' }}>
+            {companies.length} business{companies.length !== 1 ? 'es' : ''} onboarded
+            {buildStatus?.sha ? <> · running <span className="mono">{buildStatus.sha.slice(0, 7)}</span></> : null}
+          </div>
+        </div>
+        <a className="btn btn-primary" href="/onboard" style={{ textDecoration: 'none' }}>
+          <Icon name="onboard" size={15} /> Onboard a Business
+        </a>
       </div>
 
-      {/* Metrics grid */}
-      {(analytics || adminHealth || metering) && (
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
-          gap: '0.75rem',
-          marginBottom: '1.75rem',
-        }}>
-          {/* Credits Remaining */}
-          <div style={metricCardStyle}>
-            <span style={metricLabelStyle}>Credits Remaining</span>
-            <span style={metricValueStyle}>
-              {metering ? metering.balance.toLocaleString() : '—'}
-            </span>
-            {metering && (
-              <span style={{
-                fontSize: '0.7rem', fontWeight: 600, padding: '0.15rem 0.5rem',
-                background: TIER_COLORS[metering.tier] + '22',
-                color: TIER_COLORS[metering.tier],
-                borderRadius: 4, alignSelf: 'flex-start', marginTop: '0.2rem',
-              }}>
+      {/* Bento metrics */}
+      {hasMetrics && (
+        <div className="bento">
+          <StatCard delay="reveal-1" icon="coin" label="Credits" tone="var(--violet)"
+            value={metering ? metering.balance.toLocaleString() : '—'}
+            sub={metering && (
+              <span className="pill" style={{ color: TIER_COLOR[metering.tier], borderColor: TIER_COLOR[metering.tier] + '55', background: TIER_COLOR[metering.tier] + '18' }}>
                 {metering.tier.toUpperCase()}
               </span>
-            )}
-          </div>
-
-          {/* Leads */}
-          <div style={metricCardStyle}>
-            <span style={metricLabelStyle}>Leads</span>
-            <span style={metricValueStyle}>
-              {analytics?.leadsTotal ?? '—'}
-            </span>
-            {analytics && typeof analytics.leadsConverted === 'number' && (
-              <span style={{ fontSize: '0.75rem', color: '#22c55e' }}>
-                {analytics.leadsConverted} converted
-              </span>
-            )}
-          </div>
-
-          {/* Campaigns */}
-          <div style={metricCardStyle}>
-            <span style={metricLabelStyle}>Campaigns Sent</span>
-            <span style={metricValueStyle}>
-              {analytics?.campaignsSent ?? '—'}
-            </span>
-          </div>
-
-          {/* API Uptime */}
-          <div style={metricCardStyle}>
-            <span style={metricLabelStyle}>API Uptime</span>
-            <span style={metricValueStyle}>
-              {adminHealth ? formatUptime(adminHealth.api.uptime) : '—'}
-            </span>
-            {adminHealth && (
-              <span style={{
-                fontSize: '0.7rem', color: adminHealth.api.status === 'ok' ? '#22c55e' : '#ef4444',
-              }}>
+            )} />
+          <StatCard delay="reveal-2" icon="pin" label="Leads" tone="var(--info)"
+            value={analytics?.leadsTotal != null ? String(analytics.leadsTotal) : '—'}
+            sub={analytics && typeof analytics.leadsConverted === 'number' && (
+              <span className="sub" style={{ color: 'var(--ok)' }}>{analytics.leadsConverted} converted</span>
+            )} />
+          <StatCard delay="reveal-3" icon="campaign" label="Campaigns Sent" tone="var(--brand)"
+            value={analytics?.campaignsSent != null ? String(analytics.campaignsSent) : '—'} />
+          <StatCard delay="reveal-4" icon="bolt" label="API Uptime"
+            value={adminHealth ? formatUptime(adminHealth.api.uptime) : '—'}
+            tone={adminHealth && adminHealth.api.status !== 'ok' ? 'var(--bad)' : undefined}
+            sub={adminHealth && (
+              <span className="pill" style={{ color: adminHealth.api.status === 'ok' ? 'var(--ok)' : 'var(--bad)',
+                borderColor: (adminHealth.api.status === 'ok' ? 'var(--ok)' : 'var(--bad)') + '55' }}>
                 {adminHealth.api.status}
               </span>
-            )}
-          </div>
+            )} />
         </div>
       )}
 
-      {companies.length === 0 ? (
-        <div style={{
-          background: '#1e2433', borderRadius: 12, padding: '3rem',
-          textAlign: 'center', border: '2px dashed #2d3748',
-        }}>
-          <div style={{ fontSize: '2rem', marginBottom: '0.75rem' }}>🏢</div>
-          <div style={{ fontWeight: 600, color: '#e2e8f0', marginBottom: '0.4rem' }}>
-            No companies yet
-          </div>
-          <div style={{ color: '#64748b', fontSize: '0.875rem', marginBottom: '1.25rem' }}>
-            Onboard your first business to get started.
-          </div>
-          <a href="/onboard" style={{
-            background: '#6366f1', color: '#fff', borderRadius: 8,
-            padding: '0.55rem 1.25rem', textDecoration: 'none', fontSize: '0.875rem', fontWeight: 600,
+      {/* Companies */}
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+          <div className="h2">Companies</div>
+          {companies.length > 0 && <span className="sub">{companies.length} total</span>}
+        </div>
+
+        {companies.length === 0 ? (
+          <div className="glass reveal" style={{
+            padding: '3.5rem 2rem', textAlign: 'center', borderStyle: 'dashed', borderWidth: 2,
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
           }}>
-            Onboard a Business
-          </a>
-        </div>
-      ) : (
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-          gap: '1rem',
-        }}>
-          {companies.map((c) => (
-            <CompanyCard
-              key={c.id}
-              company={c}
-              health={healthMap[c.id] ?? null}
-              buildOk={buildOk}
-            />
-          ))}
-        </div>
-      )}
+            <div style={{
+              width: 54, height: 54, borderRadius: 16, display: 'grid', placeItems: 'center',
+              background: 'linear-gradient(140deg, rgba(129,140,248,.2), rgba(167,139,250,.08))',
+              color: 'var(--brand)', marginBottom: 4,
+            }}>
+              <Icon name="company" size={26} />
+            </div>
+            <div style={{ fontWeight: 650, fontSize: '1.05rem' }}>No companies yet</div>
+            <div className="sub" style={{ maxWidth: 340 }}>Onboard your first business to extract its DNA card and spawn its agents.</div>
+            <a className="btn btn-primary" href="/onboard" style={{ marginTop: 8, textDecoration: 'none' }}>
+              <Icon name="onboard" size={15} /> Onboard a Business
+            </a>
+          </div>
+        ) : (
+          <div className="bento">
+            {companies.map((c, i) => (
+              <div key={c.id} className={`col-4 reveal reveal-${Math.min(i + 1, 6)}`}>
+                <CompanyCard company={c} health={healthMap[c.id] ?? null} buildOk={buildOk} />
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

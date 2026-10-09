@@ -67,23 +67,23 @@ interface AffiliateStats {
 // ---------------------------------------------------------------------------
 
 const card: React.CSSProperties = {
-  background: '#1e2433',
+  background: 'var(--surface)',
   borderRadius: 10,
-  border: '1px solid #2d3748',
+  border: '1px solid var(--line-2)',
   padding: '1.25rem',
 }
 
 const sectionTitle: React.CSSProperties = {
   fontSize: '1rem',
   fontWeight: 700,
-  color: '#f1f5f9',
+  color: 'var(--fg)',
   marginBottom: '1rem',
   marginTop: 0,
 }
 
 const label: React.CSSProperties = {
   fontSize: '0.72rem',
-  color: '#64748b',
+  color: 'var(--fg-3)',
   textTransform: 'uppercase' as const,
   letterSpacing: '0.05em',
 }
@@ -91,17 +91,17 @@ const label: React.CSSProperties = {
 const bigNumber: React.CSSProperties = {
   fontSize: '2.5rem',
   fontWeight: 800,
-  color: '#f1f5f9',
+  color: 'var(--fg)',
   lineHeight: 1,
 }
 
 const tierBadge = (tier: string): React.CSSProperties => {
   const colors: Record<string, string> = {
-    free: '#64748b',
-    pro: '#6366f1',
-    agency: '#f59e0b',
+    free: 'var(--fg-3)',
+    pro: 'var(--brand-2)',
+    agency: 'var(--warn)',
   }
-  const c = colors[tier] ?? '#64748b'
+  const c = colors[tier] ?? 'var(--fg-3)'
   return {
     display: 'inline-block',
     padding: '0.2rem 0.6rem',
@@ -117,18 +117,18 @@ const tierBadge = (tier: string): React.CSSProperties => {
 
 const btn = (variant: 'primary' | 'secondary' | 'outline'): React.CSSProperties => {
   if (variant === 'primary') return {
-    background: '#6366f1', color: '#fff', border: 'none',
+    background: 'var(--brand-2)', color: '#fff', border: 'none',
     borderRadius: 7, padding: '0.5rem 1.1rem', fontSize: '0.82rem',
     fontWeight: 600, cursor: 'pointer',
   }
   if (variant === 'secondary') return {
-    background: '#2d3748', color: '#e2e8f0', border: 'none',
+    background: 'var(--line-2)', color: 'var(--fg)', border: 'none',
     borderRadius: 7, padding: '0.5rem 1.1rem', fontSize: '0.82rem',
     fontWeight: 600, cursor: 'pointer',
   }
   return {
-    background: 'transparent', color: '#818cf8',
-    border: '1px solid #6366f1',
+    background: 'transparent', color: 'var(--brand)',
+    border: '1px solid var(--brand-2)',
     borderRadius: 7, padding: '0.5rem 1.1rem', fontSize: '0.82rem',
     fontWeight: 600, cursor: 'pointer',
   }
@@ -229,7 +229,7 @@ export function BillingPage() {
 
   if (!companyId) {
     return (
-      <div style={{ color: '#94a3b8', padding: '2rem', textAlign: 'center' }}>
+      <div style={{ color: 'var(--fg-2)', padding: '2rem', textAlign: 'center' }}>
         Select a company from the top bar to manage billing.
       </div>
     )
@@ -237,7 +237,7 @@ export function BillingPage() {
 
   if (loading) {
     return (
-      <div style={{ color: '#94a3b8', padding: '2rem', textAlign: 'center' }}>
+      <div style={{ color: 'var(--fg-2)', padding: '2rem', textAlign: 'center' }}>
         Loading billing data…
       </div>
     )
@@ -265,10 +265,10 @@ export function BillingPage() {
   return (
     <div style={{ maxWidth: 960, margin: '0 auto' }}>
       <div style={{ marginBottom: '1.75rem' }}>
-        <h1 style={{ fontSize: '1.4rem', fontWeight: 700, color: '#f1f5f9', margin: 0 }}>
+        <h1 style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--fg)', margin: 0 }}>
           Billing &amp; Credits
         </h1>
-        <p style={{ color: '#64748b', fontSize: '0.875rem', marginTop: '0.35rem' }}>
+        <p style={{ color: 'var(--fg-3)', fontSize: '0.875rem', marginTop: '0.35rem' }}>
           Manage your plan, top up credits, and track usage.
         </p>
       </div>
@@ -276,7 +276,7 @@ export function BillingPage() {
       {error && (
         <div style={{
           background: '#7f1d1d22', border: '1px solid #ef444444', borderRadius: 8,
-          color: '#fca5a5', padding: '0.75rem 1rem', marginBottom: '1.25rem', fontSize: '0.85rem',
+          color: 'var(--bad)', padding: '0.75rem 1rem', marginBottom: '1.25rem', fontSize: '0.85rem',
         }}>
           {error}
         </div>
@@ -302,7 +302,7 @@ export function BillingPage() {
           </div>
           <div>
             <div style={label}>Monthly Allowance</div>
-            <div style={{ color: '#e2e8f0', fontSize: '1.1rem', fontWeight: 600, marginTop: '0.4rem' }}>
+            <div style={{ color: 'var(--fg)', fontSize: '1.1rem', fontWeight: 600, marginTop: '0.4rem' }}>
               {monthlyLimit.toLocaleString()} credits / mo
             </div>
           </div>
@@ -312,15 +312,15 @@ export function BillingPage() {
         <div style={{ marginTop: '1.25rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
             <span style={label}>Used This Period</span>
-            <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
+            <span style={{ fontSize: '0.78rem', color: 'var(--fg-2)' }}>
               {usedThisMonth.toLocaleString()} / {monthlyLimit.toLocaleString()} ({progressPct}%)
             </span>
           </div>
           <div style={{
-            background: '#2d3748', borderRadius: 99, height: 8, overflow: 'hidden',
+            background: 'var(--line-2)', borderRadius: 99, height: 8, overflow: 'hidden',
           }}>
             <div style={{
-              background: progressPct > 85 ? '#ef4444' : '#6366f1',
+              background: progressPct > 85 ? 'var(--bad)' : 'var(--brand-2)',
               height: '100%',
               width: `${progressPct}%`,
               borderRadius: 99,
@@ -339,8 +339,8 @@ export function BillingPage() {
             const isCurrent = metering?.tier === tierKey
             return (
               <div key={tierKey} style={{
-                background: isCurrent ? '#6366f111' : '#13172a',
-                border: isCurrent ? '1.5px solid #6366f1' : '1px solid #2d3748',
+                background: isCurrent ? '#6366f111' : 'var(--bg-2)',
+                border: isCurrent ? '1.5px solid var(--brand-2)' : '1px solid var(--line-2)',
                 borderRadius: 10,
                 padding: '1.25rem',
                 display: 'flex',
@@ -351,18 +351,18 @@ export function BillingPage() {
                 {isCurrent && (
                   <span style={{
                     position: 'absolute', top: '0.75rem', right: '0.75rem',
-                    fontSize: '0.7rem', color: '#818cf8', fontWeight: 700,
+                    fontSize: '0.7rem', color: 'var(--brand)', fontWeight: 700,
                   }}>
                     ✓ Current
                   </span>
                 )}
-                <div style={{ fontSize: '1rem', fontWeight: 700, color: '#f1f5f9' }}>
+                <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--fg)' }}>
                   {tier?.name ?? tierKey}
                 </div>
-                <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#818cf8' }}>
+                <div style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--brand)' }}>
                   {tier?.price ?? '—'}
                 </div>
-                <div style={{ fontSize: '0.82rem', color: '#94a3b8' }}>
+                <div style={{ fontSize: '0.82rem', color: 'var(--fg-2)' }}>
                   {tier ? tier.credits.toLocaleString() : '—'} credits / mo
                 </div>
                 <button
@@ -389,23 +389,23 @@ export function BillingPage() {
       {/* ── Section 3: Credit Packs ─────────────────────────────────────── */}
       <div style={{ ...card, marginBottom: '1.5rem' }}>
         <h2 style={sectionTitle}>Credit Packs</h2>
-        <p style={{ fontSize: '0.82rem', color: '#64748b', marginTop: 0, marginBottom: '1rem' }}>
+        <p style={{ fontSize: '0.82rem', color: 'var(--fg-3)', marginTop: 0, marginBottom: '1rem' }}>
           One-time top-ups — credits never expire.
         </p>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: '1rem' }}>
           {(config?.packs ?? []).map((pack) => (
             <div key={pack.priceId} style={{
-              background: '#13172a', border: '1px solid #2d3748',
+              background: 'var(--bg-2)', border: '1px solid var(--line-2)',
               borderRadius: 10, padding: '1.1rem',
               display: 'flex', flexDirection: 'column', gap: '0.4rem',
             }}>
-              <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#f1f5f9' }}>
+              <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--fg)' }}>
                 {pack.name}
               </div>
-              <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#22c55e' }}>
+              <div style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--ok)' }}>
                 {pack.price}
               </div>
-              <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
+              <div style={{ fontSize: '0.8rem', color: 'var(--fg-2)' }}>
                 {pack.credits.toLocaleString()} credits
               </div>
               <button
@@ -424,7 +424,7 @@ export function BillingPage() {
       <div style={{ ...card, marginBottom: '1.5rem' }}>
         <h2 style={sectionTitle}>Usage History</h2>
         {historyEntries.length === 0 ? (
-          <div style={{ color: '#64748b', fontSize: '0.85rem', padding: '1rem 0' }}>
+          <div style={{ color: 'var(--fg-3)', fontSize: '0.85rem', padding: '1rem 0' }}>
             No usage recorded yet.
           </div>
         ) : (
@@ -436,9 +436,9 @@ export function BillingPage() {
                     {['Timestamp', 'Operation', 'Credits', 'Balance After', 'Refunded'].map((h) => (
                       <th key={h} style={{
                         textAlign: 'left', padding: '0.5rem 0.75rem',
-                        color: '#64748b', fontWeight: 600, fontSize: '0.72rem',
+                        color: 'var(--fg-3)', fontWeight: 600, fontSize: '0.72rem',
                         textTransform: 'uppercase', letterSpacing: '0.04em',
-                        borderBottom: '1px solid #2d3748',
+                        borderBottom: '1px solid var(--line-2)',
                       }}>
                         {h}
                       </th>
@@ -454,26 +454,26 @@ export function BillingPage() {
                       <tr key={entry.id} style={{
                         background: i % 2 === 0 ? 'transparent' : '#13172a44',
                       }}>
-                        <td style={{ padding: '0.5rem 0.75rem', color: '#94a3b8' }}>
+                        <td style={{ padding: '0.5rem 0.75rem', color: 'var(--fg-2)' }}>
                           {new Date(entry.timestamp).toLocaleString()}
                         </td>
-                        <td style={{ padding: '0.5rem 0.75rem', color: '#e2e8f0' }}>
+                        <td style={{ padding: '0.5rem 0.75rem', color: 'var(--fg)' }}>
                           {entry.operationType}
                         </td>
                         <td style={{
                           padding: '0.5rem 0.75rem',
-                          color: isCredit ? '#22c55e' : '#f87171',
+                          color: isCredit ? 'var(--ok)' : 'var(--bad)',
                           fontWeight: 600,
                         }}>
                           {isCredit ? '+' : '-'}{Math.abs(entry.creditsDeducted)}
                         </td>
-                        <td style={{ padding: '0.5rem 0.75rem', color: '#94a3b8' }}>
+                        <td style={{ padding: '0.5rem 0.75rem', color: 'var(--fg-2)' }}>
                           —
                         </td>
                         <td style={{ padding: '0.5rem 0.75rem' }}>
                           {entry.refunded
-                            ? <span style={{ color: '#fbbf24', fontSize: '0.75rem' }}>Refunded</span>
-                            : <span style={{ color: '#475569', fontSize: '0.75rem' }}>No</span>}
+                            ? <span style={{ color: 'var(--warn)', fontSize: '0.75rem' }}>Refunded</span>
+                            : <span style={{ color: 'var(--fg-3)', fontSize: '0.75rem' }}>No</span>}
                         </td>
                       </tr>
                     )
@@ -492,7 +492,7 @@ export function BillingPage() {
                 >
                   ← Prev
                 </button>
-                <span style={{ color: '#64748b', fontSize: '0.8rem' }}>
+                <span style={{ color: 'var(--fg-3)', fontSize: '0.8rem' }}>
                   Page {historyPage + 1} / {totalPages}
                 </span>
                 <button
@@ -511,13 +511,13 @@ export function BillingPage() {
       {/* ── Section 5: Referral Program ─────────────────────────────────── */}
       <div style={{ ...card, marginBottom: '1.5rem' }}>
         <h2 style={sectionTitle}>Referral Program</h2>
-        <p style={{ fontSize: '0.82rem', color: '#64748b', marginTop: 0, marginBottom: '1.25rem' }}>
+        <p style={{ fontSize: '0.82rem', color: 'var(--fg-3)', marginTop: 0, marginBottom: '1.25rem' }}>
           Earn credits when you refer others. Commission: 10% (Starter) · 15% (Pro) · 20% (Agency).
         </p>
 
         {!affiliate?.account ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <div style={{ color: '#94a3b8', fontSize: '0.85rem' }}>
+            <div style={{ color: 'var(--fg-2)', fontSize: '0.85rem' }}>
               You don't have a referral account yet.
             </div>
             <button style={btn('primary')} onClick={handleInitAffiliate}>
@@ -531,10 +531,10 @@ export function BillingPage() {
               <div style={{ ...label, marginBottom: '0.5rem' }}>Your Referral Code</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
                 <span style={{
-                  background: '#13172a', border: '1px solid #2d3748',
+                  background: 'var(--bg-2)', border: '1px solid var(--line-2)',
                   borderRadius: 7, padding: '0.5rem 1rem',
                   fontFamily: 'monospace', fontSize: '1rem',
-                  color: '#818cf8', fontWeight: 700, letterSpacing: '0.1em',
+                  color: 'var(--brand)', fontWeight: 700, letterSpacing: '0.1em',
                 }}>
                   {affiliate.account.referralCode}
                 </span>
@@ -545,7 +545,7 @@ export function BillingPage() {
                   {copied ? 'Copied!' : 'Copy Link'}
                 </button>
               </div>
-              <div style={{ fontSize: '0.75rem', color: '#475569', marginTop: '0.5rem' }}>
+              <div style={{ fontSize: '0.75rem', color: 'var(--fg-3)', marginTop: '0.5rem' }}>
                 Share: https://helixmain.duckdns.org/?ref={affiliate.account.referralCode}
               </div>
             </div>
@@ -554,13 +554,13 @@ export function BillingPage() {
             <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
               <div>
                 <div style={label}>Referrals</div>
-                <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#f1f5f9', marginTop: '0.2rem' }}>
+                <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--fg)', marginTop: '0.2rem' }}>
                   {affiliate.account.referrals.length}
                 </div>
               </div>
               <div>
                 <div style={label}>Total Credits Earned</div>
-                <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#22c55e', marginTop: '0.2rem' }}>
+                <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--ok)', marginTop: '0.2rem' }}>
                   +{affiliate.account.totalEarned.toLocaleString()}
                 </div>
               </div>

@@ -19,18 +19,18 @@ const TAB_LABELS: { id: Tab; label: string }[] = [
 ]
 
 const inputStyle: React.CSSProperties = {
-  background: '#0f1117', border: '1px solid #2d3748', borderRadius: 6,
-  color: '#e2e8f0', padding: '0.45rem 0.7rem', fontSize: '0.85rem', width: '100%',
+  background: 'var(--bg)', border: '1px solid var(--line-2)', borderRadius: 6,
+  color: 'var(--fg)', padding: '0.45rem 0.7rem', fontSize: '0.85rem', width: '100%',
   outline: 'none',
 }
 
 const labelStyle: React.CSSProperties = {
-  fontSize: '0.72rem', color: '#94a3b8', marginBottom: '0.2rem', display: 'block', fontWeight: 500,
+  fontSize: '0.72rem', color: 'var(--fg-2)', marginBottom: '0.2rem', display: 'block', fontWeight: 500,
 }
 
 function ConfidencePill({ inferred, confidence }: { inferred: boolean; confidence: number }) {
-  if (!inferred) return <span style={{ fontSize: '0.65rem', color: '#22c55e', background: '#22c55e18', borderRadius: 3, padding: '0.08rem 0.3rem' }}>confirmed</span>
-  return <span style={{ fontSize: '0.65rem', color: '#f59e0b', background: '#f59e0b18', borderRadius: 3, padding: '0.08rem 0.3rem' }}>inferred {Math.round(confidence * 100)}%</span>
+  if (!inferred) return <span style={{ fontSize: '0.65rem', color: 'var(--ok)', background: '#22c55e18', borderRadius: 3, padding: '0.08rem 0.3rem' }}>confirmed</span>
+  return <span style={{ fontSize: '0.65rem', color: 'var(--warn)', background: '#f59e0b18', borderRadius: 3, padding: '0.08rem 0.3rem' }}>inferred {Math.round(confidence * 100)}%</span>
 }
 
 function EditableField({ label, value, inferred, confidence, onChange }: {
@@ -143,30 +143,30 @@ export function CompanyPage() {
     }
   }
 
-  if (loading) return <div style={{ color: '#94a3b8', padding: '2rem' }}>Loading company…</div>
-  if (error)   return <div style={{ color: '#ef4444', padding: '2rem' }}>Error: {error}</div>
-  if (!card)   return <div style={{ color: '#64748b', padding: '2rem' }}>Company not found.</div>
+  if (loading) return <div style={{ color: 'var(--fg-2)', padding: '2rem' }}>Loading company…</div>
+  if (error)   return <div style={{ color: 'var(--bad)', padding: '2rem' }}>Error: {error}</div>
+  if (!card)   return <div style={{ color: 'var(--fg-3)', padding: '2rem' }}>Company not found.</div>
 
   return (
     <div style={{ maxWidth: 860, margin: '0 auto' }}>
       {/* Page header */}
       <div style={{ marginBottom: '1.5rem' }}>
-        <h1 style={{ fontSize: '1.4rem', fontWeight: 700, color: '#f1f5f9', margin: 0 }}>
+        <h1 style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--fg)', margin: 0 }}>
           {fieldVal('name') || id}
         </h1>
-        <div style={{ color: '#64748b', fontSize: '0.8rem', marginTop: '0.2rem' }}>
+        <div style={{ color: 'var(--fg-3)', fontSize: '0.8rem', marginTop: '0.2rem' }}>
           v{card.version} · {id}
         </div>
       </div>
 
       {/* Tab bar */}
-      <div style={{ display: 'flex', gap: '0.25rem', borderBottom: '1px solid #2d3748', marginBottom: '1.5rem' }}>
+      <div style={{ display: 'flex', gap: '0.25rem', borderBottom: '1px solid var(--line-2)', marginBottom: '1.5rem' }}>
         {TAB_LABELS.map(({ id: tid, label }) => (
           <button key={tid} onClick={() => setTab(tid)} style={{
             background: 'transparent', border: 'none', cursor: 'pointer',
             padding: '0.5rem 1rem', fontSize: '0.85rem', fontWeight: activeTab === tid ? 600 : 400,
-            color: activeTab === tid ? '#818cf8' : '#64748b',
-            borderBottom: activeTab === tid ? '2px solid #6366f1' : '2px solid transparent',
+            color: activeTab === tid ? 'var(--brand)' : 'var(--fg-3)',
+            borderBottom: activeTab === tid ? '2px solid var(--brand-2)' : '2px solid transparent',
             transition: 'color 0.12s',
           }}>
             {label}
@@ -190,19 +190,19 @@ export function CompanyPage() {
             const val = fieldVal(key)
             if (!val) return null
             return (
-              <div key={key} style={{ display: 'flex', gap: '0.75rem', padding: '0.6rem 0', borderBottom: '1px solid #1e2433' }}>
-                <span style={{ width: 120, fontSize: '0.8rem', color: '#64748b', flexShrink: 0 }}>{lbl}</span>
-                <span style={{ fontSize: '0.9rem', color: '#e2e8f0' }}>{val}</span>
+              <div key={key} style={{ display: 'flex', gap: '0.75rem', padding: '0.6rem 0', borderBottom: '1px solid var(--surface)' }}>
+                <span style={{ width: 120, fontSize: '0.8rem', color: 'var(--fg-3)', flexShrink: 0 }}>{lbl}</span>
+                <span style={{ fontSize: '0.9rem', color: 'var(--fg)' }}>{val}</span>
               </div>
             )
           })}
 
           {card.offerings?.items?.length ? (
-            <div style={{ padding: '0.6rem 0', borderBottom: '1px solid #1e2433' }}>
-              <div style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: '0.4rem' }}>Offerings</div>
+            <div style={{ padding: '0.6rem 0', borderBottom: '1px solid var(--surface)' }}>
+              <div style={{ fontSize: '0.8rem', color: 'var(--fg-3)', marginBottom: '0.4rem' }}>Offerings</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
                 {card.offerings.items.map((o) => (
-                  <span key={o} style={{ background: '#6366f122', color: '#818cf8', borderRadius: 5, padding: '0.2rem 0.6rem', fontSize: '0.78rem' }}>
+                  <span key={o} style={{ background: '#6366f122', color: 'var(--brand)', borderRadius: 5, padding: '0.2rem 0.6rem', fontSize: '0.78rem' }}>
                     {o}
                   </span>
                 ))}
@@ -215,8 +215,8 @@ export function CompanyPage() {
       {/* ── CARD EDITOR ── */}
       {activeTab === 'editor' && (
         <div>
-          <div style={{ background: '#1e2433', borderRadius: 10, padding: '1.25rem', border: '1px solid #2d3748', marginBottom: '1rem' }}>
-            <h3 style={{ margin: '0 0 1rem', fontSize: '0.9rem', color: '#94a3b8', fontWeight: 600 }}>CORE FIELDS</h3>
+          <div className="glass" style={{ background: 'var(--surface)', borderRadius: 10, padding: '1.25rem', border: '1px solid var(--line-2)', marginBottom: '1rem' }}>
+            <h3 style={{ margin: '0 0 1rem', fontSize: '0.9rem', color: 'var(--fg-2)', fontWeight: 600 }}>CORE FIELDS</h3>
             {(
               [
                 ['Business Name', 'name'],
@@ -241,13 +241,13 @@ export function CompanyPage() {
             })}
           </div>
 
-          <div style={{ background: '#1e2433', borderRadius: 10, padding: '1.25rem', border: '1px solid #2d3748', marginBottom: '1rem' }}>
-            <h3 style={{ margin: '0 0 1rem', fontSize: '0.9rem', color: '#94a3b8', fontWeight: 600 }}>SPECIALS</h3>
+          <div className="glass" style={{ background: 'var(--surface)', borderRadius: 10, padding: '1.25rem', border: '1px solid var(--line-2)', marginBottom: '1rem' }}>
+            <h3 style={{ margin: '0 0 1rem', fontSize: '0.9rem', color: 'var(--fg-2)', fontWeight: 600 }}>SPECIALS</h3>
             <SpecialsEditor specials={specials} onChange={setSpecials} />
           </div>
 
-          <div style={{ background: '#1e2433', borderRadius: 10, padding: '1.25rem', border: '1px solid #2d3748', marginBottom: '1.25rem' }}>
-            <h3 style={{ margin: '0 0 1rem', fontSize: '0.9rem', color: '#94a3b8', fontWeight: 600 }}>SOCIAL PROFILES</h3>
+          <div className="glass" style={{ background: 'var(--surface)', borderRadius: 10, padding: '1.25rem', border: '1px solid var(--line-2)', marginBottom: '1.25rem' }}>
+            <h3 style={{ margin: '0 0 1rem', fontSize: '0.9rem', color: 'var(--fg-2)', fontWeight: 600 }}>SOCIAL PROFILES</h3>
             <SocialEditor socials={socials} onChange={setSocials} />
           </div>
 
@@ -255,7 +255,7 @@ export function CompanyPage() {
             <div style={{
               marginBottom: '0.75rem', padding: '0.6rem 0.85rem', borderRadius: 6, fontSize: '0.82rem',
               background: saveMsg.startsWith('Error') ? '#ef444411' : '#22c55e11',
-              color: saveMsg.startsWith('Error') ? '#ef4444' : '#22c55e',
+              color: saveMsg.startsWith('Error') ? 'var(--bad)' : 'var(--ok)',
               border: `1px solid ${saveMsg.startsWith('Error') ? '#ef444433' : '#22c55e33'}`,
             }}>
               {saveMsg}
@@ -263,7 +263,7 @@ export function CompanyPage() {
           )}
 
           <button onClick={handleSave} disabled={saving} style={{
-            background: saving ? '#374151' : '#6366f1', color: '#fff',
+            background: saving ? 'var(--line-2)' : 'var(--brand-2)', color: '#fff',
             border: 'none', borderRadius: 8, padding: '0.6rem 1.5rem',
             fontSize: '0.9rem', fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', width: '100%',
           }}>
@@ -286,11 +286,11 @@ export function CompanyPage() {
       {activeTab === 'greeting' && (
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-            <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 600, color: '#e2e8f0' }}>
+            <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 600, color: 'var(--fg)' }}>
               Compiled Greeting
             </h3>
             <button onClick={loadGreeting} style={{
-              background: '#6366f1', color: '#fff', border: 'none', borderRadius: 6,
+              background: 'var(--brand-2)', color: '#fff', border: 'none', borderRadius: 6,
               padding: '0.35rem 0.9rem', fontSize: '0.8rem', cursor: 'pointer', fontWeight: 600,
             }}>
               {greeting ? 'Recompile' : 'Load Greeting'}
@@ -318,19 +318,19 @@ export function CompanyPage() {
                 if (!text) return null
                 return (
                   <div key={period} style={{
-                    background: '#1e2433', borderRadius: 8, padding: '1rem',
-                    border: '1px solid #2d3748',
+                    background: 'var(--surface)', borderRadius: 8, padding: '1rem',
+                    border: '1px solid var(--line-2)',
                   }}>
-                    <div style={{ fontSize: '0.72rem', color: '#6366f1', fontWeight: 700, textTransform: 'uppercase', marginBottom: '0.5rem' }}>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--brand-2)', fontWeight: 700, textTransform: 'uppercase', marginBottom: '0.5rem' }}>
                       {period}
                     </div>
-                    <div style={{ fontSize: '0.9rem', color: '#e2e8f0', lineHeight: 1.55 }}>{text}</div>
+                    <div style={{ fontSize: '0.9rem', color: 'var(--fg)', lineHeight: 1.55 }}>{text}</div>
                   </div>
                 )
               })}
             </div>
           ) : (
-            <div style={{ color: '#475569', fontSize: '0.875rem', padding: '1rem 0' }}>
+            <div style={{ color: 'var(--fg-3)', fontSize: '0.875rem', padding: '1rem 0' }}>
               Click "Load Greeting" to compile greetings from the current card.
             </div>
           )}

@@ -73,9 +73,9 @@ const CHANNEL_COLORS: Record<Channel, string> = {
   instagram: '#e1306c',
   tiktok:    '#ff0050',
   linkedin:  '#0a66c2',
-  email:     '#f59e0b',
+  email:     'var(--warn)',
   facebook:  '#1877f2',
-  x:         '#94a3b8',
+  x:         'var(--fg-2)',
 }
 
 // ---------------------------------------------------------------------------
@@ -102,7 +102,7 @@ function ChannelBadge({ channel }: { channel: Channel }) {
 }
 
 function QualityBadge({ score }: { score: number }) {
-  const color = score >= 80 ? '#22c55e' : score >= 60 ? '#f59e0b' : '#ef4444'
+  const color = score >= 80 ? 'var(--ok)' : score >= 60 ? 'var(--warn)' : 'var(--bad)'
   return (
     <span style={{
       background: color + '22',
@@ -149,9 +149,8 @@ function AssetCard({
     : asset.text
 
   return (
-    <div style={{
-      background: '#1e2433',
-      border: '1px solid #2d3748',
+    <div className="glass" style={{ background: 'var(--surface)',
+      border: '1px solid var(--line-2)',
       borderRadius: 10,
       padding: '1rem',
       display: 'flex',
@@ -162,7 +161,7 @@ function AssetCard({
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
         <ChannelBadge channel={asset.channel} />
         <span style={{
-          background: '#2d3748', color: '#94a3b8',
+          background: 'var(--line-2)', color: 'var(--fg-2)',
           borderRadius: 4, padding: '0.15rem 0.5rem',
           fontSize: '0.72rem', fontWeight: 600,
           textTransform: 'uppercase', letterSpacing: '0.04em',
@@ -173,7 +172,7 @@ function AssetCard({
         {asset.voiceValidation && (
           <span style={{
             fontSize: '0.72rem', fontWeight: 600,
-            color: asset.voiceValidation.passed ? '#22c55e' : '#ef4444',
+            color: asset.voiceValidation.passed ? 'var(--ok)' : 'var(--bad)',
           }}>
             {asset.voiceValidation.passed ? '✓ voice' : '✗ voice'}
           </span>
@@ -184,7 +183,7 @@ function AssetCard({
       <div
         onClick={() => setExpanded((x) => !x)}
         style={{
-          color: '#cbd5e1',
+          color: 'var(--fg)',
           fontSize: '0.83rem',
           lineHeight: 1.55,
           cursor: 'pointer',
@@ -200,7 +199,7 @@ function AssetCard({
       {!expanded && (
         <button
           onClick={() => setExpanded(true)}
-          style={{ background: 'none', border: 'none', color: '#818cf8', fontSize: '0.78rem', cursor: 'pointer', textAlign: 'left', padding: 0 }}
+          style={{ background: 'none', border: 'none', color: 'var(--brand)', fontSize: '0.78rem', cursor: 'pointer', textAlign: 'left', padding: 0 }}
         >
           Show more
         </button>
@@ -208,7 +207,7 @@ function AssetCard({
 
       {/* TikTok audio suggestion */}
       {asset.audioSuggestion && (
-        <div style={{ fontSize: '0.78rem', color: '#94a3b8', fontStyle: 'italic' }}>
+        <div style={{ fontSize: '0.78rem', color: 'var(--fg-2)', fontStyle: 'italic' }}>
           Audio: {asset.audioSuggestion}
         </div>
       )}
@@ -217,7 +216,7 @@ function AssetCard({
       {asset.hashtags.length > 0 && (
         <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
           {asset.hashtags.slice(0, 6).map((tag) => (
-            <span key={tag} style={{ color: '#818cf8', fontSize: '0.75rem' }}>{tag}</span>
+            <span key={tag} style={{ color: 'var(--brand)', fontSize: '0.75rem' }}>{tag}</span>
           ))}
         </div>
       )}
@@ -228,7 +227,7 @@ function AssetCard({
           onClick={handleApprove}
           disabled={approving}
           style={{
-            background: approving ? '#374151' : '#6366f1',
+            background: approving ? 'var(--line-2)' : 'var(--brand-2)',
             color: '#fff',
             border: 'none',
             borderRadius: 6,
@@ -244,10 +243,10 @@ function AssetCard({
         </button>
       )}
       {asset.status === 'approved' && (
-        <span style={{ color: '#22c55e', fontSize: '0.8rem', fontWeight: 600 }}>Queued for approval</span>
+        <span style={{ color: 'var(--ok)', fontSize: '0.8rem', fontWeight: 600 }}>Queued for approval</span>
       )}
       {approveError && (
-        <div style={{ color: '#ef4444', fontSize: '0.78rem' }}>{approveError}</div>
+        <div style={{ color: 'var(--bad)', fontSize: '0.78rem' }}>{approveError}</div>
       )}
     </div>
   )
@@ -256,12 +255,12 @@ function AssetCard({
 function UserStoryAccordion({ stories }: { stories: UserStory[] }) {
   const [open, setOpen] = useState(false)
   return (
-    <div style={{ border: '1px solid #2d3748', borderRadius: 8, overflow: 'hidden' }}>
+    <div style={{ border: '1px solid var(--line-2)', borderRadius: 8, overflow: 'hidden' }}>
       <button
         onClick={() => setOpen((x) => !x)}
         style={{
-          width: '100%', background: '#1e2433', border: 'none',
-          color: '#e2e8f0', padding: '0.75rem 1rem',
+          width: '100%', background: 'var(--surface)', border: 'none',
+          color: 'var(--fg)', padding: '0.75rem 1rem',
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
           cursor: 'pointer', fontSize: '0.875rem', fontWeight: 600,
         }}
@@ -272,10 +271,10 @@ function UserStoryAccordion({ stories }: { stories: UserStory[] }) {
       {open && (
         <div style={{ padding: '0.75rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
           {stories.map((s) => (
-            <div key={s.id} style={{ fontSize: '0.83rem', color: '#94a3b8', borderLeft: '2px solid #6366f1', paddingLeft: '0.75rem' }}>
+            <div key={s.id} style={{ fontSize: '0.83rem', color: 'var(--fg-2)', borderLeft: '2px solid var(--brand-2)', paddingLeft: '0.75rem' }}>
               <span style={{ color: CHANNEL_COLORS[s.channel], fontWeight: 600 }}>{s.channel}</span>
               {' / '}{s.assetType} — {s.brief}
-              {s.audiencePersona && <span style={{ color: '#64748b' }}> (for: {s.audiencePersona})</span>}
+              {s.audiencePersona && <span style={{ color: 'var(--fg-3)' }}> (for: {s.audiencePersona})</span>}
             </div>
           ))}
         </div>
@@ -365,16 +364,16 @@ export function CampaignPage() {
 
   return (
     <div style={{ maxWidth: 900, margin: '0 auto' }}>
-      <h1 style={{ fontSize: '1.4rem', fontWeight: 700, color: '#f1f5f9', margin: '0 0 0.35rem' }}>
+      <h1 style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--fg)', margin: '0 0 0.35rem' }}>
         Campaign Forge
       </h1>
-      <p style={{ color: '#64748b', fontSize: '0.875rem', marginTop: 0, marginBottom: '1.5rem' }}>
+      <p style={{ color: 'var(--fg-3)', fontSize: '0.875rem', marginTop: 0, marginBottom: '1.5rem' }}>
         Generate a full campaign PRD and social assets from your brand DNA.
       </p>
 
       {/* Goal input */}
       <div style={{ marginBottom: '1rem' }}>
-        <label style={{ display: 'block', color: '#94a3b8', fontSize: '0.82rem', marginBottom: '0.4rem' }}>
+        <label style={{ display: 'block', color: 'var(--fg-2)', fontSize: '0.82rem', marginBottom: '0.4rem' }}>
           Campaign Goal
         </label>
         <input
@@ -382,8 +381,8 @@ export function CampaignPage() {
           onChange={(e) => setGoal(e.target.value)}
           placeholder="e.g. Get more customers this weekend"
           style={{
-            width: '100%', background: '#1e2433', border: '1px solid #2d3748',
-            color: '#e2e8f0', borderRadius: 8, padding: '0.6rem 0.9rem',
+            width: '100%', background: 'var(--surface)', border: '1px solid var(--line-2)',
+            color: 'var(--fg)', borderRadius: 8, padding: '0.6rem 0.9rem',
             fontSize: '0.9rem', outline: 'none', boxSizing: 'border-box',
           }}
         />
@@ -391,7 +390,7 @@ export function CampaignPage() {
 
       {/* Channel selector */}
       <div style={{ marginBottom: '1.25rem' }}>
-        <label style={{ display: 'block', color: '#94a3b8', fontSize: '0.82rem', marginBottom: '0.5rem' }}>
+        <label style={{ display: 'block', color: 'var(--fg-2)', fontSize: '0.82rem', marginBottom: '0.5rem' }}>
           Channels
         </label>
         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
@@ -402,9 +401,9 @@ export function CampaignPage() {
                 key={id}
                 onClick={() => toggleChannel(id)}
                 style={{
-                  background: active ? CHANNEL_COLORS[id] + '33' : '#1e2433',
-                  color: active ? CHANNEL_COLORS[id] : '#94a3b8',
-                  border: `1px solid ${active ? CHANNEL_COLORS[id] : '#2d3748'}`,
+                  background: active ? CHANNEL_COLORS[id] + '33' : 'var(--surface)',
+                  color: active ? CHANNEL_COLORS[id] : 'var(--fg-2)',
+                  border: `1px solid ${active ? CHANNEL_COLORS[id] : 'var(--line-2)'}`,
                   borderRadius: 6,
                   padding: '0.4rem 0.85rem',
                   fontSize: '0.82rem',
@@ -425,7 +424,7 @@ export function CampaignPage() {
         onClick={handleGeneratePRD}
         disabled={prdLoading}
         style={{
-          background: prdLoading ? '#374151' : '#6366f1',
+          background: prdLoading ? 'var(--line-2)' : 'var(--brand-2)',
           color: '#fff', border: 'none', borderRadius: 8,
           padding: '0.6rem 1.4rem', fontSize: '0.9rem', fontWeight: 600,
           cursor: prdLoading ? 'not-allowed' : 'pointer', marginBottom: '1rem',
@@ -435,20 +434,19 @@ export function CampaignPage() {
       </button>
 
       {prdError && (
-        <div style={{ color: '#ef4444', fontSize: '0.85rem', marginBottom: '1rem' }}>{prdError}</div>
+        <div style={{ color: 'var(--bad)', fontSize: '0.85rem', marginBottom: '1rem' }}>{prdError}</div>
       )}
 
       {/* PRD Preview */}
       {prd && (
         <div style={{ marginBottom: '1.5rem' }}>
-          <div style={{
-            background: '#1e2433', border: '1px solid #2d3748',
+          <div className="glass" style={{ background: 'var(--surface)', border: '1px solid var(--line-2)',
             borderRadius: 10, padding: '1.25rem', marginBottom: '1rem',
           }}>
-            <h2 style={{ fontSize: '1rem', fontWeight: 700, color: '#818cf8', margin: '0 0 0.6rem' }}>
+            <h2 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--brand)', margin: '0 0 0.6rem' }}>
               Campaign Overview
             </h2>
-            <p style={{ color: '#cbd5e1', fontSize: '0.875rem', lineHeight: 1.6, margin: 0 }}>
+            <p style={{ color: 'var(--fg)', fontSize: '0.875rem', lineHeight: 1.6, margin: 0 }}>
               {prd.overview}
             </p>
           </div>
@@ -465,13 +463,13 @@ export function CampaignPage() {
               if (!s) return null
               return (
                 <div key={ch} style={{
-                  background: '#1e2433', border: `1px solid ${CHANNEL_COLORS[ch as Channel] ?? '#2d3748'}33`,
+                  background: 'var(--surface)', border: `1px solid ${CHANNEL_COLORS[ch as Channel] ?? 'var(--line-2)'}33`,
                   borderRadius: 8, padding: '0.9rem',
                 }}>
                   <ChannelBadge channel={ch as Channel} />
-                  <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: '#94a3b8', lineHeight: 1.5 }}>
-                    <div><span style={{ color: '#64748b' }}>Objective:</span> {s.objective}</div>
-                    <div><span style={{ color: '#64748b' }}>Frequency:</span> {s.frequency}</div>
+                  <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: 'var(--fg-2)', lineHeight: 1.5 }}>
+                    <div><span style={{ color: 'var(--fg-3)' }}>Objective:</span> {s.objective}</div>
+                    <div><span style={{ color: 'var(--fg-3)' }}>Frequency:</span> {s.frequency}</div>
                   </div>
                 </div>
               )
@@ -485,7 +483,7 @@ export function CampaignPage() {
             onClick={handleGenerateAssets}
             disabled={assetsLoading}
             style={{
-              background: assetsLoading ? '#374151' : '#059669',
+              background: assetsLoading ? 'var(--line-2)' : 'var(--ok)',
               color: '#fff', border: 'none', borderRadius: 8,
               padding: '0.6rem 1.4rem', fontSize: '0.9rem', fontWeight: 600,
               cursor: assetsLoading ? 'not-allowed' : 'pointer', marginTop: '1rem',
@@ -495,7 +493,7 @@ export function CampaignPage() {
           </button>
 
           {assetsError && (
-            <div style={{ color: '#ef4444', fontSize: '0.85rem', marginTop: '0.5rem' }}>{assetsError}</div>
+            <div style={{ color: 'var(--bad)', fontSize: '0.85rem', marginTop: '0.5rem' }}>{assetsError}</div>
           )}
         </div>
       )}
@@ -503,7 +501,7 @@ export function CampaignPage() {
       {/* Assets grid */}
       {assets.length > 0 && (
         <div>
-          <h2 style={{ fontSize: '1rem', fontWeight: 700, color: '#f1f5f9', margin: '0 0 0.75rem' }}>
+          <h2 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--fg)', margin: '0 0 0.75rem' }}>
             Generated Assets ({assets.length})
           </h2>
           <div style={{

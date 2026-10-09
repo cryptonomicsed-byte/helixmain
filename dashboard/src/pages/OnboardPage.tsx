@@ -5,13 +5,13 @@ import { useHelixStore } from '../store'
 import type { BusinessCard } from '../api'
 
 const inputStyle: React.CSSProperties = {
-  background: '#0f1117', border: '1px solid #2d3748', borderRadius: 8,
-  color: '#e2e8f0', padding: '0.55rem 0.85rem', fontSize: '0.9rem', width: '100%',
+  background: 'var(--bg)', border: '1px solid var(--line-2)', borderRadius: 8,
+  color: 'var(--fg)', padding: '0.55rem 0.85rem', fontSize: '0.9rem', width: '100%',
   outline: 'none',
 }
 
 const labelStyle: React.CSSProperties = {
-  fontSize: '0.78rem', color: '#94a3b8', marginBottom: '0.3rem', display: 'block', fontWeight: 500,
+  fontSize: '0.78rem', color: 'var(--fg-2)', marginBottom: '0.3rem', display: 'block', fontWeight: 500,
 }
 
 type Phase = 'input' | 'extracting' | 'review' | 'compiling' | 'done'
@@ -29,7 +29,7 @@ function FieldRow({ label, field, onChange }: {
         {field.inferred && (
           <span style={{
             marginLeft: '0.5rem', fontSize: '0.68rem',
-            color: '#f59e0b', background: '#f59e0b18',
+            color: 'var(--warn)', background: '#f59e0b18',
             borderRadius: 4, padding: '0.1rem 0.35rem',
           }}>
             inferred {Math.round(field.confidence * 100)}%
@@ -38,7 +38,7 @@ function FieldRow({ label, field, onChange }: {
         {!field.inferred && (
           <span style={{
             marginLeft: '0.5rem', fontSize: '0.68rem',
-            color: '#22c55e', background: '#22c55e18',
+            color: 'var(--ok)', background: '#22c55e18',
             borderRadius: 4, padding: '0.1rem 0.35rem',
           }}>
             confirmed
@@ -116,17 +116,17 @@ export function OnboardPage() {
 
   return (
     <div style={{ maxWidth: 640, margin: '0 auto' }}>
-      <h1 style={{ fontSize: '1.4rem', fontWeight: 700, color: '#f1f5f9', marginBottom: '0.4rem' }}>
+      <h1 style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--fg)', marginBottom: '0.4rem' }}>
         Onboard a Business
       </h1>
-      <p style={{ color: '#64748b', fontSize: '0.875rem', marginBottom: '2rem' }}>
+      <p style={{ color: 'var(--fg-3)', fontSize: '0.875rem', marginBottom: '2rem' }}>
         Enter a business URL and we'll extract its card automatically.
       </p>
 
       {/* Step 1 — URL input */}
       {(phase === 'input' || phase === 'extracting') && (
         <form onSubmit={handleExtract}>
-          <div style={{ background: '#1e2433', borderRadius: 12, padding: '1.5rem', border: '1px solid #2d3748' }}>
+          <div className="glass" style={{ background: 'var(--surface)', borderRadius: 12, padding: '1.5rem', border: '1px solid var(--line-2)' }}>
             <div style={{ marginBottom: '1rem' }}>
               <label style={labelStyle}>Business Website URL *</label>
               <input
@@ -150,12 +150,12 @@ export function OnboardPage() {
               />
             </div>
             {error && (
-              <div style={{ color: '#ef4444', fontSize: '0.82rem', marginBottom: '1rem', padding: '0.6rem', background: '#ef444411', borderRadius: 6 }}>
+              <div style={{ color: 'var(--bad)', fontSize: '0.82rem', marginBottom: '1rem', padding: '0.6rem', background: '#ef444411', borderRadius: 6 }}>
                 {error}
               </div>
             )}
             <button type="submit" disabled={phase === 'extracting'} style={{
-              background: phase === 'extracting' ? '#374151' : '#6366f1',
+              background: phase === 'extracting' ? 'var(--line-2)' : 'var(--brand-2)',
               color: '#fff', border: 'none', borderRadius: 8,
               padding: '0.6rem 1.5rem', fontSize: '0.9rem', fontWeight: 600,
               cursor: phase === 'extracting' ? 'not-allowed' : 'pointer', width: '100%',
@@ -169,15 +169,14 @@ export function OnboardPage() {
       {/* Step 2 — Review extracted card */}
       {(phase === 'review' || phase === 'compiling') && card && (
         <div>
-          <div style={{
-            background: '#1e2433', borderRadius: 12, padding: '1.5rem',
-            border: '1px solid #2d3748', marginBottom: '1rem',
+          <div className="glass" style={{ background: 'var(--surface)', borderRadius: 12, padding: '1.5rem',
+            border: '1px solid var(--line-2)', marginBottom: '1rem',
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-              <h2 style={{ fontSize: '1rem', fontWeight: 700, color: '#e2e8f0', margin: 0 }}>
+              <h2 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--fg)', margin: 0 }}>
                 Review Extracted Card
               </h2>
-              <span style={{ fontSize: '0.72rem', color: '#64748b' }}>card id: {card.id}</span>
+              <span style={{ fontSize: '0.72rem', color: 'var(--fg-3)' }}>card id: {card.id}</span>
             </div>
 
             <FieldRow label="Business Name" field={resolvedField('name')} onChange={(v) => patchField('name', v)} />
@@ -189,7 +188,7 @@ export function OnboardPage() {
           </div>
 
           {error && (
-            <div style={{ color: '#ef4444', fontSize: '0.82rem', marginBottom: '1rem', padding: '0.6rem', background: '#ef444411', borderRadius: 6 }}>
+            <div style={{ color: 'var(--bad)', fontSize: '0.82rem', marginBottom: '1rem', padding: '0.6rem', background: '#ef444411', borderRadius: 6 }}>
               {error}
             </div>
           )}
@@ -199,7 +198,7 @@ export function OnboardPage() {
               onClick={() => { setPhase('input'); setCard(null); setEdits({}) }}
               disabled={phase === 'compiling'}
               style={{
-                background: 'transparent', color: '#94a3b8', border: '1px solid #2d3748',
+                background: 'transparent', color: 'var(--fg-2)', border: '1px solid var(--line-2)',
                 borderRadius: 8, padding: '0.6rem 1.25rem', fontSize: '0.875rem',
                 cursor: 'pointer', fontWeight: 500,
               }}
@@ -210,7 +209,7 @@ export function OnboardPage() {
               onClick={handleGoLive}
               disabled={phase === 'compiling'}
               style={{
-                flex: 1, background: phase === 'compiling' ? '#374151' : '#22c55e',
+                flex: 1, background: phase === 'compiling' ? 'var(--line-2)' : 'var(--ok)',
                 color: '#fff', border: 'none', borderRadius: 8,
                 padding: '0.6rem 1.5rem', fontSize: '0.9rem', fontWeight: 700,
                 cursor: phase === 'compiling' ? 'not-allowed' : 'pointer',
@@ -224,15 +223,14 @@ export function OnboardPage() {
 
       {/* Step 3 — Done */}
       {phase === 'done' && (
-        <div style={{
-          background: '#1e2433', borderRadius: 12, padding: '2.5rem',
+        <div className="glass" style={{ background: 'var(--surface)', borderRadius: 12, padding: '2.5rem',
           textAlign: 'center', border: '1px solid #22c55e44',
         }}>
           <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>✅</div>
-          <div style={{ fontWeight: 700, fontSize: '1.1rem', color: '#22c55e', marginBottom: '0.4rem' }}>
+          <div style={{ fontWeight: 700, fontSize: '1.1rem', color: 'var(--ok)', marginBottom: '0.4rem' }}>
             Agent compiled successfully
           </div>
-          <div style={{ color: '#64748b', fontSize: '0.875rem' }}>
+          <div style={{ color: 'var(--fg-3)', fontSize: '0.875rem' }}>
             Redirecting to company page…
           </div>
         </div>

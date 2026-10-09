@@ -6,8 +6,8 @@ interface Props {
 }
 
 const inputStyle: React.CSSProperties = {
-  background: '#0f1117', border: '1px solid #2d3748', borderRadius: 6,
-  color: '#e2e8f0', padding: '0.4rem 0.6rem', fontSize: '0.82rem', width: '100%',
+  background: 'var(--bg)', border: '1px solid var(--line-2)', borderRadius: 6,
+  color: 'var(--fg)', padding: '0.4rem 0.6rem', fontSize: '0.82rem', width: '100%',
   outline: 'none',
 }
 
@@ -30,7 +30,7 @@ export function SocialEditor({ socials, onChange }: Props) {
         <div key={key} style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
           <span style={{ width: 28, textAlign: 'center', fontSize: '1rem' }}>{icon}</span>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginBottom: '0.15rem' }}>{label}</div>
+            <div style={{ fontSize: '0.72rem', color: 'var(--fg-2)', marginBottom: '0.15rem' }}>{label}</div>
             <input
               style={inputStyle}
               value={socials[key] ?? ''}

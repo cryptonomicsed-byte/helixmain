@@ -31,10 +31,10 @@ const TABS: Array<{ label: string; filter: AssetType | 'all' }> = [
 ]
 
 const TYPE_BADGE: Record<AssetType, { label: string; bg: string; color: string }> = {
-  card:           { label: 'Card',     bg: '#6366f122', color: '#818cf8' },
-  campaign_asset: { label: 'Campaign', bg: '#f59e0b22', color: '#fbbf24' },
-  plan:           { label: 'Plan',     bg: '#10b98122', color: '#34d399' },
-  site:           { label: 'Site',     bg: '#3b82f622', color: '#60a5fa' },
+  card:           { label: 'Card',     bg: '#6366f122', color: 'var(--brand)' },
+  campaign_asset: { label: 'Campaign', bg: '#f59e0b22', color: 'var(--warn)' },
+  plan:           { label: 'Plan',     bg: '#10b98122', color: 'var(--ok)' },
+  site:           { label: 'Site',     bg: '#3b82f622', color: 'var(--info)' },
   jingle:         { label: 'Jingle',   bg: '#ec489922', color: '#f472b6' },
 }
 
@@ -89,17 +89,17 @@ export function PortfolioPage() {
     padding: '0.4rem 0.9rem',
     fontSize: '0.82rem',
     fontWeight: active ? 600 : 400,
-    color: active ? '#818cf8' : '#64748b',
+    color: active ? 'var(--brand)' : 'var(--fg-3)',
     background: active ? '#6366f122' : 'transparent',
     border: '1px solid',
-    borderColor: active ? '#6366f155' : '#2d3748',
+    borderColor: active ? '#6366f155' : 'var(--line-2)',
     borderRadius: 6,
     cursor: 'pointer',
   })
 
   const cardStyle: React.CSSProperties = {
-    background: '#1e2433',
-    border: '1px solid #2d3748',
+    background: 'var(--surface)',
+    border: '1px solid var(--line-2)',
     borderRadius: 10,
     padding: '1rem 1.25rem',
     display: 'flex',
@@ -113,7 +113,7 @@ export function PortfolioPage() {
 
   if (!currentCompany) {
     return (
-      <div style={{ color: '#64748b', padding: '2rem', textAlign: 'center' }}>
+      <div style={{ color: 'var(--fg-3)', padding: '2rem', textAlign: 'center' }}>
         Select a company from the top bar to view its portfolio.
       </div>
     )
@@ -123,11 +123,11 @@ export function PortfolioPage() {
     <div>
       {/* Header */}
       <div style={{ marginBottom: '1.5rem' }}>
-        <h1 style={{ fontSize: '1.4rem', fontWeight: 700, color: '#f1f5f9', margin: 0 }}>
+        <h1 style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--fg)', margin: 0 }}>
           Portfolio
         </h1>
-        <p style={{ color: '#64748b', fontSize: '0.875rem', marginTop: '0.35rem' }}>
-          All assets produced for <strong style={{ color: '#e2e8f0' }}>{currentCompany.name}</strong>
+        <p style={{ color: 'var(--fg-3)', fontSize: '0.875rem', marginTop: '0.35rem' }}>
+          All assets produced for <strong style={{ color: 'var(--fg)' }}>{currentCompany.name}</strong>
         </p>
       </div>
 
@@ -151,28 +151,27 @@ export function PortfolioPage() {
 
       {/* Loading */}
       {loading && (
-        <div style={{ color: '#94a3b8', padding: '2rem', textAlign: 'center' }}>
+        <div style={{ color: 'var(--fg-2)', padding: '2rem', textAlign: 'center' }}>
           Loading portfolio…
         </div>
       )}
 
       {/* Error */}
       {!loading && error && (
-        <div style={{ color: '#ef4444', padding: '1rem' }}>
+        <div style={{ color: 'var(--bad)', padding: '1rem' }}>
           <strong>Error:</strong> {error}
         </div>
       )}
 
       {/* Empty state */}
       {!loading && !error && filtered.length === 0 && (
-        <div style={{
-          background: '#1e2433', borderRadius: 12, padding: '3rem',
-          textAlign: 'center', border: '2px dashed #2d3748',
+        <div className="glass" style={{ background: 'var(--surface)', borderRadius: 12, padding: '3rem',
+          textAlign: 'center', border: '2px dashed var(--line-2)',
         }}>
-          <div style={{ fontWeight: 600, color: '#e2e8f0', marginBottom: '0.4rem' }}>
+          <div style={{ fontWeight: 600, color: 'var(--fg)', marginBottom: '0.4rem' }}>
             No {activeTab === 'all' ? 'assets' : activeTab.replace('_', ' ') + 's'} yet
           </div>
-          <div style={{ color: '#64748b', fontSize: '0.875rem' }}>
+          <div style={{ color: 'var(--fg-3)', fontSize: '0.875rem' }}>
             {activeTab === 'card' && 'Onboard a business to generate a card.'}
             {activeTab === 'campaign_asset' && 'Run a campaign to generate assets.'}
             {activeTab === 'plan' && 'Generate a business plan from the company page.'}
@@ -203,20 +202,20 @@ export function PortfolioPage() {
                   }}>
                     {badge.label}
                   </span>
-                  <span style={{ fontSize: '0.72rem', color: '#475569' }}>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--fg-3)' }}>
                     {formatDate(asset.createdAt)}
                   </span>
                 </div>
 
                 {/* Name */}
-                <div style={{ fontWeight: 600, color: '#e2e8f0', fontSize: '0.9rem' }}>
+                <div style={{ fontWeight: 600, color: 'var(--fg)', fontSize: '0.9rem' }}>
                   {asset.name}
                 </div>
 
                 {/* Preview text */}
                 {asset.previewText && (
                   <div style={{
-                    fontSize: '0.8rem', color: '#64748b', lineHeight: 1.4,
+                    fontSize: '0.8rem', color: 'var(--fg-3)', lineHeight: 1.4,
                     overflow: 'hidden', display: '-webkit-box',
                     WebkitLineClamp: 3, WebkitBoxOrient: 'vertical',
                   }}>
@@ -233,7 +232,7 @@ export function PortfolioPage() {
                     style={{
                       marginTop: '0.4rem', alignSelf: 'flex-start',
                       fontSize: '0.78rem', fontWeight: 600,
-                      color: '#818cf8', textDecoration: 'none',
+                      color: 'var(--brand)', textDecoration: 'none',
                       padding: '0.3rem 0.75rem',
                       background: '#6366f122', borderRadius: 6,
                       border: '1px solid #6366f133',

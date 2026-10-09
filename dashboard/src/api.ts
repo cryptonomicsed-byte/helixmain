@@ -132,8 +132,24 @@ export interface ApprovalItem {
   action: string
   agent: string
   customer_context: string
-  risk_level: 'low' | 'medium' | 'high'
+  risk_level?: 'low' | 'medium' | 'high'
   created_at: string
+  expires_at?: string
+}
+
+/** Raw row returned by SparkGatekeeper's GET /held. */
+export interface HeldOperation {
+  id: string
+  card_id: string
+  card_version: number
+  acting_hash: string
+  org_id?: string
+  action_id: string
+  action_json: string
+  trail_json: string
+  proposed_at: string
+  expires_at: string
+  status: string
 }
 
 export interface AuditEntry {
@@ -214,15 +230,46 @@ export const api = {
   // Cards
   getCard: (cardId: string) => get<BusinessCard>(`/cards/${cardId}`),
 
-  // SparkGatekeeper (direct to port 9100, not proxied through /api)
-  gkQueue: () =>
-    request<{ pending: ApprovalItem[]; audit: AuditEntry[] }>('GET', '/queue', undefined, GK_BASE),
+  // SparkGatekeeper (proxied at /gk → 127.0.0.1:9100)
+  // The gatekeeper's real contract: GET /held, POST /held/:id/deny,
+  // POST /held/:id/challenge + /held/:id/approve (WebAuthn, fail-closed).
+  gkQueue: async () => {
+    const held = await request<HeldOperation[]>('GET', '/held', undefined, GK_BASE)
+    const pending: ApprovalItem[] = held.map((h) => {
+      let action = h.action_id
+      let context = h.action_json
+      let risk: 'low' | 'medium' | 'high' | undefined
+      try {
+        const a = JSON.parse(h.action_json)
+        action = a.tool ?? a.kind ?? a.action ?? h.action_id
+        const p = a.payload && typeof a.payload === 'object' ? a.payload : null
+        context = p ? `${a.tool ?? a.kind}: ${JSON.stringify(p)}` : (a.summary ?? h.action_json)
+        if (a.risk === 'low' || a.risk === 'medium' || a.risk === 'high') risk = a.risk
+      } catch { /* keep raw */ }
+      return {
+        id: h.id,
+        action: String(action),
+        agent: h.acting_hash ? h.acting_hash.slice(0, 12) : h.card_id,
+        customer_context: String(context),
+        risk_level: risk,
+        created_at: h.proposed_at,
+        expires_at: h.expires_at,
+      }
+    })
+    return { pending, audit: [] as AuditEntry[] }
+  },
 
-  gkApprove: (id: string) =>
-    request<{ ok: boolean }>('POST', '/approve', { id }, GK_BASE),
+  /** Step 1 of approval: fetch the WebAuthn assertion challenge for a hold. */
+  gkChallenge: (id: string) =>
+    request<any>('GET', `/held/${id}/challenge`, undefined, GK_BASE),
+
+  /** Step 2 of approval: post the WebAuthn assertion. The gatekeeper verifies
+   *  it server-side; a missing/invalid credential is refused (fail-closed). */
+  gkApprove: (id: string, credential: unknown) =>
+    request<{ ok: boolean }>('POST', `/held/${id}/approve`, { credential }, GK_BASE),
 
   gkDeny: (id: string) =>
-    request<{ ok: boolean }>('POST', '/deny', { id }, GK_BASE),
+    request<{ denied: boolean }>('POST', `/held/${id}/deny`, undefined, GK_BASE),
 
 
   // Playground

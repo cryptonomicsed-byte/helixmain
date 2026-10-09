@@ -31,10 +31,10 @@ const CHANNEL_COLORS: Record<string, string> = {
   instagram: '#e1306c',
   tiktok:    '#ff0050',
   linkedin:  '#0a66c2',
-  email:     '#f59e0b',
+  email:     'var(--warn)',
   facebook:  '#1877f2',
-  x:         '#94a3b8',
-  sms:       '#10b981',
+  x:         'var(--fg-2)',
+  sms:       'var(--ok)',
 }
 
 // ---------------------------------------------------------------------------
@@ -61,7 +61,7 @@ function formatPublishAt(iso: string): string {
 // ---------------------------------------------------------------------------
 
 function ChannelBadge({ channel }: { channel: string }) {
-  const color = CHANNEL_COLORS[channel] ?? '#94a3b8'
+  const color = CHANNEL_COLORS[channel] ?? 'var(--fg-2)'
   return (
     <span style={{
       background: color + '22',
@@ -107,9 +107,8 @@ function ScheduledRow({
     : entry.assetId
 
   return (
-    <div style={{
-      background: '#1e2433',
-      border: '1px solid #2d3748',
+    <div className="glass" style={{ background: 'var(--surface)',
+      border: '1px solid var(--line-2)',
       borderRadius: 10,
       padding: '1rem 1.25rem',
       display: 'flex',
@@ -121,7 +120,7 @@ function ScheduledRow({
           {asset && <ChannelBadge channel={asset.channel} />}
           {asset && (
             <span style={{
-              background: '#2d3748', color: '#94a3b8',
+              background: 'var(--line-2)', color: 'var(--fg-2)',
               borderRadius: 4, padding: '0.15rem 0.5rem',
               fontSize: '0.72rem', fontWeight: 600,
               textTransform: 'uppercase' as const,
@@ -130,7 +129,7 @@ function ScheduledRow({
             </span>
           )}
           <span style={{
-            background: '#6366f122', color: '#818cf8',
+            background: '#6366f122', color: 'var(--brand)',
             borderRadius: 4, padding: '0.15rem 0.5rem',
             fontSize: '0.72rem', fontWeight: 600,
           }}>
@@ -138,11 +137,11 @@ function ScheduledRow({
           </span>
         </div>
 
-        <div style={{ color: '#cbd5e1', fontSize: '0.83rem', marginBottom: '0.35rem' }}>
+        <div style={{ color: 'var(--fg)', fontSize: '0.83rem', marginBottom: '0.35rem' }}>
           {preview}
         </div>
 
-        <div style={{ color: '#64748b', fontSize: '0.78rem' }}>
+        <div style={{ color: 'var(--fg-3)', fontSize: '0.78rem' }}>
           Scheduled: {formatPublishAt(entry.publishAt)}
         </div>
       </div>
@@ -151,8 +150,8 @@ function ScheduledRow({
         onClick={handleCancel}
         disabled={cancelling}
         style={{
-          background: cancelling ? '#374151' : '#7f1d1d',
-          color: cancelling ? '#94a3b8' : '#fca5a5',
+          background: cancelling ? 'var(--line-2)' : '#7f1d1d',
+          color: cancelling ? 'var(--fg-2)' : 'var(--bad)',
           border: '1px solid #991b1b',
           borderRadius: 6,
           padding: '0.4rem 0.85rem',
@@ -252,7 +251,7 @@ export function SchedulePage() {
 
   if (!currentCompany) {
     return (
-      <div style={{ color: '#64748b', padding: '2rem', textAlign: 'center' }}>
+      <div style={{ color: 'var(--fg-3)', padding: '2rem', textAlign: 'center' }}>
         Select a company to manage its schedule.
       </div>
     )
@@ -260,33 +259,32 @@ export function SchedulePage() {
 
   return (
     <div style={{ maxWidth: 800, margin: '0 auto' }}>
-      <h1 style={{ fontSize: '1.4rem', fontWeight: 700, color: '#f1f5f9', margin: '0 0 0.35rem' }}>
+      <h1 style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--fg)', margin: '0 0 0.35rem' }}>
         Social Schedule
       </h1>
-      <p style={{ color: '#64748b', fontSize: '0.875rem', marginTop: 0, marginBottom: '1.5rem' }}>
+      <p style={{ color: 'var(--fg-3)', fontSize: '0.875rem', marginTop: 0, marginBottom: '1.5rem' }}>
         Manage scheduled posts for {currentCompany.name}.
       </p>
 
       {loading && (
-        <div style={{ color: '#94a3b8', fontSize: '0.875rem', marginBottom: '1rem' }}>
+        <div style={{ color: 'var(--fg-2)', fontSize: '0.875rem', marginBottom: '1rem' }}>
           Loading schedule…
         </div>
       )}
       {error && (
-        <div style={{ color: '#ef4444', fontSize: '0.875rem', marginBottom: '1rem' }}>{error}</div>
+        <div style={{ color: 'var(--bad)', fontSize: '0.875rem', marginBottom: '1rem' }}>{error}</div>
       )}
 
       {/* Scheduled list */}
       {!loading && scheduled.length === 0 ? (
-        <div style={{
-          background: '#1e2433', borderRadius: 12, padding: '3rem',
-          textAlign: 'center', border: '2px dashed #2d3748', marginBottom: '2rem',
+        <div className="glass" style={{ background: 'var(--surface)', borderRadius: 12, padding: '3rem',
+          textAlign: 'center', border: '2px dashed var(--line-2)', marginBottom: '2rem',
         }}>
           <div style={{ fontSize: '2rem', marginBottom: '0.75rem' }}>📅</div>
-          <div style={{ fontWeight: 600, color: '#e2e8f0', marginBottom: '0.4rem' }}>
+          <div style={{ fontWeight: 600, color: 'var(--fg)', marginBottom: '0.4rem' }}>
             No scheduled posts
           </div>
-          <div style={{ color: '#64748b', fontSize: '0.875rem' }}>
+          <div style={{ color: 'var(--fg-3)', fontSize: '0.875rem' }}>
             Generate a campaign and approve assets to schedule them.
           </div>
         </div>
@@ -304,18 +302,17 @@ export function SchedulePage() {
       )}
 
       {/* Schedule Asset panel */}
-      <div style={{
-        background: '#1e2433',
-        border: '1px solid #2d3748',
+      <div className="glass" style={{ background: 'var(--surface)',
+        border: '1px solid var(--line-2)',
         borderRadius: 10,
         padding: '1.25rem',
       }}>
-        <h2 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#e2e8f0', margin: '0 0 1rem' }}>
+        <h2 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--fg)', margin: '0 0 1rem' }}>
           Schedule an Asset
         </h2>
         <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <div style={{ flex: '1 1 200px' }}>
-            <label style={{ display: 'block', color: '#64748b', fontSize: '0.78rem', marginBottom: '0.3rem' }}>
+            <label style={{ display: 'block', color: 'var(--fg-3)', fontSize: '0.78rem', marginBottom: '0.3rem' }}>
               Asset ID
             </label>
             <input
@@ -323,14 +320,14 @@ export function SchedulePage() {
               onChange={(e) => setFormAssetId(e.target.value)}
               placeholder="Paste asset ID…"
               style={{
-                width: '100%', background: '#0f1117', border: '1px solid #2d3748',
-                color: '#e2e8f0', borderRadius: 6, padding: '0.5rem 0.75rem',
+                width: '100%', background: 'var(--bg)', border: '1px solid var(--line-2)',
+                color: 'var(--fg)', borderRadius: 6, padding: '0.5rem 0.75rem',
                 fontSize: '0.82rem', outline: 'none', boxSizing: 'border-box',
               }}
             />
           </div>
           <div style={{ flex: '1 1 200px' }}>
-            <label style={{ display: 'block', color: '#64748b', fontSize: '0.78rem', marginBottom: '0.3rem' }}>
+            <label style={{ display: 'block', color: 'var(--fg-3)', fontSize: '0.78rem', marginBottom: '0.3rem' }}>
               Publish Time
             </label>
             <input
@@ -338,8 +335,8 @@ export function SchedulePage() {
               value={formPublishAt}
               onChange={(e) => setFormPublishAt(e.target.value)}
               style={{
-                width: '100%', background: '#0f1117', border: '1px solid #2d3748',
-                color: '#e2e8f0', borderRadius: 6, padding: '0.5rem 0.75rem',
+                width: '100%', background: 'var(--bg)', border: '1px solid var(--line-2)',
+                color: 'var(--fg)', borderRadius: 6, padding: '0.5rem 0.75rem',
                 fontSize: '0.82rem', outline: 'none', boxSizing: 'border-box',
                 colorScheme: 'dark',
               }}
@@ -349,7 +346,7 @@ export function SchedulePage() {
             onClick={handleSchedule}
             disabled={formLoading}
             style={{
-              background: formLoading ? '#374151' : '#6366f1',
+              background: formLoading ? 'var(--line-2)' : 'var(--brand-2)',
               color: '#fff', border: 'none', borderRadius: 6,
               padding: '0.5rem 1.1rem', fontSize: '0.85rem', fontWeight: 600,
               cursor: formLoading ? 'not-allowed' : 'pointer',
@@ -360,10 +357,10 @@ export function SchedulePage() {
           </button>
         </div>
         {formError && (
-          <div style={{ color: '#ef4444', fontSize: '0.8rem', marginTop: '0.6rem' }}>{formError}</div>
+          <div style={{ color: 'var(--bad)', fontSize: '0.8rem', marginTop: '0.6rem' }}>{formError}</div>
         )}
         {formSuccess && (
-          <div style={{ color: '#22c55e', fontSize: '0.8rem', marginTop: '0.6rem' }}>Asset scheduled successfully.</div>
+          <div style={{ color: 'var(--ok)', fontSize: '0.8rem', marginTop: '0.6rem' }}>Asset scheduled successfully.</div>
         )}
       </div>
     </div>

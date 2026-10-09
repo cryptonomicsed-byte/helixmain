@@ -17,15 +17,15 @@ const STYLES = `
 .msg-agent{align-self:flex-start;background:var(--surface);border:1px solid var(--border);padding:.6rem .9rem;border-radius:12px 12px 12px 2px;max-width:75%}
 .msg-text{font-size:.875rem;line-height:1.5;white-space:pre-wrap}
 .msg-meta{font-size:.72rem;color:var(--muted);margin-top:.3rem}
-.gate-warn{color:#f59e0b;font-size:.72rem;margin-top:.2rem}
+.gate-warn{color:var(--warn);font-size:.72rem;margin-top:.2rem}
 .play-input{display:flex;gap:.5rem;padding:1rem;border-top:1px solid var(--border)}
 .play-input input{flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:.5rem .75rem;border-radius:6px;font-size:.875rem}
 .play-input input:focus{outline:none;border-color:var(--accent)}
 .play-input input:disabled{opacity:.5}
 .test-result{display:flex;align-items:flex-start;gap:.5rem;font-size:.82rem;padding:.35rem 0;border-bottom:1px solid var(--border)}
 .test-result:last-child{border-bottom:none}
-.test-pass{color:#22c55e;flex-shrink:0;font-weight:700}
-.test-fail{color:#f87171;flex-shrink:0;font-weight:700}
+.test-pass{color:var(--ok);flex-shrink:0;font-weight:700}
+.test-fail{color:var(--bad);flex-shrink:0;font-weight:700}
 .test-label{color:var(--text);font-weight:500}
 .test-detail{color:var(--muted);font-size:.75rem;margin-top:.15rem;line-height:1.4}
 .sidebar-label{font-size:.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.25rem}
@@ -71,9 +71,9 @@ function Btn({
       style={{
         padding: '.5rem .75rem',
         borderRadius: 6,
-        border: danger ? '1px solid #f87171' : '1px solid var(--border)',
+        border: danger ? '1px solid var(--bad)' : '1px solid var(--border)',
         background: danger ? '#7f1d1d22' : 'var(--surface)',
-        color: danger ? '#f87171' : 'var(--text)',
+        color: danger ? 'var(--bad)' : 'var(--text)',
         cursor: disabled || loading ? 'not-allowed' : 'pointer',
         fontSize: '.82rem',
         fontWeight: 600,
@@ -248,18 +248,18 @@ export function PlaygroundPage() {
   return (
     <div>
       <div style={{ marginBottom: '1.25rem' }}>
-        <h1 style={{ fontSize: '1.4rem', fontWeight: 700, color: '#f1f5f9', margin: 0 }}>
+        <h1 style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--fg)', margin: 0 }}>
           Agent Playground
         </h1>
-        <p style={{ color: '#64748b', fontSize: '0.875rem', marginTop: '0.35rem' }}>
+        <p style={{ color: 'var(--fg-3)', fontSize: '0.875rem', marginTop: '0.35rem' }}>
           Test your agent before going live — inspect routing, gates, and tone.
         </p>
       </div>
 
       {error && (
         <div style={{
-          background: '#7f1d1d22', border: '1px solid #f87171', borderRadius: 6,
-          padding: '.5rem .75rem', color: '#f87171', fontSize: '.82rem', marginBottom: '1rem',
+          background: '#7f1d1d22', border: '1px solid var(--bad)', borderRadius: 6,
+          padding: '.5rem .75rem', color: 'var(--bad)', fontSize: '.82rem', marginBottom: '1rem',
         }}>
           {error}
         </div>
@@ -331,7 +331,7 @@ export function PlaygroundPage() {
             </Btn>
 
             {testResults.length > 0 && (
-              <div style={{ fontSize: '.75rem', color: '#64748b', marginBottom: '.25rem' }}>
+              <div style={{ fontSize: '.75rem', color: 'var(--fg-3)', marginBottom: '.25rem' }}>
                 {passCount}/{testResults.length} passed
               </div>
             )}

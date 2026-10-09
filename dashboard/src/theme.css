@@ -1,0 +1,160 @@
+/* HelixMain dashboard — design system
+   Grounded in docs/ui-master-chart-2026.md: glassmorphism, aurora mesh,
+   bento grid, spring-ish transitions, activity pulse, reduced-motion safe.
+   Zero dependencies — pure CSS. */
+
+:root {
+  color-scheme: dark;   /* native controls, scrollbars + dropdowns render dark */
+  /* surfaces */
+  --bg:        #07080d;
+  --bg-2:      #0b0d16;
+  --surface:   rgba(19, 23, 42, 0.62);
+  --surface-2: rgba(26, 31, 54, 0.78);
+  --line:      rgba(255,255,255,0.07);
+  --line-2:    rgba(255,255,255,0.12);
+
+  /* text */
+  --fg:        #e8ecf6;
+  --fg-2:      #a9b4cc;
+  --fg-3:      #6b7690;
+
+  /* brand + state */
+  --brand:     #818cf8;
+  --brand-2:   #6366f1;
+  --violet:    #a78bfa;
+  --ok:        #34d399;
+  --warn:      #fbbf24;
+  --bad:       #f87171;
+  --info:      #38bdf8;
+
+  /* aliases used by the older pages (previously undefined → unstyled) */
+  --border:    var(--line-2);
+  --text:      var(--fg);
+  --muted:     var(--fg-3);
+  --accent:    var(--brand);
+
+  /* geometry */
+  --r-sm: 10px;
+  --r:    16px;
+  --r-lg: 22px;
+  --pad:  18px;
+
+  /* elevation */
+  --shadow:   0 1px 0 rgba(255,255,255,0.04) inset, 0 18px 48px -24px rgba(0,0,0,0.9);
+  --shadow-lg:0 1px 0 rgba(255,255,255,0.05) inset, 0 40px 90px -40px rgba(0,0,0,1);
+  --glow:     0 0 0 1px rgba(129,140,248,0.25), 0 0 34px -6px rgba(99,102,241,0.55);
+
+  /* motion */
+  --ease: cubic-bezier(.22,.61,.36,1);
+  --spring: cubic-bezier(.34,1.56,.64,1);
+  --t: 200ms;
+}
+
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* ── aurora backdrop ─────────────────────────────────────────── */
+.aurora { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.aurora::before, .aurora::after {
+  content: ''; position: absolute; width: 62vw; height: 62vw; border-radius: 50%;
+  filter: blur(110px); opacity: .30;
+}
+.aurora::before { background: radial-gradient(circle, #6366f1, transparent 62%); top: -22vw; left: -12vw; animation: drift 26s var(--ease) infinite alternate; }
+.aurora::after  { background: radial-gradient(circle, #a78bfa, transparent 62%); bottom: -28vw; right: -14vw; animation: drift 34s var(--ease) infinite alternate-reverse; }
+@keyframes drift { from { transform: translate3d(0,0,0) scale(1); } to { transform: translate3d(4vw,3vw,0) scale(1.12); } }
+
+/* ── glass surfaces ──────────────────────────────────────────── */
+.glass {
+  background: linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.012)), var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  box-shadow: var(--shadow);
+}
+.glass-hover { transition: transform var(--t) var(--ease), border-color var(--t), box-shadow var(--t); }
+.glass-hover:hover { transform: translateY(-2px); border-color: var(--line-2); box-shadow: var(--shadow-lg); }
+
+/* ── bento grid ──────────────────────────────────────────────── */
+.bento { display: grid; grid-template-columns: repeat(12, 1fr); gap: 14px; }
+.col-3{grid-column:span 3}.col-4{grid-column:span 4}.col-6{grid-column:span 6}
+.col-8{grid-column:span 8}.col-12{grid-column:span 12}
+@media (max-width: 1080px){ .col-3,.col-4{grid-column:span 6} .col-8{grid-column:span 12} }
+@media (max-width: 680px){ .bento>*{grid-column:span 12 !important} }
+
+/* ── typography ──────────────────────────────────────────────── */
+.h1 { font-size: 1.45rem; font-weight: 700; letter-spacing: -0.02em; }
+.h2 { font-size: 1.05rem; font-weight: 650; letter-spacing: -0.01em; }
+.sub { color: var(--fg-3); font-size: .78rem; }
+.mono { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; }
+.grad-text { background: linear-gradient(92deg, var(--brand), var(--violet)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
+/* ── stat ────────────────────────────────────────────────────── */
+.stat-val { font-size: 1.9rem; font-weight: 700; letter-spacing: -0.03em; line-height: 1.05; }
+.trend-up { color: var(--ok); } .trend-down { color: var(--bad); }
+
+/* ── pills / badges ──────────────────────────────────────────── */
+.pill { display: inline-flex; align-items: center; gap: .35rem; padding: .2rem .55rem; border-radius: 999px; font-size: .7rem; font-weight: 600; border: 1px solid var(--line-2); color: var(--fg-2); background: rgba(255,255,255,0.03); }
+.pill-ok{color:var(--ok);border-color:rgba(52,211,153,.35);background:rgba(52,211,153,.10)}
+.pill-warn{color:var(--warn);border-color:rgba(251,191,36,.35);background:rgba(251,191,36,.10)}
+.pill-bad{color:var(--bad);border-color:rgba(248,113,113,.35);background:rgba(248,113,113,.10)}
+
+/* ── activity pulse ──────────────────────────────────────────── */
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; background: var(--ok); position: relative; }
+.dot::after { content:''; position:absolute; inset:-4px; border-radius:50%; border:1px solid currentColor; opacity:.5; animation: ping 1.9s var(--ease) infinite; }
+.dot-bad{background:var(--bad);color:var(--bad)} .dot-warn{background:var(--warn);color:var(--warn)}
+@keyframes ping { 0%{transform:scale(.6);opacity:.7} 70%,100%{transform:scale(1.7);opacity:0} }
+
+/* ── buttons ─────────────────────────────────────────────────── */
+.btn { display:inline-flex; align-items:center; gap:.45rem; padding:.5rem .85rem; border-radius:11px; font-size:.82rem; font-weight:600; cursor:pointer; border:1px solid var(--line-2); background:rgba(255,255,255,0.04); color:var(--fg); transition: transform 120ms var(--spring), background var(--t), border-color var(--t), box-shadow var(--t); }
+.btn:hover { background:rgba(255,255,255,0.08); transform: translateY(-1px); }
+.btn:active { transform: translateY(0) scale(.98); }
+.btn-primary { background: linear-gradient(180deg, var(--brand), var(--brand-2)); border-color: transparent; color: #0b0d16; box-shadow: var(--glow); }
+.btn-ghost { background: transparent; }
+
+/* ── progress / meter ────────────────────────────────────────── */
+.meter { height: 8px; border-radius: 999px; background: rgba(255,255,255,0.07); overflow: hidden; }
+.meter>i { display:block; height:100%; border-radius:999px; background: linear-gradient(90deg, var(--brand), var(--violet)); animation: grow 700ms var(--ease) both; }
+@keyframes grow { from { transform: scaleX(0); transform-origin: left; } }
+
+/* ── reveal ──────────────────────────────────────────────────── */
+.reveal { animation: reveal 480ms var(--ease) both; }
+.reveal-1{animation-delay:40ms}.reveal-2{animation-delay:90ms}.reveal-3{animation-delay:140ms}
+.reveal-4{animation-delay:190ms}.reveal-5{animation-delay:240ms}.reveal-6{animation-delay:290ms}
+@keyframes reveal { from { opacity:0; transform: translateY(10px); } }
+
+/* ── scrollbars ──────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,.09); border-radius: 999px; border: 3px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.16); background-clip: content-box; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
+}
+
+/* ── primitives for the migrated pages ───────────────────────── */
+.panel {
+  background: linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.008)), var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  box-shadow: var(--shadow);
+}
+
+/* native dropdown popups are light-on-dark UNLESS the scheme is declared */
+input:not([type=checkbox]):not([type=radio]), select, textarea { color-scheme: dark; }
+select option { background: var(--bg-2); color: var(--fg); }
+
+input:focus-visible, select:focus-visible, textarea:focus-visible,
+button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
