@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useHelixStore } from '../store'
 import { api } from '../api'
 import { CompanyCard } from '../components/CompanyCard'
@@ -165,9 +166,9 @@ export function DashboardPage() {
             {buildStatus?.sha ? <> · running <span className="mono">{buildStatus.sha.slice(0, 7)}</span></> : null}
           </div>
         </div>
-        <a className="btn btn-primary" href="/onboard" style={{ textDecoration: 'none' }}>
+        <Link className="btn btn-primary" to="/onboard" style={{ textDecoration: 'none' }}>
           <Icon name="onboard" size={15} /> Onboard a Business
-        </a>
+        </Link>
       </div>
 
       {/* Bento metrics */}
@@ -222,9 +223,9 @@ export function DashboardPage() {
             </div>
             <div style={{ fontWeight: 650, fontSize: '1.05rem' }}>No companies yet</div>
             <div className="sub" style={{ maxWidth: 340 }}>Onboard your first business to extract its DNA card and spawn its agents.</div>
-            <a className="btn btn-primary" href="/onboard" style={{ marginTop: 8, textDecoration: 'none' }}>
+            <Link className="btn btn-primary" to="/onboard" style={{ marginTop: 8, textDecoration: 'none' }}>
               <Icon name="onboard" size={15} /> Onboard a Business
-            </a>
+            </Link>
           </div>
         ) : (
           <div className="bento">

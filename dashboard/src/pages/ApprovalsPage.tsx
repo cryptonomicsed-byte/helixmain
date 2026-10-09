@@ -143,9 +143,10 @@ export function ApprovalsPage() {
       setEnrollMsg('Passkey enrolled on this device — you can now approve.')
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
+      const diag = `[secure=${window.isSecureContext} origin=${location.origin} pk=${typeof (window as any).PublicKeyCredential !== 'undefined'}]`
       setEnrollMsg(/40[34]/.test(msg)
         ? 'Enrollment is closed right now (the /setup endpoint is deliberately not published). Ask the operator to open it for enrollment.'
-        : `Enroll failed: ${msg}`)
+        : `Enroll failed: ${msg} ${diag}`)
     } finally { setEnrolling(false) }
   }
 
@@ -177,6 +178,11 @@ export function ApprovalsPage() {
         <div>
           <div style={{ fontWeight: 600, fontSize: '.875rem' }}>Approver passkey</div>
           <div className="sub">WebAuthn is required to approve. Enroll this device once.</div>
+          <div className="mono" style={{ fontSize: '.66rem', color: 'var(--fg-3)', marginTop: 4 }}>
+            secureContext={String(typeof window !== 'undefined' && window.isSecureContext)}
+            {' · '}origin={typeof location !== 'undefined' ? location.origin : '?'}
+            {' · '}webauthn={String(typeof window !== 'undefined' && typeof (window as any).PublicKeyCredential !== 'undefined')}
+          </div>
         </div>
         <button className="btn" disabled={enrolling} onClick={enroll}>
           <Icon name="check" size={14} /> {enrolling ? 'Enrolling…' : 'Enroll this device'}

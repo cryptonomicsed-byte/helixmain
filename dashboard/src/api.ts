@@ -198,10 +198,49 @@ export interface PlaygroundSession {
   testResults: TestResult[]
 }
 
+function cardField(value: unknown, conf: number, inferred = false): CardField {
+  const s = typeof value === 'string' ? value.trim() : ''
+  return { value: s || null, confidence: conf, source: 'extractor', inferred }
+}
+
+/** The API returns a camelCase ExtractedCard (organizationId, identity.name, …);
+ *  the UI's BusinessCard is a flat CardField shape. Normalise in ONE place so
+ *  every page consumes the same object — otherwise the review form renders empty
+ *  and navigation targets `/company/undefined`. */
+export function normalizeCard(raw: any): BusinessCard {
+  const identity = raw?.identity ?? {}
+  const voice = raw?.voice ?? {}
+  const ops = raw?.operations ?? {}
+  const prov = raw?.field_provenance ?? {}
+  const conf = (k: string) => (typeof prov?.[k]?.confidence === 'number' ? prov[k].confidence : 0.5)
+  const inf = (k: string) => Boolean(prov?.[k]?.inferred)
+  const offerings = Array.isArray(raw?.offerings) ? raw.offerings : []
+  return {
+    id: raw?.id ?? '',
+    version: raw?.version ?? 1,
+    org_id: raw?.organizationId ?? raw?.org_id ?? '',
+    name:    cardField(identity.name, conf('identity.name'), inf('identity.name')),
+    tagline: cardField(identity.tagline, conf('identity.tagline'), inf('identity.tagline')),
+    phone:   cardField(identity.phone, conf('identity.phone'), inf('identity.phone')),
+    address: cardField(identity.location, conf('identity.location'), inf('identity.location')),
+    website: cardField(identity.website, conf('identity.website'), inf('identity.website')),
+    hours:   cardField(ops.hours, conf('operations.hours'), inf('operations.hours')),
+    offerings: { items: offerings.map((o: any) => o?.name).filter(Boolean) },
+    specials: Array.isArray(raw?.specials) ? raw.specials : [],
+    socials: identity.socials ?? {},
+    voice_logo: { voice: voice.personality ?? '' },
+    policy: {
+      donts: Array.isArray(voice.donts) ? voice.donts : [],
+      human_confirm: Array.isArray(raw?.policy_donts) ? raw.policy_donts : [],
+    },
+    updated_at: raw?.createdAt ?? raw?.updated_at,
+  }
+}
+
 export const api = {
   // Extraction & compilation
-  extract: (url: string, orgId: string) =>
-    post<BusinessCard>('/extract', { url, orgId }),
+  extract: async (url: string, orgId: string) =>
+    normalizeCard(await post<any>('/extract', { url, orgId })),
 
   compile: (cardId: string, companyId: string) =>
     post<CompileResult>('/compile', { cardId, companyId }),
@@ -228,7 +267,7 @@ export const api = {
   listCompanies: () => get<Company[]>('/companies'),
 
   // Cards
-  getCard: (cardId: string) => get<BusinessCard>(`/cards/${cardId}`),
+  getCard: async (cardId: string) => normalizeCard(await get<any>(`/cards/${cardId}`)),
 
   // SparkGatekeeper (proxied at /gk → 127.0.0.1:9100)
   // The gatekeeper's real contract: GET /held, POST /held/:id/deny,

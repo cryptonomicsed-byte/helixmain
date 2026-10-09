@@ -206,6 +206,14 @@ app.post("/extract", async (req, reply) => {
     await ensureDirs();
     const cardFile = path.join(CARDS, `${card.id}.json`);
     await fs.writeFile(cardFile, JSON.stringify(card, null, 2));
+    // Also persist under the company dir so GET /cards/<orgId> (and the company
+    // page, which keys off the org id) can find it. Without this the onboard
+    // flow lands on a company page that 404s.
+    try {
+      const companyDir = path.join(HELIX_COMPANIES, body.orgId);
+      await fs.mkdir(companyDir, { recursive: true });
+      await fs.writeFile(path.join(companyDir, "card.json"), JSON.stringify(card, null, 2));
+    } catch { /* non-fatal — card is still saved by card id */ }
     return reply.code(200).send(card);
   } catch (e) {
     if (usageEntry) await refundCredits(usageEntry.id).catch(() => {});

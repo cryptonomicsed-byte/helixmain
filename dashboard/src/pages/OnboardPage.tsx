@@ -128,13 +128,14 @@ export function OnboardPage() {
         <form onSubmit={handleExtract}>
           <div className="glass" style={{ background: 'var(--surface)', borderRadius: 12, padding: '1.5rem', border: '1px solid var(--line-2)' }}>
             <div style={{ marginBottom: '1rem' }}>
-              <label style={labelStyle}>Business Website URL *</label>
+              <label style={labelStyle}>Business website or brand name *</label>
               <input
                 style={inputStyle}
-                type="url"
+                type="text"
+                inputMode="url"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                placeholder="https://yourbusiness.com"
+                placeholder="yourbusiness.com — or just a brand name"
                 required
                 disabled={phase === 'extracting'}
               />
