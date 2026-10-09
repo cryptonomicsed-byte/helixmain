@@ -34,6 +34,7 @@ export interface Lead {
   source: "apollo" | "hunter" | "places" | "manual" | "osm";
   status: LeadStatus;
   score: number;              // 0-100
+  tier?: "hot" | "warm" | "cold" | "disqualified";
   signals: string[];          // qualification signals
   notes: string[];
   activityLog: ActivityEntry[];
@@ -247,6 +248,35 @@ export async function huntLeadsHunter(
 // Lead hunting — OpenStreetMap / Overpass API
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// OSM industry → Overpass tag map
+// ---------------------------------------------------------------------------
+
+const OSM_TAG_MAP: Record<string, string[]> = {
+  barber:      ["shop=hairdresser", "shop=barber"],
+  hair:        ["shop=hairdresser"],
+  restaurant:  ["amenity=restaurant", "amenity=fast_food"],
+  cafe:        ["amenity=cafe"],
+  coffee:      ["amenity=cafe"],
+  pizza:       ["amenity=restaurant", "amenity=fast_food"],
+  bar:         ["amenity=bar", "amenity=pub"],
+  gym:         ["leisure=fitness_centre", "amenity=gym"],
+  dentist:     ["amenity=dentist"],
+  doctor:      ["amenity=doctors"],
+  pharmacy:    ["amenity=pharmacy"],
+  hotel:       ["tourism=hotel"],
+  shop:        ["shop=*"],
+  retail:      ["shop=*"],
+  salon:       ["shop=beauty"],
+  nail:        ["shop=nail_salon"],
+  laundry:     ["shop=laundry", "shop=dry_cleaning"],
+  auto:        ["shop=car_repair", "amenity=car_wash"],
+  plumber:     ["craft=plumber"],
+  electrician: ["craft=electrician"],
+  florist:     ["shop=florist"],
+  bakery:      ["shop=bakery"],
+};
+
 export interface OsmFilters {
   lat: number;
   lng: number;
@@ -255,18 +285,59 @@ export interface OsmFilters {
   companyId: string;
 }
 
+async function scoreDigitalFootprint(website: string): Promise<number> {
+  try {
+    const headRes = await fetch(website, {
+      method: "HEAD",
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!headRes.ok) return 30;
+    try {
+      const getRes = await fetch(website, {
+        method: "GET",
+        signal: AbortSignal.timeout(8000),
+        headers: { "User-Agent": "HelixMain/1.0" },
+      });
+      if (!getRes.ok) return 60;
+      const html = await getRes.text();
+      const hasSocial =
+        /instagram\.com|facebook\.com|twitter\.com|x\.com|tiktok\.com|linkedin\.com/i.test(html);
+      return hasSocial ? 100 : 60;
+    } catch {
+      return 60; // HEAD ok but GET failed — site is live, just no social detected
+    }
+  } catch {
+    return 30;
+  }
+}
+
 export async function huntLeadsOSM(filters: OsmFilters): Promise<Lead[]> {
   const radius = filters.radiusMeters ?? 5000;
   const { lat, lng, industry, companyId } = filters;
 
-  const query = `[out:json][timeout:25];
-(
-  node["amenity"~"${industry}",i](around:${radius},${lat},${lng});
-  way["amenity"~"${industry}",i](around:${radius},${lat},${lng});
-  node["shop"~"${industry}",i](around:${radius},${lat},${lng});
-  node["name"~"${industry}",i](around:${radius},${lat},${lng});
-);
-out body;`;
+  // Build Overpass union clauses from tag map, or fall back to name search
+  const key = industry.toLowerCase();
+  const tags = OSM_TAG_MAP[key] ?? [];
+
+  let unionClauses: string;
+  if (tags.length > 0) {
+    const lines: string[] = [];
+    for (const tag of tags) {
+      const [k, v] = tag.split("=");
+      const valueClause = v === "*" ? "" : `="${v}"`;
+      lines.push(`  node["${k}"${valueClause}](around:${radius},${lat},${lng});`);
+      lines.push(`  way["${k}"${valueClause}](around:${radius},${lat},${lng});`);
+    }
+    unionClauses = lines.join("\n");
+  } else {
+    // Fallback: name search
+    unionClauses = [
+      `  node["name"~"${industry}",i](around:${radius},${lat},${lng});`,
+      `  way["name"~"${industry}",i](around:${radius},${lat},${lng});`,
+    ].join("\n");
+  }
+
+  const query = `[out:json][timeout:25];\n(\n${unionClauses}\n);\nout body;`;
 
   let elements: any[] = [];
   try {
@@ -287,73 +358,49 @@ out body;`;
     return [];
   }
 
-  const leads: Lead[] = [];
+  // Build stub leads first, then score footprints in parallel
+  type StubElement = {
+    el: any;
+    name: string;
+    website: string | undefined;
+    phone: string | undefined;
+    email: string;
+  };
 
-  for (const el of elements) {
+  const stubs: StubElement[] = elements.map((el: any) => {
     const tags = el.tags ?? {};
-    const name: string = tags.name ?? `OSM element ${el.id}`;
-    const website: string | undefined =
-      tags["contact:website"] ?? tags.website ?? undefined;
-    const phone: string | undefined =
-      tags["contact:phone"] ?? tags.phone ?? undefined;
-    const email: string =
-      tags["contact:email"] ?? tags.email ?? "";
+    return {
+      el,
+      name:    tags.name ?? `OSM element ${el.id}` as string,
+      website: tags["contact:website"] ?? tags.website ?? undefined,
+      phone:   tags["contact:phone"]   ?? tags.phone   ?? undefined,
+      email:   tags["contact:email"]   ?? tags.email   ?? "",
+    };
+  });
 
-    // Compute digital footprint score
-    let digitalFootprintScore = 0;
-    const signals: string[] = [];
+  // Score all footprints in parallel
+  const scoreResults = await Promise.allSettled(
+    stubs.map((s) => s.website ? scoreDigitalFootprint(s.website) : Promise.resolve(0)),
+  );
 
-    if (website) {
-      try {
-        const headRes = await fetch(website, {
-          method: "HEAD",
-          signal: AbortSignal.timeout(5000),
-        });
-        if (headRes.ok) {
-          // Try to detect social links in HTML
-          let hasSocial = false;
-          try {
-            const getRes = await fetch(website, {
-              method: "GET",
-              signal: AbortSignal.timeout(8000),
-              headers: { "User-Agent": "HelixMain/1.0" },
-            });
-            if (getRes.ok) {
-              const html = await getRes.text();
-              hasSocial =
-                /instagram\.com|facebook\.com|twitter\.com|x\.com|tiktok\.com|linkedin\.com/i.test(
-                  html,
-                );
-            }
-          } catch {
-            // GET failed after HEAD succeeded — treat as live no social
-          }
-          digitalFootprintScore = hasSocial ? 100 : 60;
-        } else {
-          digitalFootprintScore = 30;
-        }
-      } catch {
-        digitalFootprintScore = 30;
-      }
-    } else {
-      digitalFootprintScore = 0;
-    }
-
-    signals.push(`digitalFootprintScore:${digitalFootprintScore}`);
+  const leads: Lead[] = stubs.map((s, i) => {
+    const scoreResult = scoreResults[i];
+    const digitalFootprintScore =
+      scoreResult.status === "fulfilled" ? scoreResult.value : 0;
 
     const lead: Lead = {
       id: randomUUID(),
       companyId,
-      name,
-      email,
-      phone,
-      company: name,
-      website,
-      source: "osm",
-      status: "new",
-      score: 0,
-      signals,
-      notes: [],
+      name:    s.name,
+      email:   s.email,
+      phone:   s.phone,
+      company: s.name,
+      website: s.website,
+      source:  "osm",
+      status:  "new",
+      score:   0,
+      signals: [`digitalFootprintScore:${digitalFootprintScore}`],
+      notes:   [],
       activityLog: [
         makeActivity(
           "created",
@@ -366,8 +413,8 @@ out body;`;
 
     leadStore.set(lead.id, lead);
     saveLeadStore().catch(() => {});
-    leads.push(lead);
-  }
+    return lead;
+  });
 
   return leads;
 }
@@ -401,10 +448,16 @@ Return JSON: {"score": <number>, "signals": [<string>,...], "tier": "hot"|"warm"
     console.warn("[salesPipeline] qualifyLead JSON parse failed:", resp.text.slice(0, 200));
   }
 
+  const VALID_TIERS = ["hot", "warm", "cold", "disqualified"] as const;
+  type Tier = typeof VALID_TIERS[number];
+
   const updated: Lead = {
     ...lead,
     score: typeof parsed.score === "number" ? parsed.score : lead.score,
     signals: Array.isArray(parsed.signals) ? parsed.signals : lead.signals,
+    tier: (VALID_TIERS as readonly string[]).includes(parsed.tier ?? "")
+      ? (parsed.tier as Tier)
+      : lead.tier,
     updatedAt: now(),
     activityLog: [
       ...lead.activityLog,
@@ -421,6 +474,43 @@ Return JSON: {"score": <number>, "signals": [<string>,...], "tier": "hot"|"warm"
 }
 
 // ---------------------------------------------------------------------------
+// Lead contact enrichment — crawl website for mailto/tel if email is empty
+// ---------------------------------------------------------------------------
+
+export async function enrichLeadContact(lead: Lead): Promise<Lead> {
+  if (lead.email) return lead;
+  if (!lead.website) return lead;
+
+  let html = "";
+  try {
+    const res = await fetch(lead.website, {
+      method: "GET",
+      signal: AbortSignal.timeout(8000),
+      headers: { "User-Agent": "HelixMain/1.0" },
+    });
+    if (!res.ok) return lead;
+    html = await res.text();
+  } catch {
+    return lead;
+  }
+
+  const emailMatch = html.match(/mailto:([^\s"'?><]+)/i);
+  const telMatch   = html.match(/tel:([+\d\s\-().]{7,20})/i);
+
+  if (!emailMatch && !telMatch) return lead;
+
+  const updated: Lead = {
+    ...lead,
+    email: emailMatch ? emailMatch[1].toLowerCase() : lead.email,
+    phone: telMatch   ? telMatch[1].trim()          : lead.phone,
+    updatedAt: now(),
+  };
+  leadStore.set(updated.id, updated);
+  saveLeadStore().catch(() => {});
+  return updated;
+}
+
+// ---------------------------------------------------------------------------
 // Closer portfolio — generate personalized outreach draft
 // ---------------------------------------------------------------------------
 
@@ -428,6 +518,8 @@ export async function generateOutreach(
   lead: Lead,
   card: any,
 ): Promise<OutreachDraft> {
+  // Enrich contact info from website if email is missing
+  lead = await enrichLeadContact(lead);
   const name        = card?.identity?.name ?? "the business";
   const pitch       = card?.identity?.elevator_pitch ?? "";
   const tone        = card?.voice?.tone ?? "professional";

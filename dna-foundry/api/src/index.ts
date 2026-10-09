@@ -563,26 +563,36 @@ app.post("/sales/hunt", async (req, reply) => {
 // POST /sales/hunt/gps — OSM/Overpass lead hunting by GPS coordinates
 app.post("/sales/hunt/gps", async (req, reply) => {
   const body = (req.body ?? {}) as {
-    lat?: number;
-    lng?: number;
-    industry?: string;
-    radiusMeters?: number;
+    lat?: unknown;
+    lng?: unknown;
+    industry?: unknown;
+    radiusMeters?: unknown;
     companyId?: string;
   };
-  if (typeof body.lat !== "number") return reply.code(400).send({ ok: false, error: "lat required" });
-  if (typeof body.lng !== "number") return reply.code(400).send({ ok: false, error: "lng required" });
-  if (!body.industry)   return reply.code(400).send({ ok: false, error: "industry required" });
-  if (!body.companyId)  return reply.code(400).send({ ok: false, error: "companyId required" });
+
+  if (typeof body.lat !== "number")
+    return reply.code(400).send({ ok: false, error: "lat must be a number" });
+  if (typeof body.lng !== "number")
+    return reply.code(400).send({ ok: false, error: "lng must be a number" });
+  if (typeof body.industry !== "string" || body.industry.trim() === "")
+    return reply.code(400).send({ ok: false, error: "industry must be a non-empty string" });
+  if (!body.companyId)
+    return reply.code(400).send({ ok: false, error: "companyId required" });
+
+  const radiusMeters =
+    typeof body.radiusMeters === "number" && body.radiusMeters > 0
+      ? body.radiusMeters
+      : 5000;
 
   try {
     const leads = await huntLeadsOSM({
-      lat: body.lat,
-      lng: body.lng,
-      industry: body.industry,
-      radiusMeters: body.radiusMeters,
-      companyId: body.companyId,
+      lat:          body.lat,
+      lng:          body.lng,
+      industry:     body.industry.trim(),
+      radiusMeters,
+      companyId:    body.companyId,
     });
-    return reply.code(200).send({ ok: true, leads });
+    return reply.code(200).send({ ok: true, leads, count: leads.length });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return reply.code(500).send({ ok: false, error: msg });

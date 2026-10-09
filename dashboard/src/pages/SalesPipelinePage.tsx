@@ -1,0 +1,514 @@
+import { useState, useEffect, useCallback } from 'react'
+import { useHelixStore } from '../store'
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+interface ActivityEntry {
+  timestamp: string
+  type: string
+  detail: string
+}
+
+interface LeadRow {
+  id: string
+  name: string
+  company?: string
+  website?: string
+  phone?: string
+  email: string
+  score: number
+  tier?: 'hot' | 'warm' | 'cold' | 'disqualified'
+  status: 'new' | 'contacted' | 'qualified' | 'converted' | 'lost'
+  signals: string[]
+  activityLog: ActivityEntry[]
+}
+
+interface OutreachDraft {
+  leadId: string
+  subjectLine: string
+  emailBody: string
+  closingScript: string
+  objectionRebuttals: Record<string, string>
+  followUpSequence: string[]
+  holdQueueId?: string
+}
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+const COLUMNS: { key: LeadRow['status']; label: string; color: string }[] = [
+  { key: 'new',       label: 'New',       color: '#63b3ed' },
+  { key: 'contacted', label: 'Contacted', color: '#f6ad55' },
+  { key: 'qualified', label: 'Qualified', color: '#9f7aea' },
+  { key: 'converted', label: 'Converted', color: '#68d391' },
+  { key: 'lost',      label: 'Lost',      color: '#718096' },
+]
+
+const TIER_MAP: Record<string, { icon: string; color: string }> = {
+  hot:          { icon: '🔥', color: '#fc8181' },
+  warm:         { icon: '♨️',  color: '#f6ad55' },
+  cold:         { icon: '🧊', color: '#63b3ed' },
+  disqualified: { icon: '✗',  color: '#718096' },
+}
+
+// ---------------------------------------------------------------------------
+// Sub-components
+// ---------------------------------------------------------------------------
+
+function TierBadge({ tier }: { tier?: string }) {
+  if (!tier) return null
+  const t = TIER_MAP[tier]
+  if (!t) return null
+  return (
+    <span style={{ color: t.color, fontSize: '0.78rem', fontWeight: 600 }}>
+      {t.icon} {tier}
+    </span>
+  )
+}
+
+function ScoreBadge({ score }: { score: number }) {
+  const bg = score >= 70 ? '#22543d' : score >= 40 ? '#744210' : '#2d3748'
+  const color = score >= 70 ? '#68d391' : score >= 40 ? '#f6ad55' : '#a0aec0'
+  return (
+    <span style={{
+      background: bg, color, borderRadius: 4,
+      padding: '1px 6px', fontSize: '0.75rem', fontWeight: 700,
+    }}>
+      {score}
+    </span>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Side panel
+// ---------------------------------------------------------------------------
+
+interface PanelProps {
+  lead: LeadRow
+  companyId: string
+  cardId: string
+  onClose: () => void
+  onLeadUpdate: (updated: LeadRow) => void
+}
+
+function LeadPanel({ lead, companyId, cardId, onClose, onLeadUpdate }: PanelProps) {
+  const [outreach, setOutreach]   = useState<OutreachDraft | null>(null)
+  const [outLoading, setOutLoading] = useState(false)
+  const [submitLoading, setSubmitLoading] = useState(false)
+  const [holdId, setHoldId]       = useState<string | null>(null)
+  const [activity, setActivity]   = useState<ActivityEntry[]>(lead.activityLog ?? [])
+
+  useEffect(() => {
+    // Refresh activity log from server
+    fetch(`/api/sales/leads/${lead.id}/activity`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((d: { activityLog?: ActivityEntry[] } | null) => {
+        if (d?.activityLog) setActivity(d.activityLog)
+      })
+      .catch(() => {/* non-fatal */})
+  }, [lead.id])
+
+  async function generateOutreach() {
+    setOutLoading(true)
+    try {
+      const res = await fetch(`/api/sales/outreach/${lead.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ companyId, cardId }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = await res.json() as { draft: OutreachDraft }
+      setOutreach(data.draft)
+    } catch (e) {
+      console.warn('[LeadPanel] outreach error:', e)
+    } finally {
+      setOutLoading(false)
+    }
+  }
+
+  async function submitForApproval() {
+    if (!outreach) return
+    setSubmitLoading(true)
+    try {
+      const res = await fetch(`/api/sales/submit/${lead.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ companyId, draft: outreach }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = await res.json() as { holdQueueId?: string }
+      setHoldId(data.holdQueueId ?? 'submitted')
+      onLeadUpdate({ ...lead, status: 'contacted' })
+    } catch (e) {
+      console.warn('[LeadPanel] submit error:', e)
+    } finally {
+      setSubmitLoading(false)
+    }
+  }
+
+  return (
+    <div style={{
+      position: 'fixed', top: 0, right: 0, bottom: 0, width: 420,
+      background: '#1a1f2e', borderLeft: '1px solid #2d3748',
+      zIndex: 100, display: 'flex', flexDirection: 'column',
+      boxShadow: '-4px 0 24px #00000066',
+    }}>
+      {/* Header */}
+      <div style={{
+        padding: '1rem 1.25rem', borderBottom: '1px solid #2d3748',
+        display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
+      }}>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: '1rem', color: '#e2e8f0' }}>{lead.name}</div>
+          {lead.company && <div style={{ fontSize: '0.8rem', color: '#718096', marginTop: 2 }}>{lead.company}</div>}
+        </div>
+        <button onClick={onClose} style={{
+          background: 'none', border: 'none', color: '#718096',
+          fontSize: '1.2rem', cursor: 'pointer', padding: '0 0.25rem',
+        }}>✕</button>
+      </div>
+
+      {/* Body — scrollable */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '1rem 1.25rem' }}>
+        {/* Score + tier */}
+        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', marginBottom: '1rem' }}>
+          <ScoreBadge score={lead.score} />
+          <TierBadge tier={lead.tier} />
+          <span style={{ fontSize: '0.78rem', color: '#718096', marginLeft: 'auto' }}>
+            {lead.status}
+          </span>
+        </div>
+
+        {/* Website */}
+        {lead.website && (
+          <div style={{ marginBottom: '0.75rem' }}>
+            <span style={{ fontSize: '0.75rem', color: '#718096', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Website</span>
+            <div style={{ marginTop: 2 }}>
+              <a href={lead.website} target="_blank" rel="noopener noreferrer"
+                style={{ color: '#4299e1', fontSize: '0.875rem', wordBreak: 'break-all' }}>
+                {lead.website}
+              </a>
+            </div>
+          </div>
+        )}
+
+        {/* Activity log */}
+        <div style={{ marginBottom: '1rem' }}>
+          <div style={{
+            fontSize: '0.75rem', color: '#718096', textTransform: 'uppercase',
+            letterSpacing: '0.04em', marginBottom: '0.5rem',
+          }}>
+            Activity Log
+          </div>
+          <div style={{
+            maxHeight: 180, overflowY: 'auto', background: '#0f1117',
+            borderRadius: 6, border: '1px solid #2d3748', padding: '0.5rem 0.75rem',
+          }}>
+            {activity.length === 0 && (
+              <div style={{ color: '#718096', fontSize: '0.8rem' }}>No activity yet.</div>
+            )}
+            {activity.map((a, i) => (
+              <div key={i} style={{
+                paddingBottom: '0.4rem', marginBottom: '0.4rem',
+                borderBottom: i < activity.length - 1 ? '1px solid #2d3748' : undefined,
+              }}>
+                <div style={{ fontSize: '0.7rem', color: '#718096' }}>
+                  {new Date(a.timestamp).toLocaleString()}
+                </div>
+                <div style={{ fontSize: '0.8rem', color: '#a0aec0', marginTop: 1 }}>{a.detail}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Outreach draft */}
+        {outreach && (
+          <div style={{
+            background: '#0f1117', border: '1px solid #2d3748',
+            borderRadius: 6, padding: '0.75rem', marginBottom: '1rem',
+          }}>
+            <div style={{ fontSize: '0.75rem', color: '#718096', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              Outreach Draft
+            </div>
+            <div style={{ fontSize: '0.82rem', color: '#9f7aea', fontWeight: 600, marginBottom: '0.35rem' }}>
+              {outreach.subjectLine}
+            </div>
+            <div style={{ fontSize: '0.8rem', color: '#a0aec0', whiteSpace: 'pre-wrap', maxHeight: 160, overflowY: 'auto' }}>
+              {outreach.emailBody}
+            </div>
+          </div>
+        )}
+
+        {holdId && (
+          <div style={{
+            background: '#22543d22', border: '1px solid #22543d',
+            borderRadius: 6, padding: '0.6rem 0.75rem', marginBottom: '1rem',
+            fontSize: '0.82rem', color: '#68d391',
+          }}>
+            Submitted to hold queue: <strong>{holdId}</strong>
+          </div>
+        )}
+      </div>
+
+      {/* Footer actions */}
+      <div style={{
+        padding: '1rem 1.25rem', borderTop: '1px solid #2d3748',
+        display: 'flex', gap: '0.75rem', flexWrap: 'wrap',
+      }}>
+        <button
+          onClick={generateOutreach}
+          disabled={outLoading}
+          style={{
+            flex: 1, background: outLoading ? '#2d3748' : '#2c5282',
+            color: '#bee3f8', border: 'none', borderRadius: 6,
+            padding: '0.5rem', fontSize: '0.85rem', cursor: outLoading ? 'not-allowed' : 'pointer',
+          }}
+        >
+          {outLoading ? 'Generating…' : 'Generate Outreach'}
+        </button>
+        {outreach && !holdId && (
+          <button
+            onClick={submitForApproval}
+            disabled={submitLoading}
+            style={{
+              flex: 1, background: submitLoading ? '#2d3748' : '#276749',
+              color: '#9ae6b4', border: 'none', borderRadius: 6,
+              padding: '0.5rem', fontSize: '0.85rem', cursor: submitLoading ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {submitLoading ? 'Submitting…' : 'Submit for Approval'}
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Kanban column
+// ---------------------------------------------------------------------------
+
+interface ColumnProps {
+  col: typeof COLUMNS[number]
+  leads: LeadRow[]
+  onView: (lead: LeadRow) => void
+  onMove: (leadId: string, status: LeadRow['status']) => void
+}
+
+function KanbanColumn({ col, leads, onView, onMove }: ColumnProps) {
+  const nextStatuses = COLUMNS
+    .filter((c) => c.key !== col.key)
+    .map((c) => c)
+
+  return (
+    <div style={{
+      flex: '1 1 0', minWidth: 180, background: '#1a1f2e',
+      border: '1px solid #2d3748', borderRadius: 10,
+      display: 'flex', flexDirection: 'column', overflow: 'hidden',
+    }}>
+      {/* Column header */}
+      <div style={{
+        padding: '0.65rem 0.85rem', background: '#0f1117',
+        borderBottom: '1px solid #2d3748', display: 'flex',
+        alignItems: 'center', gap: '0.4rem',
+      }}>
+        <span style={{
+          width: 8, height: 8, borderRadius: '50%',
+          display: 'inline-block', background: col.color, flexShrink: 0,
+        }} />
+        <span style={{ fontWeight: 600, fontSize: '0.85rem', color: '#e2e8f0' }}>{col.label}</span>
+        <span style={{
+          marginLeft: 'auto', background: '#2d3748', color: '#718096',
+          borderRadius: 10, padding: '1px 7px', fontSize: '0.72rem',
+        }}>
+          {leads.length}
+        </span>
+      </div>
+
+      {/* Cards */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '0.5rem' }}>
+        {leads.map((lead) => (
+          <div key={lead.id} style={{
+            background: '#0f1117', border: '1px solid #2d3748',
+            borderRadius: 8, padding: '0.65rem 0.75rem', marginBottom: '0.5rem',
+          }}>
+            <div style={{ fontWeight: 600, fontSize: '0.875rem', color: '#e2e8f0', marginBottom: 2 }}>
+              {lead.name}
+            </div>
+            {lead.company && (
+              <div style={{ fontSize: '0.78rem', color: '#718096', marginBottom: '0.4rem' }}>
+                {lead.company}
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
+              <ScoreBadge score={lead.score} />
+              <TierBadge tier={lead.tier} />
+            </div>
+
+            {/* Move + View actions */}
+            <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginTop: '0.3rem' }}>
+              <button
+                onClick={() => onView(lead)}
+                style={{
+                  background: '#2d3748', color: '#a0aec0',
+                  border: 'none', borderRadius: 4, padding: '0.25rem 0.6rem',
+                  fontSize: '0.75rem', cursor: 'pointer',
+                }}
+              >
+                View
+              </button>
+              <div style={{ position: 'relative' }}>
+                <select
+                  defaultValue=""
+                  onChange={(e) => {
+                    if (e.target.value) onMove(lead.id, e.target.value as LeadRow['status'])
+                    e.target.value = ''
+                  }}
+                  style={{
+                    background: '#1a1f2e', color: '#718096',
+                    border: '1px solid #2d3748', borderRadius: 4,
+                    padding: '0.2rem 0.4rem', fontSize: '0.72rem', cursor: 'pointer',
+                  }}
+                >
+                  <option value="" disabled>→ Move</option>
+                  {nextStatuses.map((s) => (
+                    <option key={s.key} value={s.key}>→ {s.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+        ))}
+        {leads.length === 0 && (
+          <div style={{ color: '#4a5568', fontSize: '0.78rem', textAlign: 'center', padding: '1rem 0' }}>
+            Empty
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------
+
+export function SalesPipelinePage() {
+  const { currentCompany } = useHelixStore()
+  const [leads, setLeads]         = useState<LeadRow[]>([])
+  const [loading, setLoading]     = useState(false)
+  const [panelLead, setPanelLead] = useState<LeadRow | null>(null)
+
+  const loadLeads = useCallback(async (companyId: string) => {
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/sales/leads/${companyId}`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = await res.json() as { leads: LeadRow[] }
+      setLeads(data.leads ?? [])
+    } catch (e) {
+      console.warn('[SalesPipelinePage] load error:', e)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (currentCompany) loadLeads(currentCompany.id)
+    else setLeads([])
+  }, [currentCompany, loadLeads])
+
+  async function handleMove(leadId: string, status: LeadRow['status']) {
+    try {
+      const res = await fetch(`/api/sales/leads/${leadId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = await res.json() as { lead: LeadRow }
+      setLeads((prev) => prev.map((l) => l.id === leadId ? data.lead : l))
+      if (panelLead?.id === leadId) setPanelLead(data.lead)
+    } catch (e) {
+      console.warn('[SalesPipelinePage] move error:', e)
+    }
+  }
+
+  function handleLeadUpdate(updated: LeadRow) {
+    setLeads((prev) => prev.map((l) => l.id === updated.id ? updated : l))
+    if (panelLead?.id === updated.id) setPanelLead(updated)
+  }
+
+  if (!currentCompany) {
+    return (
+      <div style={{ color: '#718096', padding: '2rem', textAlign: 'center' }}>
+        Select a company from the header to view the pipeline.
+      </div>
+    )
+  }
+
+  const byStatus = (status: LeadRow['status']) =>
+    leads.filter((l) => l.status === status)
+
+  return (
+    <div style={{ color: '#e2e8f0', height: '100%' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+        <h1 style={{ fontSize: '1.4rem', fontWeight: 700, color: '#e2e8f0', margin: 0 }}>
+          Sales Pipeline
+        </h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <span style={{ fontSize: '0.8rem', color: '#718096' }}>
+            {leads.length} total leads
+          </span>
+          <button
+            onClick={() => loadLeads(currentCompany.id)}
+            disabled={loading}
+            style={{
+              background: '#2d3748', color: '#a0aec0', border: 'none',
+              borderRadius: 6, padding: '0.35rem 0.85rem', fontSize: '0.8rem',
+              cursor: loading ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {loading ? 'Loading…' : '↺ Refresh'}
+          </button>
+        </div>
+      </div>
+
+      {/* Kanban board */}
+      <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start', overflowX: 'auto', paddingBottom: '1rem' }}>
+        {COLUMNS.map((col) => (
+          <KanbanColumn
+            key={col.key}
+            col={col}
+            leads={byStatus(col.key)}
+            onView={setPanelLead}
+            onMove={handleMove}
+          />
+        ))}
+      </div>
+
+      {/* Side panel */}
+      {panelLead && (
+        <>
+          {/* Backdrop */}
+          <div
+            onClick={() => setPanelLead(null)}
+            style={{
+              position: 'fixed', inset: 0, background: '#00000066', zIndex: 99,
+            }}
+          />
+          <LeadPanel
+            lead={panelLead}
+            companyId={currentCompany.id}
+            cardId={currentCompany.id}
+            onClose={() => setPanelLead(null)}
+            onLeadUpdate={handleLeadUpdate}
+          />
+        </>
+      )}
+    </div>
+  )
+}

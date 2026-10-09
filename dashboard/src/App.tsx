@@ -1,11 +1,14 @@
 import { Routes, Route } from 'react-router-dom'
 import { Layout } from './components/Layout'
-import { DashboardPage }  from './pages/DashboardPage'
-import { OnboardPage }    from './pages/OnboardPage'
-import { CompanyPage }    from './pages/CompanyPage'
-import { GreetingPage }   from './pages/GreetingPage'
-import { ApprovalsPage }  from './pages/ApprovalsPage'
-import { PlaygroundPage } from './pages/PlaygroundPage'
+import { DashboardPage }     from './pages/DashboardPage'
+import { OnboardPage }       from './pages/OnboardPage'
+import { CompanyPage }       from './pages/CompanyPage'
+import { GreetingPage }      from './pages/GreetingPage'
+import { ApprovalsPage }     from './pages/ApprovalsPage'
+import { PlaygroundPage }    from './pages/PlaygroundPage'
+import { LeadHunterPage }    from './pages/LeadHunterPage'
+import { SalesPipelinePage } from './pages/SalesPipelinePage'
+import { IntelPage }         from './pages/IntelPage'
 
 export default function App() {
   return (
@@ -17,6 +20,9 @@ export default function App() {
         <Route path="greeting"         element={<GreetingPage />} />
         <Route path="approvals"        element={<ApprovalsPage />} />
         <Route path="playground"       element={<PlaygroundPage />} />
+        <Route path="leads"            element={<LeadHunterPage />} />
+        <Route path="pipeline"         element={<SalesPipelinePage />} />
+        <Route path="intel"            element={<IntelPage />} />
       </Route>
     </Routes>
   )

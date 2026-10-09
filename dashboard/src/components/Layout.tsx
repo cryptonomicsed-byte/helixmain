@@ -8,6 +8,9 @@ const NAV_LINKS = [
   { to: '/onboard',    label: 'Onboard',    icon: '➕' },
   { to: '/approvals',  label: 'Approvals',  icon: '🔔' },
   { to: '/playground', label: 'Playground', icon: '🧪' },
+  { to: '/leads',      label: 'Leads',      icon: '📍' },
+  { to: '/pipeline',   label: 'Pipeline',   icon: '📊' },
+  { to: '/intel',      label: 'Intel',      icon: '⚔' },
 ]
 
 const sidebarStyle: React.CSSProperties = {
