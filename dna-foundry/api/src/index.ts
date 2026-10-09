@@ -11,6 +11,7 @@ import { spawn } from "child_process";
 import { promises as fs } from "fs";
 import path from "path";
 import Fastify from "fastify";
+import { extractor } from "./services/extractor";
 
 const app = Fastify({ logger: true });
 const ROOT = path.resolve(__dirname, "..", "..");
@@ -42,6 +43,20 @@ async function findCard(cardId: string): Promise<string | null> {
 }
 
 app.get("/health", async () => ({ ok: true, service: "dna-foundry" }));
+
+app.post("/extract", async (req, reply) => {
+  const body = (req.body ?? {}) as { url?: string; orgId?: string };
+  if (!body.url) return reply.code(400).send({ ok: false, error: "url required" });
+  if (!body.orgId) return reply.code(400).send({ ok: false, error: "orgId required" });
+
+  const card = await extractor.extractCard({ url: body.url, orgId: body.orgId });
+
+  await ensureDirs();
+  const cardFile = path.join(CARDS, `${card.id}.json`);
+  await fs.writeFile(cardFile, JSON.stringify(card, null, 2));
+
+  return reply.code(200).send(card);
+});
 
 app.post("/jobs", async (req, reply) => {
   const body = (req.body ?? {}) as { url?: string; organization_id?: string };
