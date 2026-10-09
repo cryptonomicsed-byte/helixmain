@@ -61,6 +61,13 @@ import {
   initAccount,
   getCreditSummary,
 } from "./services/metering";
+import {
+  createSession,
+  sendMessage,
+  runTestSuite,
+  clearSession,
+  getSessions,
+} from "./services/playground";
 
 const app = Fastify({ logger: true });
 const ROOT = path.resolve(__dirname, "..", "..");
@@ -834,6 +841,70 @@ app.post("/metering/init/:companyId", async (req, reply) => {
   const { companyId } = req.params as { companyId: string };
   const account = initAccount(companyId);
   return reply.code(200).send(account);
+});
+
+// ---------------------------------------------------------------------------
+// Playground routes  (isolated test environment — no writes to live agent dirs)
+// ---------------------------------------------------------------------------
+
+// POST /playground/session — create a new playground session
+app.post("/playground/session", async (req, reply) => {
+  const body = (req.body ?? {}) as { companyId?: string; cardId?: string; persona?: string };
+  if (!body.companyId) return reply.code(400).send({ ok: false, error: "companyId required" });
+  if (!body.cardId)    return reply.code(400).send({ ok: false, error: "cardId required" });
+
+  try {
+    const session = await createSession(body.companyId, body.cardId, body.persona);
+    return reply.code(200).send(session);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return reply.code(404).send({ ok: false, error: msg });
+  }
+});
+
+// POST /playground/message — send a message in an existing session
+app.post("/playground/message", async (req, reply) => {
+  const body = (req.body ?? {}) as { sessionId?: string; message?: string };
+  if (!body.sessionId) return reply.code(400).send({ ok: false, error: "sessionId required" });
+  if (!body.message)   return reply.code(400).send({ ok: false, error: "message required" });
+
+  try {
+    const msg = await sendMessage(body.sessionId, body.message);
+    return reply.code(200).send(msg);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    const code = msg.includes("not found") ? 404 : 500;
+    return reply.code(code).send({ ok: false, error: msg });
+  }
+});
+
+// POST /playground/test — run automated test suite against a session
+app.post("/playground/test", async (req, reply) => {
+  const body = (req.body ?? {}) as { sessionId?: string };
+  if (!body.sessionId) return reply.code(400).send({ ok: false, error: "sessionId required" });
+
+  try {
+    const results = await runTestSuite(body.sessionId);
+    return reply.code(200).send({ ok: true, results });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    const code = msg.includes("not found") ? 404 : 500;
+    return reply.code(code).send({ ok: false, error: msg });
+  }
+});
+
+// DELETE /playground/session/:sessionId — clear a session without affecting live agent
+app.delete("/playground/session/:sessionId", async (req, reply) => {
+  const { sessionId } = req.params as { sessionId: string };
+  clearSession(sessionId);
+  return reply.code(200).send({ ok: true });
+});
+
+// GET /playground/sessions/:companyId — list all sessions for a company
+app.get("/playground/sessions/:companyId", async (req, reply) => {
+  const { companyId } = req.params as { companyId: string };
+  const list = getSessions(companyId);
+  return reply.code(200).send(list);
 });
 
 async function main() {

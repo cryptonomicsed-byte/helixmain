@@ -156,6 +156,32 @@ export interface CompileResult {
 // API surface
 // ---------------------------------------------------------------------------
 
+export interface PlaygroundMessage {
+  id: string
+  role: 'customer' | 'agent' | 'system'
+  content: string
+  timestamp: string
+  cardSectionsUsed?: string[]
+  gateTriggered?: boolean
+  gateReason?: string
+}
+
+export interface TestResult {
+  test: string
+  passed: boolean
+  detail: string
+}
+
+export interface PlaygroundSession {
+  id: string
+  companyId: string
+  cardVersion: number
+  createdAt: string
+  messages: PlaygroundMessage[]
+  persona?: string
+  testResults: TestResult[]
+}
+
 export const api = {
   // Extraction & compilation
   extract: (url: string, orgId: string) =>
@@ -197,4 +223,20 @@ export const api = {
 
   gkDeny: (id: string) =>
     request<{ ok: boolean }>('POST', '/deny', { id }, GK_BASE),
+
+  // Playground
+  playgroundCreate: (companyId: string, cardId: string, persona?: string) =>
+    post<PlaygroundSession>('/playground/session', { companyId, cardId, persona }),
+
+  playgroundMessage: (sessionId: string, message: string) =>
+    post<PlaygroundMessage>('/playground/message', { sessionId, message }),
+
+  playgroundTest: (sessionId: string) =>
+    post<{ ok: boolean; results: TestResult[] }>('/playground/test', { sessionId }),
+
+  playgroundClear: (sessionId: string) =>
+    request<{ ok: boolean }>('DELETE', `/playground/session/${sessionId}`),
+
+  playgroundSessions: (companyId: string) =>
+    get<PlaygroundSession[]>(`/playground/sessions/${companyId}`),
 }
