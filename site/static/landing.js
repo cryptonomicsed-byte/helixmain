@@ -170,6 +170,28 @@
     };
   }
 
+  function strToBuf(s) {
+    return new TextEncoder().encode(s);
+  }
+
+  /* The WebAuthn user handle must reach the API as BYTES.
+   *
+   * webauthn.ts sets `userID: company` — a plain slug — and @simplewebauthn
+   * carries it into the options JSON verbatim (no base64url encoding; the JSON
+   * says "id": "rons-coffee-house"). So it needs ENCODING to bytes, not decoding.
+   *
+   * b64urlToBuf() was used here, which only appeared to work because a slug whose
+   * length is a valid base64 length decodes to harmless garbage (the server does
+   * not re-check the handle). Any slug of length % 4 === 1 is not valid base64 at
+   * all, so atob threw and signup died with "The string to be decoded is not
+   * correctly encoded" — e.g. "second-test-diner" (17). Same latent bug lived in
+   * dashboard/src/components/AuthGate.tsx, where it would break enrollment for
+   * slugs like "test-cafe" (9). */
+  function userHandle(v) {
+    if (typeof v === "string") return strToBuf(v);
+    return v; // already bytes
+  }
+
   /* Registration — used by SIGNUP. Same shapes as AuthGate.tsx's createPasskey.
      This is what makes self-serve possible: the ceremony that creates the account
      IS the passkey ceremony, so there is no token and no operator between a
@@ -180,7 +202,7 @@
       publicKey: {
         challenge: b64urlToBuf(pk.challenge),
         rp: pk.rp,
-        user: Object.assign({}, pk.user, { id: b64urlToBuf(pk.user.id) }),
+        user: Object.assign({}, pk.user, { id: userHandle(pk.user.id) }),
         pubKeyCredParams: pk.pubKeyCredParams,
         timeout: pk.timeout || 60000,
         attestation: pk.attestation || "none",

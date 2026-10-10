@@ -27,13 +27,16 @@ function bufToB64url(buf: ArrayBuffer): string {
   for (let i = 0; i < b.length; i++) s += String.fromCharCode(b[i])
   return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
+function strToBuf(s: string): ArrayBuffer {
+  return new TextEncoder().encode(s).buffer as ArrayBuffer
+}
 
 async function createPasskey(options: any): Promise<unknown> {
   const pk = options.publicKey ?? options
   const cred = await navigator.credentials.create({ publicKey: {
     challenge: b64urlToBuf(pk.challenge),
     rp: pk.rp,
-    user: { ...pk.user, id: b64urlToBuf(pk.user.id) },
+    user: { ...pk.user, id: strToBuf(pk.user.id) },
     pubKeyCredParams: pk.pubKeyCredParams,
     timeout: pk.timeout,
     attestation: pk.attestation ?? 'none',
