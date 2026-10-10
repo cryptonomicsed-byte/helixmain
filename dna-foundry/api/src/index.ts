@@ -470,18 +470,21 @@ function proposalsDir(cardId: string): string {
 async function applyCardPatch(
   cardId: string,
   body: CardPatchBody
-): Promise<{ card: Record<string, any>; fieldsChanged: string[] } | { error: string; code: number }> {
+): Promise<
+  | { ok: true; card: Record<string, any>; fieldsChanged: string[] }
+  | { ok: false; error: string; code: number }
+> {
   if (!body.patch || typeof body.patch !== "object")
-    return { error: "patch object required", code: 400 };
+    return { ok: false, error: "patch object required", code: 400 };
 
   const p = await findCard(cardId);
-  if (!p) return { error: "card not found", code: 404 };
+  if (!p) return { ok: false, error: "card not found", code: 404 };
 
   let card: Record<string, any>;
   try {
     card = JSON.parse(await fs.readFile(p, "utf8"));
   } catch {
-    return { error: "card is unreadable", code: 500 };
+    return { ok: false, error: "card is unreadable", code: 500 };
   }
 
   const before = JSON.parse(JSON.stringify(card));
@@ -525,7 +528,7 @@ async function applyCardPatch(
     await fs.writeFile(p, JSON.stringify(card, null, 2));
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    return { error: `could not write card: ${msg}`, code: 500 };
+    return { ok: false, error: `could not write card: ${msg}`, code: 500 };
   }
 
   const companyId = card.organizationId ?? card.org_id ?? cardId;
@@ -544,14 +547,20 @@ async function applyCardPatch(
     /* a changelog failure must not lose the edit */
   }
 
-  return { card, fieldsChanged };
+  return { ok: true, card, fieldsChanged };
 }
 
 /** Record a proposal. Writes nothing to the card. */
-async function createProposal(cardId: string, body: CardPatchBody) {
+async function createProposal(
+  cardId: string,
+  body: CardPatchBody
+): Promise<
+  | { ok: true; proposal: Record<string, any> }
+  | { ok: false; error: string; code: number }
+> {
   if (!body.patch || typeof body.patch !== "object")
-    return { error: "patch object required", code: 400 } as const;
-  if (!(await findCard(cardId))) return { error: "card not found", code: 404 } as const;
+    return { ok: false, error: "patch object required", code: 400 };
+  if (!(await findCard(cardId))) return { ok: false, error: "card not found", code: 404 };
 
   const id = "prp_" + randomUUID().slice(0, 8);
   const proposal = {
@@ -568,7 +577,7 @@ async function createProposal(cardId: string, body: CardPatchBody) {
   const dir = proposalsDir(cardId);
   await fs.mkdir(dir, { recursive: true });
   await fs.writeFile(path.join(dir, `${id}.json`), JSON.stringify(proposal, null, 2));
-  return { proposal };
+  return { ok: true, proposal };
 }
 
 // PATCH /cards/:id — propose a change (owner). Records a proposal, returns 202;
@@ -576,7 +585,7 @@ async function createProposal(cardId: string, body: CardPatchBody) {
 app.patch("/cards/:id", { preHandler: [requireAuth, requireOwner] }, async (req, reply) => {
   const id = (req.params as { id: string }).id;
   const made = await createProposal(id, (req.body ?? {}) as CardPatchBody);
-  if ("error" in made) return reply.code(made.code).send({ ok: false, error: made.error });
+  if (!made.ok) return reply.code(made.code).send({ ok: false, error: made.error });
   return reply.code(202).send({ ok: true, status: "pending", proposal: made.proposal });
 });
 
@@ -584,7 +593,7 @@ app.patch("/cards/:id", { preHandler: [requireAuth, requireOwner] }, async (req,
 app.post("/cards/:id/propose", { preHandler: [requireAuth, requireOwner] }, async (req, reply) => {
   const id = (req.params as { id: string }).id;
   const made = await createProposal(id, (req.body ?? {}) as CardPatchBody);
-  if ("error" in made) return reply.code(made.code).send({ ok: false, error: made.error });
+  if (!made.ok) return reply.code(made.code).send({ ok: false, error: made.error });
   return reply.code(202).send({ ok: true, status: "pending", proposal: made.proposal });
 });
 
@@ -613,7 +622,7 @@ app.post(
       author: proposal.author,
       summary: proposal.summary,
     });
-    if ("error" in applied)
+    if (!applied.ok)
       return reply.code(applied.code).send({ ok: false, error: applied.error });
 
     proposal.status = "applied";
