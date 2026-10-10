@@ -499,6 +499,8 @@ export function parseCardMd(
       const dv = kv(b, "Delivery"); if (dv !== null) o.delivery_fence = dv;
       const ct = kv(b, "Catering"); if (ct !== null) o.catering = ct;
       const hc = kv(b, "Human confirm"); if (hc !== null) o.human_confirm = listVal(hc, ";");
+      const rs = kv(b, "Response SLA"); if (rs !== null) o.response_sla = rs;
+      const ps = kv(b, "Pipeline"); if (ps !== null) o.pipeline_stages = listVal(ps, ";");
       const sy = kv(b, "Systems"); if (sy !== null) o.systems = listVal(sy, ",");
       const nt = kv(b, "Notes"); if (nt !== null) o.notes = nt;
     }

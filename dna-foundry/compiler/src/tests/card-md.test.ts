@@ -12,8 +12,8 @@ const { canonicalJson, cardHash } = require("../business-md");
 const { emitCardMd, actingHash } = require("../card-md");
 const { parseCardMd, verifyCardMd } = require("../card-md-parse");
 
-const PY_HASH = "5d53266858479ad4e423354b109601b3d47ae26c7db5bc47d80e3ae74819b20d";
-const PY_ACTING_HASH = "bc4c496a5b5cb1b47c92aeb317950ab91d167a174156b8f3d2760e032bbbd0ac";
+const PY_HASH = "804e8fc7b3157cb43ee4bb6edcdc8e6b42f1e18444510b6084f497adc313d270";
+const PY_ACTING_HASH = "d4b5f9b11e8e08d4af7876fca251a0a8b7e4df8ef737c0fc8ce029acd2177116";
 
 const CARD = {
   id: "dna_test0001",
@@ -47,6 +47,8 @@ const CARD = {
     hours: "Mon–Fri 11am–9pm",
     channels: ["phone"],
     human_confirm: ["large orders"],
+    response_sla: "within 24 hours",
+    pipeline_stages: ["new", "contacted", "quoted", "booked", "lost"],
   },
   policies: [{ topic: "Refunds", rule: "ask-human" }],
   handoff: {
@@ -71,7 +73,7 @@ const CARD = {
       extractor_agent: "extractor:website",
     },
   },
-  acting_hash: "bc4c496a5b5cb1b47c92aeb317950ab91d167a174156b8f3d2760e032bbbd0ac",
+  acting_hash: "d4b5f9b11e8e08d4af7876fca251a0a8b7e4df8ef737c0fc8ce029acd2177116",
 };
 
 const CHANGELOG = ["**v1** (2026-10-01T00:00:00Z): initial extraction — 12 findings"];

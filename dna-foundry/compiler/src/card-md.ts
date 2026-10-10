@@ -244,6 +244,8 @@ export function emitCardMd(card: any, changelog: string[]): string {
     ops.delivery_fence ? bl("**Delivery:** " + ops.delivery_fence) : null,
     ops.catering ? bl("**Catering:** " + ops.catering) : null,
     ops.human_confirm && ops.human_confirm.length ? bl("**Human confirm:** " + joinList(ops.human_confirm, "; ")) : null,
+    ops.response_sla ? bl("**Response SLA:** " + ops.response_sla) : null,
+    ops.pipeline_stages && ops.pipeline_stages.length ? bl("**Pipeline:** " + joinList(ops.pipeline_stages, "; ")) : null,
     ops.systems && ops.systems.length ? bl("**Systems:** " + joinList(ops.systems, ", ")) : null,
     ops.notes ? bl("**Notes:** " + ops.notes) : null,
   ]));
