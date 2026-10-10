@@ -27,7 +27,7 @@ async function setup(replies = {}, extraEnv = {}) {
       } catch {
         /* leave null */
       }
-      calls.push({ path: req.url, body: parsed, headers: req.headers });
+      calls.push({ path: req.url, body: parsed, headers: req.headers, method: req.method });
       const r = replies[req.url] ?? { status: 200, body: { ok: true } };
       res.writeHead(r.status, { "content-type": "application/json" });
       res.end(JSON.stringify(r.body));
@@ -488,6 +488,9 @@ test("crm.manage maps each action to its real endpoint", async () => {
     assert.deepEqual(calls[3].body, { companyId: "demo-barber", contact: { name: "Ada" } });
     assert.deepEqual(calls[4].body, { companyId: "demo-barber", stage: "won" });
     assert.equal(JSON.parse(upd.result.content[0].text).status, "pending");
+    // The verb matters as much as the path: the update route is PATCH, and the
+    // tool defaulted to POST once — a 404 that the stub, ignoring verbs, hid.
+    assert.deepEqual(calls.map((c) => c.method), ["GET", "GET", "GET", "POST", "PATCH"]);
   } finally {
     await close();
   }
@@ -585,6 +588,77 @@ test("crm.manage refuses an incomplete action without calling the API", async ()
     });
     assert.equal(c.result.isError, true);
     assert.equal(calls.length, 0);
+  } finally {
+    await close();
+  }
+});
+
+test("every write tool uses the API route's real HTTP verb", async () => {
+  const { rpc, calls, close } = await setup({
+    "/agent/session": { status: 200, body: { ok: true } },
+    "/content/prd": { status: 200, body: { ok: true, prd: { id: "p" } } },
+    "/content/generate": { status: 200, body: { ok: true } },
+    "/sales/hunt": { status: 200, body: { ok: true } },
+    "/sales/hunt/gps": { status: 200, body: { ok: true } },
+    "/site/generate": { status: 200, body: { ok: true, url: "u" } },
+    "/crm/contacts": { status: 202, body: { ok: true, status: "pending", proposal: { id: "p1" } } },
+    "/crm/contacts/c1": { status: 202, body: { ok: true, status: "pending", proposal: { id: "p2" } } },
+    "/crm/proposals/p1/confirm": { status: 200, body: { ok: true, status: "applied" } },
+    "/billing/checkout": { status: 200, body: { ok: true, checkoutUrl: "u" } },
+  });
+  try {
+    await rpc("tools/call", { name: "voice.call", arguments: { companyId: "demo-barber", message: "hi" } });
+    await rpc("tools/call", { name: "content.generate", arguments: { companyId: "demo-barber", goal: "g", channels: ["email"] } });
+    await rpc("tools/call", { name: "leads.discover", arguments: { companyId: "demo-barber", industry: "x" } });
+    await rpc("tools/call", { name: "leads.discover", arguments: { companyId: "demo-barber", lat: 1, lng: 2 } });
+    await rpc("tools/call", { name: "site.publish", arguments: { companyId: "demo-barber" } });
+    await rpc("tools/call", { name: "crm.manage", arguments: { companyId: "demo-barber", action: "create", contact: { name: "A" } } });
+    await rpc("tools/call", { name: "crm.manage", arguments: { companyId: "demo-barber", action: "update", contactId: "c1", note: "n" } });
+    await rpc("tools/call", { name: "crm.manage", arguments: { companyId: "demo-barber", action: "confirm", proposalId: "p1" } });
+    await rpc("tools/call", { name: "billing.status", arguments: { companyId: "demo-barber", action: "checkout", priceId: "price_1" } });
+    assert.deepEqual(
+      calls.map((c) => `${c.method} ${c.path}`),
+      [
+        "POST /agent/session",
+        "POST /content/prd",
+        "POST /content/generate",
+        "POST /sales/hunt",
+        "POST /sales/hunt/gps",
+        "POST /site/generate",
+        "POST /crm/contacts",
+        "PATCH /crm/contacts/c1",
+        "POST /crm/proposals/p1/confirm",
+        "POST /billing/checkout",
+      ]
+    );
+  } finally {
+    await close();
+  }
+});
+
+test("every read tool uses GET", async () => {
+  const { rpc, calls, close } = await setup({
+    "/metering/demo-barber": { status: 200, body: { balance: 1 } },
+    "/plan/demo-barber": { status: 200, body: { ok: true } },
+    "/metering/demo-barber/history": { status: 200, body: { entries: [] } },
+    "/analytics/demo-barber": { status: 200, body: { ok: true } },
+    "/billing/config": { status: 200, body: { tiers: {} } },
+    "/billing/portal/demo-barber": { status: 200, body: { ok: true } },
+    "/crm/contacts/demo-barber": { status: 200, body: [] },
+    "/crm/summary/demo-barber": { status: 200, body: { total: 0 } },
+    "/crm/proposals/demo-barber": { status: 200, body: { ok: true, proposals: [] } },
+  });
+  try {
+    await rpc("tools/call", { name: "billing.status", arguments: { companyId: "demo-barber" } });
+    await rpc("tools/call", { name: "billing.status", arguments: { companyId: "demo-barber", action: "config" } });
+    await rpc("tools/call", { name: "billing.status", arguments: { companyId: "demo-barber", action: "portal" } });
+    await rpc("tools/call", { name: "analytics.query", arguments: { companyId: "demo-barber" } });
+    await rpc("tools/call", { name: "crm.manage", arguments: { companyId: "demo-barber", action: "summary" } });
+    await rpc("tools/call", { name: "crm.manage", arguments: { companyId: "demo-barber", action: "proposals" } });
+    assert.ok(
+      calls.every((c) => c.method === "GET"),
+      `non-GET read: ${JSON.stringify(calls.map((c) => `${c.method} ${c.path}`))}`
+    );
   } finally {
     await close();
   }

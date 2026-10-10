@@ -644,7 +644,11 @@ const HANDLERS = {
         if (a.summary) body.summary = a.summary;
         // PROPOSE: records a pending proposal (202), mutating nothing. companyId
         // rides along so the API records it under the right tenant.
-        return api(`/crm/contacts/${encodeURIComponent(a.contactId)}`, body, { companyId: a.companyId });
+        // NB: this route is PATCH — the default verb here is POST, which 404s.
+        return api(`/crm/contacts/${encodeURIComponent(a.contactId)}`, body, {
+          method: "PATCH",
+          companyId: a.companyId,
+        });
       }
       case "confirm": {
         if (!a.proposalId) {
