@@ -15,7 +15,7 @@
   --line-2:    rgba(255, 255, 255, 0.16);
   --text:      #eef1f8;
   --muted:     #9aa3b8;
-  --muted-2:   #6c7689;
+  --muted-2:   #8892a6;
   --accent:    #6366f1;
   --accent-lo: #818cf8;
   --accent-dk: #4f46e5;
@@ -165,13 +165,13 @@ button { font: inherit; color: inherit; }
 .gcard-main { position: absolute; inset: 0 auto auto 0; width: 100%; padding: 0.9rem 1rem 1rem; }
 .gcard-bar { display: flex; align-items: center; gap: 0.35rem; margin-bottom: 0.75rem; }
 .gcard-bar .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line-2); }
-.gcard-bar em { margin-left: 0.5rem; font-style: normal; font-family: var(--mono); font-size: 0.72rem; color: var(--muted-2); }
+.gcard-bar em { margin-left: 0.5rem; font-style: normal; font-family: var(--mono); font-size: 0.78rem; color: var(--muted-2); }
 .code {
-  margin: 0; font-family: var(--mono); font-size: 0.72rem; line-height: 1.75;
+  margin: 0; font-family: var(--mono); font-size: 0.78rem; line-height: 1.75;
   color: #b9c2d8; white-space: pre; overflow: hidden;
 }
-.gcard-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 0.85rem; padding-top: 0.7rem; border-top: 1px solid var(--line); font-size: 0.72rem; color: var(--muted-2); }
-.pill { font-size: 0.68rem; font-weight: 600; padding: 0.2rem 0.55rem; border-radius: 999px; }
+.gcard-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 0.85rem; padding-top: 0.7rem; border-top: 1px solid var(--line); font-size: 0.78rem; color: var(--muted-2); }
+.pill { font-size: 0.78rem; font-weight: 600; padding: 0.2rem 0.55rem; border-radius: 999px; }
 .pill-ok { background: rgba(52, 211, 153, 0.14); color: var(--ok); border: 1px solid rgba(52, 211, 153, 0.3); }
 
 .gcard-float {
@@ -180,7 +180,7 @@ button { font: inherit; color: inherit; }
 }
 .gcard-icon { font-size: 1rem; color: var(--accent-lo); line-height: 1; }
 .gcard-float strong { font-size: 0.86rem; font-weight: 600; }
-.gcard-float small { font-size: 0.74rem; color: var(--muted); }
+.gcard-float small { font-size: 0.78rem; color: var(--muted); }
 .f1 { right: -2%; top: 2%; }
 .f2 { left: -6%; bottom: 16%; }
 .f3 { right: 4%; bottom: -3%; }
@@ -205,7 +205,7 @@ button { font: inherit; color: inherit; }
 .step-n { font-family: var(--mono); font-size: 0.8rem; color: var(--accent-lo); margin-bottom: 0.9rem; }
 .step h3 { font-size: 1.08rem; margin-bottom: 0.6rem; }
 .step p { color: var(--muted); font-size: 0.92rem; }
-.step-chip { margin-top: 1rem; display: inline-block; font-size: 0.72rem; color: var(--muted-2); border: 1px solid var(--line); border-radius: 999px; padding: 0.25rem 0.7rem; }
+.step-chip { margin-top: 1rem; display: inline-block; font-size: 0.78rem; color: var(--muted-2); border: 1px solid var(--line); border-radius: 999px; padding: 0.25rem 0.7rem; }
 
 /* ── Live proof ──────────────────────────────────────────────────────── */
 .proof-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 1.25rem; }
@@ -228,7 +228,7 @@ button { font: inherit; color: inherit; }
 .pcard-meta { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.78rem; color: var(--muted-2); }
 .pcard-foot { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-top: auto; }
 .pcard-phone { font-size: 0.82rem; color: var(--accent-lo); }
-.pcard-hash { font-size: 0.68rem; color: var(--muted-2); border-top: 1px solid var(--line); padding-top: 0.7rem; }
+.pcard-hash { font-size: 0.78rem; color: var(--muted-2); border-top: 1px solid var(--line); padding-top: 0.7rem; }
 
 /* ── Bento ───────────────────────────────────────────────────────────── */
 .bento { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.1rem; }
@@ -253,7 +253,7 @@ button { font: inherit; color: inherit; }
 .tier-featured { border-color: var(--accent); background: linear-gradient(180deg, rgba(99,102,241,0.14), rgba(255,255,255,0.04)); box-shadow: 0 34px 80px -40px rgba(99,102,241,1); }
 .tier-badge {
   position: absolute; top: -11px; left: 1.6rem; background: var(--accent); color: #fff;
-  font-size: 0.68rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  font-size: 0.78rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
   padding: 0.25rem 0.7rem; border-radius: 999px;
 }
 .tier h3 { font-size: 1.02rem; color: var(--muted); font-weight: 600; }
