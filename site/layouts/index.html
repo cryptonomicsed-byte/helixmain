@@ -1,58 +1,352 @@
-{{ define "title" }}{{ .Site.Title }} — {{ .Site.Params.tagline }}{{ end }}
-{{ define "main" }}
-<style>
-  .hero { text-align: center; padding: 4rem 0 3rem; }
-  .hero h1 { font-size: 2.5rem; margin-bottom: 1rem; }
-  .hero .tagline { font-size: 1.1rem; color: var(--muted); max-width: 520px; margin: 0 auto 2rem; }
-  .cta-row { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
-  .btn { padding: 0.65rem 1.4rem; border-radius: 6px; font-size: 0.9rem; font-weight: 600;
-         cursor: pointer; transition: opacity 0.15s; }
-  .btn-primary { background: var(--accent); color: #000; }
-  .btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
-  .btn:hover { opacity: 0.85; text-decoration: none; }
-  .how { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-         gap: 1.5rem; margin-top: 3rem; }
-  .step { background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
-          padding: 1.25rem; }
-  .step-num { color: var(--accent); font-weight: 700; font-size: 0.8rem;
-              text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.4rem; }
-  .step h3 { color: #fff; font-size: 0.95rem; margin-bottom: 0.4rem; }
-  .step p { font-size: 0.82rem; color: var(--muted); margin: 0; }
-  .dir-preview { margin-top: 3rem; }
-  .dir-preview h2 { margin-bottom: 1rem; }
-</style>
-
-<div class="hero">
-  <h1>{{ .Site.Title }}</h1>
-  <p class="tagline">{{ .Site.Params.tagline }}</p>
-  <div class="cta-row">
-    <a class="btn btn-primary" href="/directory/">Browse businesses</a>
-    <a class="btn btn-secondary" href="/for-business/">Get your AI</a>
-  </div>
-</div>
-
-<div class="how">
-  <div class="step">
-    <div class="step-num">Step 1</div>
-    <h3>You describe your business</h3>
-    <p>Name, hours, services, policies. One conversation, five minutes.</p>
-  </div>
-  <div class="step">
-    <div class="step-num">Step 2</div>
-    <h3>We build your card</h3>
-    <p>A cryptographically signed business card — your AI's ground truth.</p>
-  </div>
-  <div class="step">
-    <div class="step-num">Step 3</div>
-    <h3>Your AI goes live</h3>
-    <p>Voice agent on your website. Customers call. You approve exceptions.</p>
-  </div>
-</div>
-
-{{ $companies := .Site.Data.companies }}
-{{ if $companies }}
-<div class="dir-preview">
-  <h2>Live businesses</h2>
-</div>
+{{/* HelixMain landing page — the entry point at "/".
+     Standalone full document (deliberately does NOT use _default/baseof.html:
+     the brief's design system is its own, and this page owns the whole viewport).
+     BUILT BY HUGO, NOT by hand: /var/www/helixmain-site is the target of
+     `rsync -a --delete` in infra/site-publish.sh, so a hand-placed index.html
+     would be deleted by the next publish. Living in site/ is what makes it survive. */}}
+{{ $live := slice }}
+{{ range $id, $c := .Site.Data.companies }}
+  {{ if and $c.caller_url (not (hasPrefix $id "org_")) (not (hasPrefix $id "test")) (not (hasPrefix $id "e2e")) }}
+    {{ $live = $live | append (dict "id" $id "c" $c) }}
+  {{ end }}
 {{ end }}
-{{ end }}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HelixMain — Every business gets an AI that knows it cold.</title>
+<meta name="description" content="We turn your business into a living profile card, then give it a voice. Customers call, chat, or scan a QR code — your AI answers from your card, not from guesswork.">
+<meta property="og:title" content="HelixMain — Every business gets an AI that knows it cold.">
+<meta property="og:description" content="We turn your business into a living profile card, then give it a voice.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="{{ .Permalink }}">
+<meta name="theme-color" content="#0a0e1a">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%236366f1'/%3E%3Cpath d='M10 9v14M22 9v14M10 16h12' stroke='%23fff' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/landing.css">
+</head>
+<body>
+
+<a class="skip" href="#main">Skip to content</a>
+
+{{/* ── HEADER ─────────────────────────────────────────────────────────── */}}
+<header id="hdr" class="hdr">
+  <div class="hdr-in">
+    <a class="brand" href="/" aria-label="HelixMain home">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 32 32" width="26" height="26"><rect width="32" height="32" rx="7" fill="#6366f1"/><path d="M10 9v14M22 9v14M10 16h12" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg>
+      </span>
+      <span class="brand-name">HelixMain</span>
+    </a>
+
+    <nav class="nav-desktop" aria-label="Main">
+      <a href="/directory/">Directory</a>
+      <a href="/dashboard/" data-nav="dashboard" hidden>Dashboard</a>
+      <a href="#pricing">Pricing</a>
+      <a href="#how">How it works</a>
+      <a class="btn btn-quiet" href="#login" data-nav="login">Login</a>
+    </nav>
+
+    <button id="burger" class="burger" aria-label="Open menu" aria-expanded="false" aria-controls="mobile-menu">
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+</header>
+
+<div id="mobile-menu" class="mobile-menu" hidden>
+  <a href="/directory/">Directory</a>
+  <a href="/dashboard/" data-nav="dashboard" hidden>Dashboard</a>
+  <a href="#pricing">Pricing</a>
+  <a href="#how">How it works</a>
+  <a class="btn btn-primary btn-block" href="#login" data-nav="login">Login</a>
+</div>
+
+<main id="main">
+
+{{/* ── 1. HERO ────────────────────────────────────────────────────────── */}}
+<section class="hero" id="top">
+  <div class="mesh" aria-hidden="true">
+    <span class="blob b1"></span><span class="blob b2"></span><span class="blob b3"></span>
+    <div class="grain"></div>
+  </div>
+
+  <div class="wrap hero-in">
+    <div class="hero-copy">
+      <p class="eyebrow anim" data-anim="hero">Built on the CARD standard</p>
+      <h1 class="anim" data-anim="hero">Every business gets an AI that knows it cold.</h1>
+      <p class="lede anim" data-anim="hero">We turn your business into a living profile card, then give it a voice.</p>
+      <div class="cta-row anim" data-anim="hero">
+        <a class="btn btn-primary" href="#register">Create your card</a>
+        <a class="btn btn-ghost" href="/directory/">See it live</a>
+      </div>
+      <p class="micro anim" data-anim="hero">No app for your customers. They call, chat, or scan.</p>
+    </div>
+
+    <div class="hero-art" id="hero-art" aria-hidden="true">
+      <div class="gcard gcard-main" data-tilt>
+        <div class="gcard-bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><em>CARD.md</em></div>
+<pre class="code">---
+format: business-card/0.1
+id: demo-barber
+version: 1
+status: draft
+hash: sha256:9abb3682…
+---
+# King's Cut Barbershop
+
+## Identity
+- Name: King's Cut Barbershop
+- Phone: (718) 555-0142
+
+## Voice
+- Tone: warm, helpful, professional</pre>
+        <div class="gcard-foot"><span class="pill pill-ok">verified</span><span class="mono">v1</span></div>
+      </div>
+
+      <div class="gcard gcard-float f1" data-tilt>
+        <span class="gcard-icon" aria-hidden="true">◍</span>
+        <strong>Voice agent</strong>
+        <small>Answers from your card</small>
+      </div>
+
+      <div class="gcard gcard-float f2" data-tilt>
+        <span class="gcard-icon" aria-hidden="true">▤</span>
+        <strong>QR + NFC</strong>
+        <small>Talk in one scan</small>
+      </div>
+
+      <div class="gcard gcard-float f3" data-tilt>
+        <span class="gcard-icon" aria-hidden="true">▲</span>
+        <strong>Owner approval</strong>
+        <small>Every exception held</small>
+      </div>
+    </div>
+  </div>
+</section>
+
+{{/* ── 2. HOW IT WORKS ────────────────────────────────────────────────── */}}
+<section class="sec" id="how">
+  <div class="wrap">
+    <header class="sec-head">
+      <p class="eyebrow anim" data-anim="up">How it works</p>
+      <h2 class="anim" data-anim="up">Three steps, one session.</h2>
+    </header>
+
+    <div class="steps">
+      <div class="steps-line" aria-hidden="true"><span class="steps-line-fill"></span></div>
+
+      <article class="step anim" data-anim="step">
+        <div class="step-n">01</div>
+        <h3>We read your business</h3>
+        <p>Hand us your website, or just tell us. Hours, services, policies, the lot. Out comes a signed CARD.md — a single file that describes your business exactly.</p>
+        <div class="step-chip mono">URL in → CARD.md out</div>
+      </article>
+
+      <article class="step anim" data-anim="step">
+        <div class="step-n">02</div>
+        <h3>Your card gets a voice</h3>
+        <p>We compile the card into a voice agent. It answers from your card — never from generic training data. Change your hours and it knows the next day.</p>
+        <div class="step-chip mono">card → agent</div>
+      </article>
+
+      <article class="step anim" data-anim="step">
+        <div class="step-n">03</div>
+        <h3>Customers just talk</h3>
+        <p>A QR code on the counter, a phone number, a chat bubble on your site. Customers ask in plain language. Anything unusual is held for you to approve.</p>
+        <div class="step-chip mono">scan / call / chat</div>
+      </article>
+    </div>
+  </div>
+</section>
+
+{{/* ── 3. LIVE PROOF ──────────────────────────────────────────────────── */}}
+<section class="sec sec-alt" id="live">
+  <div class="wrap">
+    <header class="sec-head">
+      <p class="eyebrow anim" data-anim="up">Live proof</p>
+      <h2 class="anim" data-anim="up">These are live. Click and talk to one.</h2>
+      <p class="sec-sub anim" data-anim="up">Real businesses, real cards, real agents — rendered straight from the directory.</p>
+    </header>
+
+    {{ if $live }}
+    <div class="proof-grid">
+      {{ range first 3 $live }}
+      {{ $c := .c }}
+      <article class="pcard anim" data-anim="up">
+        <div class="pcard-top">
+          <div class="pcard-av" aria-hidden="true">{{ substr $c.name 0 1 }}</div>
+          <div>
+            <h3>{{ $c.name }}</h3>
+            {{ with $c.tagline }}<p class="pcard-tag">{{ . }}</p>{{ end }}
+          </div>
+        </div>
+        {{ if $c.offerings }}
+        <ul class="pcard-offers">
+          {{ range first 3 $c.offerings }}<li>{{ .name }}</li>{{ end }}
+        </ul>
+        {{ end }}
+        <div class="pcard-meta">
+          {{ with $c.address }}<span>{{ . }}</span>{{ end }}
+          {{ with $c.hours }}<span>{{ . }}</span>{{ end }}
+        </div>
+        <div class="pcard-foot">
+          <a class="btn btn-primary btn-sm" href="{{ $c.caller_url }}" rel="noopener">Call now</a>
+          {{ with $c.phone }}<span class="mono pcard-phone">{{ . }}</span>{{ end }}
+        </div>
+        <div class="pcard-hash mono">card {{ $c.card_hash }} · v{{ $c.card_version }}</div>
+      </article>
+      {{ end }}
+    </div>
+    {{ else }}
+    <p class="empty">No live agents yet.</p>
+    {{ end }}
+  </div>
+</section>
+
+{{/* ── 4. WHAT YOU GET ────────────────────────────────────────────────── */}}
+<section class="sec" id="what">
+  <div class="wrap">
+    <header class="sec-head">
+      <p class="eyebrow anim" data-anim="up">What you get</p>
+      <h2 class="anim" data-anim="up">Six things, one card.</h2>
+    </header>
+
+    <div class="bento">
+      <article class="cell span2 anim" data-anim="up">
+        <span class="cell-icon" aria-hidden="true">◍</span>
+        <h3>Voice agent</h3>
+        <p>Answers your customers on the web, on the phone, from a QR code — grounded in your card, in your tone of voice.</p>
+      </article>
+      <article class="cell anim" data-anim="up">
+        <span class="cell-icon" aria-hidden="true">▤</span>
+        <h3>Business DNA card</h3>
+        <p>A living, signed record of your business. The single source of truth everything else reads from.</p>
+      </article>
+      <article class="cell anim" data-anim="up">
+        <span class="cell-icon" aria-hidden="true">✦</span>
+        <h3>QR + NFC</h3>
+        <p>A code for the counter, a tap for the window. One scan starts a conversation.</p>
+      </article>
+      <article class="cell anim" data-anim="up">
+        <span class="cell-icon" aria-hidden="true">◎</span>
+        <h3>Owner dashboard</h3>
+        <p>See every conversation, approve anything unusual, edit your card. From your phone.</p>
+      </article>
+      <article class="cell anim" data-anim="up">
+        <span class="cell-icon" aria-hidden="true">⊕</span>
+        <h3>Directory listing</h3>
+        <p>A public page for your business that customers and search engines can actually read.</p>
+      </article>
+      <article class="cell span2 anim" data-anim="up">
+        <span class="cell-icon" aria-hidden="true">∿</span>
+        <h3>Analytics</h3>
+        <p>What people asked, what they wanted, what got held for approval — so you learn what your storefront never told you.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+{{/* ── 5. PRICING ─────────────────────────────────────────────────────── */}}
+<section class="sec sec-alt" id="pricing">
+  <div class="wrap">
+    <header class="sec-head">
+      <p class="eyebrow anim" data-anim="up">Pricing</p>
+      <h2 class="anim" data-anim="up">Start free. Pay when it earns its keep.</h2>
+      <p class="sec-sub anim" data-anim="up">Credits power voice, content, lead-hunting and site builds. Your card, your directory page and your dashboard are always included.</p>
+    </header>
+
+    <div class="tiers">
+      {{ range $key, $t := .Site.Data.pricing.tiers }}
+      <article class="tier anim{{ if $t.featured }} tier-featured{{ end }}" data-anim="up">
+        {{ if $t.featured }}<div class="tier-badge">Most popular</div>{{ end }}
+        <h3>{{ $t.name }}</h3>
+        <p class="tier-price">{{ $t.price }}</p>
+        <p class="tier-credits"><strong>{{ $t.credits }}</strong> credits / month</p>
+        <ul class="tier-feats">
+          {{ range $t.features }}<li>{{ . }}</li>{{ end }}
+        </ul>
+        <a class="btn {{ if $t.featured }}btn-primary{{ else }}btn-ghost{{ end }} btn-block" href="#register">{{ $t.cta }}</a>
+      </article>
+      {{ end }}
+    </div>
+
+    <p class="tier-note anim" data-anim="up">Need more? Credit packs from {{ .Site.Data.pricing.packs_note }}. Prices shown are monthly and billed through Stripe.</p>
+  </div>
+</section>
+
+{{/* ── 6. LOGIN / REGISTER ────────────────────────────────────────────── */}}
+<section class="sec" id="login">
+  <div class="wrap wrap-narrow">
+    <header class="sec-head">
+      <p class="eyebrow anim" data-anim="up">Get started</p>
+      <h2 class="anim" data-anim="up">Open your dashboard</h2>
+    </header>
+
+    <div class="auth anim" data-anim="up" id="auth-card">
+      <div class="tabs" role="tablist">
+        <button class="tab is-on" role="tab" aria-selected="true" data-tab="login">Login</button>
+        <button class="tab" role="tab" aria-selected="false" data-tab="register">Create Account</button>
+      </div>
+
+      {{/* Login — the real credential is a PASSKEY. There is no password and no
+           magic link: the API has no mail transport, and the PIN was retired
+           2026-10-10. One button, one tap. */}}
+      <div class="pane is-on" data-pane="login">
+        <p class="pane-lede">Your dashboard is protected by a passkey — your fingerprint, your face, or your device PIN. There is nothing to remember.</p>
+        <button id="passkey-btn" class="btn btn-primary btn-block">
+          <span class="key-glyph" aria-hidden="true">⚿</span> Unlock with passkey
+        </button>
+        <p class="pane-msg" id="login-msg" role="status" aria-live="polite"></p>
+        <p class="pane-foot">Already enrolled on another device? Sign in there, or use your API key on the dashboard's break-glass link.</p>
+      </div>
+
+      {{/* Register — a REQUEST, not an open door. passkeys.ts is explicit:
+           enrollment is bootstrapped by an operator-issued one-time token,
+           "there is no permanent open enrollment door". So we collect the
+           request and the operator issues the access link. */}}
+      <div class="pane" data-pane="register">
+        <p class="pane-lede">Tell us who you are and we'll send your access link.</p>
+        <form id="register-form" novalidate>
+          <label for="rg-name">Business name</label>
+          <input id="rg-name" name="business" type="text" autocomplete="organization" placeholder="King's Cut Barbershop" required maxlength="120">
+
+          <label for="rg-email">Email</label>
+          <input id="rg-email" name="email" type="email" autocomplete="email" placeholder="you@yourbusiness.com" required maxlength="200">
+
+          <label for="rg-site">Website <span class="opt">(optional)</span></label>
+          <input id="rg-site" name="website" type="url" autocomplete="url" placeholder="https://yourbusiness.com" maxlength="300">
+
+          <button class="btn btn-primary btn-block" type="submit" id="register-btn">Request my card</button>
+          <p class="pane-msg" id="register-msg" role="status" aria-live="polite"></p>
+        </form>
+        <p class="pane-foot">We onboard businesses personally — that's why the card comes out right.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+{{/* ── 7. FOOTER ──────────────────────────────────────────────────────── */}}
+<footer class="foot">
+  <div class="wrap foot-in">
+    <div class="foot-brand">
+      <span class="brand-name">HelixMain</span>
+      <p>Every business gets an AI that knows it cold.</p>
+    </div>
+    <nav class="foot-nav" aria-label="Footer">
+      <a href="/directory/">Directory</a>
+      <a href="/dashboard/">Dashboard</a>
+      <a href="#pricing">Pricing</a>
+      <a href="#how">How it works</a>
+      <a href="/for-business/">For business owners</a>
+    </nav>
+    <p class="foot-legal">Built on the CARD standard · <span class="mono">business-card/0.1</span></p>
+  </div>
+</footer>
+
+<script src="/vendor/gsap.min.js" defer></script>
+<script src="/vendor/ScrollTrigger.min.js" defer></script>
+<script src="/landing.js" defer></script>
+</body>
+</html>

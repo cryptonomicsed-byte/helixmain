@@ -1,0 +1,52 @@
+{
+  "_comment": "Source of truth for the API's tier table is dna-foundry/api/src/services/metering.ts (TIER_PRICES), which GET /billing/config serves. These values are a snapshot of that table taken 2026-10-10; if the API's tiers change, change them here too — the landing will not know on its own.",
+  "tiers": [
+    {
+      "key": "free",
+      "name": "Starter",
+      "price": "$0/mo",
+      "credits": 500,
+      "featured": false,
+      "cta": "Start free",
+      "features": [
+        "Your Business DNA card",
+        "Card-grounded voice agent",
+        "Public directory listing",
+        "Owner dashboard + approvals",
+        "500 credits / month"
+      ]
+    },
+    {
+      "key": "pro",
+      "name": "Pro",
+      "price": "$49/mo",
+      "credits": 2000,
+      "featured": true,
+      "cta": "Choose Pro",
+      "features": [
+        "Everything in Starter",
+        "Your own published site",
+        "QR + NFC talk codes",
+        "Campaign + content generation",
+        "Lead hunting",
+        "2,000 credits / month"
+      ]
+    },
+    {
+      "key": "agency",
+      "name": "Agency",
+      "price": "$199/mo",
+      "credits": 10000,
+      "featured": false,
+      "cta": "Choose Agency",
+      "features": [
+        "Everything in Pro",
+        "Multiple businesses under one roof",
+        "Portfolio + cross-business analytics",
+        "Priority onboarding",
+        "10,000 credits / month"
+      ]
+    }
+  ],
+  "packs_note": "$4.99 for 150 credits"
+}

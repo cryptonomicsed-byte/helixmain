@@ -3023,6 +3023,67 @@ app.post("/auth/logout", async (_req, reply) => {
   return { ok: true };
 });
 
+// ---------------------------------------------------------------------------
+// Signup requests
+//
+// /auth/signup RECORDS A REQUEST. It deliberately does NOT create a company, a
+// card, credits, or an enrollment token. passkeys.ts is explicit that enrollment
+// is bootstrapped by an operator-issued one-time token and that "there is no
+// permanent open enrollment door" — an unauthenticated route that minted accounts
+// would BE that door, and would repeat the initAccount money-printer mistake
+// (auto-creating an account for any stranger who named a company). The operator
+// reviews these with infra/approve-signup.py.
+// ---------------------------------------------------------------------------
+
+const SIGNUP_DIR = process.env.HELIX_SIGNUP_DIR || "/etc/helix/signups";
+
+/** Best-effort flood friction, per IP, in-memory. Not a security boundary. */
+const signupHits = new Map<string, number[]>();
+
+app.post("/auth/signup", async (req, reply) => {
+  const body = (req.body ?? {}) as { business?: string; email?: string; website?: string };
+  const business = String(body.business ?? "").trim();
+  const email = String(body.email ?? "").trim().toLowerCase();
+  const website = String(body.website ?? "").trim();
+
+  if (business.length < 2 || business.length > 120)
+    return reply.code(400).send({ ok: false, error: "a business name is required" });
+  if (email.length > 200 || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email))
+    return reply.code(400).send({ ok: false, error: "a valid email is required" });
+  if (website.length > 300)
+    return reply.code(400).send({ ok: false, error: "that website is too long" });
+
+  const ip = (req.headers["x-real-ip"] as string) || req.ip || "unknown";
+  const now = Date.now();
+  const recent = (signupHits.get(ip) ?? []).filter((t) => now - t < 3_600_000);
+  if (recent.length >= 5)
+    return reply.code(429).send({ ok: false, error: "too many requests — try again later" });
+  recent.push(now);
+  signupHits.set(ip, recent);
+
+  const id = randomUUID().slice(0, 8);
+  const record = {
+    id,
+    business,
+    email,
+    website: website || null,
+    requestedAt: new Date().toISOString(),
+    ip,
+    status: "pending",
+  };
+  try {
+    await fs.mkdir(SIGNUP_DIR, { recursive: true });
+    await fs.writeFile(path.join(SIGNUP_DIR, `${id}.json`), JSON.stringify(record, null, 2), {
+      mode: 0o600,
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return reply.code(500).send({ ok: false, error: `could not record the request: ${msg}` });
+  }
+
+  return reply.code(202).send({ ok: true, status: "pending" });
+});
+
 // Mint a fresh one-time enrollment link. Owner-gated: issuing a token is the same
 // authority as holding a session, so it is not a way back in without one.
 app.post("/auth/enroll/token", { preHandler: [requireAuth, requireOwner] }, async (req, reply) => {

@@ -20,9 +20,18 @@ dna-foundry/swarm/memory/
 site/public/
 site/resources/
 site/.hugo_build.lock
-site/data/
-site/static/
 site/content/b/
+# These two hold BOTH generated output (companies/*.json from build-from-cards.sh,
+# qr/*.png from the publisher) AND hand-authored source (the landing's css/js and
+# vendored libs, data/pricing.json). An ignored DIRECTORY cannot have a file
+# re-included inside it, so these are written `dir/*` — that leaves the directory
+# itself walkable and lets the ! rules below actually take effect.
+site/data/*
+!site/data/pricing.json
+site/static/*
+!site/static/landing.css
+!site/static/landing.js
+!site/static/vendor/
 
 # Per-run compiled card output. Everything under compiled/ is generated; the
 # demo cards that ARE tracked stay tracked — ignore rules never apply to tracked
