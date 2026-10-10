@@ -347,10 +347,13 @@ async function fetchStyleSheets(html: string, baseUrl: string, limit = 2): Promi
 }
 
 export function extractVisual(html: string, baseUrl = "", externalCss = ""): VisualExtraction {
-  // CSS custom properties
+  // CSS custom properties (inline + external)
   const cssVariables: Record<string, string> = {};
   for (const m of html.matchAll(/(--[\w-]+)\s*:\s*([^;"'}]+)/g)) {
     cssVariables[m[1]] = m[2].trim();
+  }
+  for (const m of externalCss.matchAll(/(--[\w-]+)\s*:\s*([^;"'}]+)/g)) {
+    if (!(m[1] in cssVariables)) cssVariables[m[1]] = m[2].trim();
   }
 
   // Colour frequency across <style> blocks, inline styles, CSS vars and any
@@ -374,13 +377,19 @@ export function extractVisual(html: string, baseUrl = "", externalCss = ""): Vis
   if (noNeutral.length >= 3) colors = noNeutral;
   colors = colors.slice(0, 6);
 
-  // Fonts — first family in each stack, minus generic keywords
+  // Fonts — first family in each stack, minus generic keywords; resolve var()
   const fontSource = externalCss ? `${html}\n${externalCss}` : html;
   const GENERIC = /^(inherit|initial|unset|revert|sans-serif|serif|monospace|cursive|fantasy|system-ui|ui-[\w-]+|emoji|math)$/i;
+  const resolveVar = (v: string): string => {
+    const m = v.match(/^var\(\s*(--[\w-]+)\s*(?:,\s*([^)]+))?\)$/);
+    if (!m) return v;
+    const resolved = cssVariables[m[1]] ?? m[2] ?? "";
+    return resolved.split(",")[0].replace(/['"]/g, "").trim();
+  };
   const fonts = [...new Set(
     [...fontSource.matchAll(/font-family\s*:\s*([^;"'}]+)/gi)]
-      .map((m) => m[1].split(",")[0].replace(/['"]/g, "").trim())
-      .filter((f) => f && !GENERIC.test(f) && f.length < 60),
+      .map((m) => resolveVar(m[1].split(",")[0].replace(/['"]/g, "").trim()))
+      .filter((f) => f && !GENERIC.test(f) && f.length < 60 && !f.startsWith("var(")),
   )].slice(0, 3);
 
   // CTAs — button text + button/cta-styled anchor text
