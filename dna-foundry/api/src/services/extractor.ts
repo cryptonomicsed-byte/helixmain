@@ -312,23 +312,52 @@ function resolveUrl(src: string, baseUrl: string): string {
   }
 }
 
-export function extractVisual(html: string, baseUrl = ""): VisualExtraction {
+/**
+ * Fetch up to `limit` same-origin external stylesheets so the colour/font scan
+ * can see CSS that modern sites ship in linked files rather than inline <style>.
+ * Fail-safe: any error or non-200 is simply skipped.
+ */
+async function fetchStyleSheets(html: string, baseUrl: string, limit = 2): Promise<string> {
+  const hrefs = [...html.matchAll(/<link[^>]+rel=["']stylesheet["'][^>]*>/gi)]
+    .map((m) => m[0].match(/href=["']([^"']+)["']/i)?.[1] ?? "")
+    .map((h) => resolveUrl(h, baseUrl))
+    .filter((u) => {
+      try { return new URL(u).origin === new URL(baseUrl).origin; } catch { return false; }
+    });
+
+  const parts: string[] = [];
+  for (const u of [...new Set(hrefs)].slice(0, limit)) {
+    try {
+      const res = await fetch(u, {
+        signal: AbortSignal.timeout(8000),
+        headers: { "User-Agent": "HelixMain/1.0" },
+      });
+      if (res.ok) parts.push((await res.text()).slice(0, 200_000));
+    } catch {
+      // never fatal
+    }
+  }
+  return parts.join("\n");
+}
+
+export function extractVisual(html: string, baseUrl = "", externalCss = ""): VisualExtraction {
   // CSS custom properties
   const cssVariables: Record<string, string> = {};
   for (const m of html.matchAll(/(--[\w-]+)\s*:\s*([^;"'}]+)/g)) {
     cssVariables[m[1]] = m[2].trim();
   }
 
-  // Colour frequency across <style> blocks, inline styles and CSS vars
+  // Colour frequency across <style> blocks, inline styles, CSS vars and any
+  // external stylesheet text we managed to fetch.
   const freq = new Map<string, number>();
   const bump = (hex: string) => freq.set(hex, (freq.get(hex) ?? 0) + 1);
 
   const styleBlocks = [...html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi)].map((m) => m[1]);
   const inlineStyles = [...html.matchAll(/style=["']([^"']*)["']/gi)].map((m) => m[1]);
-  for (const css of [...styleBlocks, ...inlineStyles, ...Object.values(cssVariables)]) {
+  for (const css of [...styleBlocks, ...inlineStyles, ...Object.values(cssVariables), externalCss]) {
     for (const m of css.matchAll(/#[0-9A-Fa-f]{6}\b/g)) bump(m[0].toUpperCase());
   }
-  for (const css of inlineStyles) {
+  for (const css of [...inlineStyles, externalCss]) {
     for (const m of css.matchAll(/rgb\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*\)/gi)) bump(rgbToHex(m[0]));
   }
 
@@ -339,9 +368,10 @@ export function extractVisual(html: string, baseUrl = ""): VisualExtraction {
   colors = colors.slice(0, 6);
 
   // Fonts — first family in each stack, minus generic keywords
+  const fontSource = externalCss ? `${html}\n${externalCss}` : html;
   const GENERIC = /^(inherit|initial|unset|revert|sans-serif|serif|monospace|cursive|fantasy|system-ui|ui-[\w-]+|emoji|math)$/i;
   const fonts = [...new Set(
-    [...html.matchAll(/font-family\s*:\s*([^;"'}]+)/gi)]
+    [...fontSource.matchAll(/font-family\s*:\s*([^;"'}]+)/gi)]
       .map((m) => m[1].split(",")[0].replace(/['"]/g, "").trim())
       .filter((f) => f && !GENERIC.test(f) && f.length < 60),
   )].slice(0, 3);
@@ -728,6 +758,10 @@ export async function extractCard(req: ExtractionRequest): Promise<ExtractedCard
 
   // ---- DOM parse ----
   const dom = parseDom(fetched.html, finalUrl);
+  // Enrich palette/fonts from same-origin stylesheets — modern sites ship CSS
+  // in linked files, not inline <style>, so the inline scan alone is thin.
+  const externalCss = await fetchStyleSheets(fetched.html, finalUrl).catch(() => "");
+  if (externalCss) dom.visual = extractVisual(fetched.html, finalUrl, externalCss);
   const socials = extractSocials(dom.socialLinks);
 
   // ---- LLM extraction ----
