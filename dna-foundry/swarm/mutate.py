@@ -139,7 +139,7 @@ def compiled_dir(card: dict) -> Path:
 
 
 def load_changelog(card: dict) -> list[str]:
-    cl_path = compiled_dir(card) / "CHANGELOG.json"
+    cl_path = compiled_dir(card) / "card-changelog.json"
     if cl_path.exists():
         return json.loads(cl_path.read_text())
     return [f"**v{card['version']}** ({card['created_at']}): initial extraction"]

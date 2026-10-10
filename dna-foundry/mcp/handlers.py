@@ -62,7 +62,7 @@ def tool_compile(args: dict) -> dict:
         return {"ok": False, "error": r.stderr[-2000:]}
     return {"ok": True, "card_id": card["id"], "version": card["version"],
             "out_dir": str(out),
-            "artifacts": ["CARD.md", "CHANGELOG.json", "system-prompt.md",
+            "artifacts": ["CARD.md", "card-changelog.json", "system-prompt.md",
                           "policy-seed.json", "tool-allowlist.json",
                           "rag-manifest.json", "dna-fields-used.json"],
             "card_md": str(out / "CARD.md")}

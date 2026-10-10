@@ -183,13 +183,13 @@ const cl = changelogPath ? JSON.parse(fs.readFileSync(changelogPath, "utf8")) : 
 
 // The compiler owns the version CHANGELOG, not the caller. When --out already
 // holds a compiled card and this is a NEWER version, carry the prior changelog
-// forward and append a line for this version. An empty CHANGELOG.json beside a
+// forward and append a line for this version. An empty card-changelog.json beside a
 // real previous_hash is half a chain: the hash says "v2 follows v1" and the
 // changelog says nothing happened. Doing it here means no caller can forget it.
 let changelog = Array.isArray(cl) ? cl.slice() : [];
 if (outDir) {
   const priorMdPath = path.join(outDir, "CARD.md");
-  const priorClPath = path.join(outDir, "CHANGELOG.json");
+  const priorClPath = path.join(outDir, "card-changelog.json");
   if (fs.existsSync(priorMdPath)) {
     try {
       const prior = parseCardMd(fs.readFileSync(priorMdPath, "utf8"));
@@ -219,7 +219,7 @@ if (outDir) {
   fs.writeFileSync(path.join(outDir, "rag-manifest.json"), JSON.stringify(compiled.ragManifest, null, 2));
   fs.writeFileSync(path.join(outDir, "dna-fields-used.json"), JSON.stringify(compiled.dnaFieldsUsed, null, 2));
   fs.writeFileSync(path.join(outDir, "CARD.md"), compiled.cardMd);
-  fs.writeFileSync(path.join(outDir, "CHANGELOG.json"), JSON.stringify(changelog, null, 2));
+  fs.writeFileSync(path.join(outDir, "card-changelog.json"), JSON.stringify(changelog, null, 2));
   // card.compile_openshell_policy -> the sandbox egress/landlock policy OpenShell consumes.
   // The policy object came out of compileCard (one call, no double compute); the
   // CLI only serialises it. Deterministic: same card + runtime -> byte-identical YAML.

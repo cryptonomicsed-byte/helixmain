@@ -532,7 +532,13 @@ async function applyCardPatch(
     return { ok: false, error: `could not write card: ${msg}`, code: 500 };
   }
 
-  const companyId = card.organizationId ?? card.org_id ?? cardId;
+  // The ledger lives beside the card, keyed by the slug the routes already
+  // address (`findCard(cardId)` resolved this card at HELIX_COMPANIES/<cardId>/).
+  // This used to key off card.organizationId (e.g. "org_demo_barber") — a
+  // DIFFERENT directory than GET /changelog/:companyId reads and than
+  // helix-onboard.sh writes, so API edits landed in an orphan ledger. One
+  // company, one file.
+  const companyId = cardId;
   const changelogPath = path.join(HELIX_COMPANIES, companyId, "changelog.json");
   try {
     await appendChange(

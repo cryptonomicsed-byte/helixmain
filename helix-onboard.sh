@@ -214,6 +214,25 @@ print(f"    api keys: written to {p} (0600, company + owner)")
 PYEOF
 }
 
+# Record the mutation in the company's API changelog ledger — the ONE history.
+# The API verifies this chain (GET /changelog/:id/verify), so the shell-side
+# writer must produce byte-identical hashes to changelog.ts; that is exactly
+# what infra/append-ledger.py does (and it is proven against the API).
+LEDGER_TOOL="/root/helixmain/infra/append-ledger.py"
+append_ledger() {
+  local id="$1" mutation="$2" note="$3"
+  local card_dir="${HELIX_DIR}/${id}"
+  if ! ssh "$VPS" "test -f '${LEDGER_TOOL}'"; then
+    echo "    WARNING: ${LEDGER_TOOL} not on host — skipping ledger append"
+    echo "             (sync helixmain to the host first: see REPOS.md)"
+    return 0
+  fi
+  ssh "$VPS" python3 "${LEDGER_TOOL}" "${card_dir}" \
+      --company-id "${id}" --mutation "${mutation}" \
+      --author onboarding --note "${note}" \
+    || echo "    WARNING: ledger append failed for ${id} (the card change is still saved)"
+}
+
 # Show QR for caller URL locally using Python
 show_qr() {
   local url="$1"
@@ -469,6 +488,7 @@ cmd_create() {
   # 5. Compile the card -> CARD.md + system-prompt + policy-seed + allowlist + hugo
   compile_card "$id"
   issue_api_keys "$id"
+  append_ledger "$id" "created" "card created (v1) via onboarding"
   post_compile_roles "$id"
 
   # 6. Write env file
@@ -574,6 +594,7 @@ cmd_update() {
 
     compile_card "$id"
     issue_api_keys "$id"
+    append_ledger "$id" "owner-confirmed" "card updated via onboarding"
   fi
 
   cmd_reload_inner "$id"

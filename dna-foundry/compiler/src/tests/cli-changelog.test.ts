@@ -1,7 +1,7 @@
 /**
  * cli-changelog.test.ts — the compiler owns the version changelog.
  *
- * An empty CHANGELOG.json beside a real previous_hash is half a chain. These
+ * An empty card-changelog.json beside a real previous_hash is half a chain. These
  * tests drive the real CLI: compile v1, then v2 into the SAME --out dir, and
  * assert the changelog carries forward with a line for the new version, that the
  * hash chain links, that CARD.md still verifies, and that re-compiling the SAME
@@ -56,7 +56,7 @@ test("a first compile writes an empty changelog and verifies", () => {
   fs.writeFileSync(v1, JSON.stringify(card()));
   run(["--card", v1, "--out", dir]);
 
-  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir, "CHANGELOG.json"), "utf8")), []);
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir, "card-changelog.json"), "utf8")), []);
   assert.match(run(["--verify-md", "--md", path.join(dir, "CARD.md")]), /^OK /);
 });
 
@@ -74,7 +74,7 @@ test("a version bump appends exactly one changelog line and chains the hash", ()
   );
   run(["--card", v2, "--out", dir]);
 
-  const cl = JSON.parse(fs.readFileSync(path.join(dir, "CHANGELOG.json"), "utf8"));
+  const cl = JSON.parse(fs.readFileSync(path.join(dir, "card-changelog.json"), "utf8"));
   assert.equal(cl.length, 1);
   assert.match(cl[0], /\*\*v2\*\*/);
 
@@ -91,7 +91,7 @@ test("re-compiling the same version does not invent a changelog entry", () => {
   run(["--card", v1, "--out", dir]);
   run(["--card", v1, "--out", dir]); // same version again
 
-  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir, "CHANGELOG.json"), "utf8")), []);
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir, "card-changelog.json"), "utf8")), []);
 });
 
 test("a caller-supplied changelog is carried, not discarded", () => {
@@ -102,7 +102,7 @@ test("a caller-supplied changelog is carried, not discarded", () => {
   fs.writeFileSync(v1, JSON.stringify(card()));
   run(["--card", v1, "--out", dir, "--changelog", clPath]);
 
-  const cl = JSON.parse(fs.readFileSync(path.join(dir, "CHANGELOG.json"), "utf8"));
+  const cl = JSON.parse(fs.readFileSync(path.join(dir, "card-changelog.json"), "utf8"));
   assert.deepEqual(cl, ["**v1** (seed): imported"]);
 });
 
