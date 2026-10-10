@@ -219,6 +219,8 @@ Include channelStrategies for every channel listed. Include 2-3 userStories per 
     jsonMode: true,
     temperature: 0.7,
     maxTokens: 3000,
+    orgId: companyId,
+    operationType: "campaign_prd",
   });
 
   let raw: any;

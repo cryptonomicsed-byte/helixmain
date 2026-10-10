@@ -19,6 +19,7 @@ const TABS: { to: string; label: string; icon: string }[] = [
   { to: 'schedule',    label: 'Schedule',   icon: 'calendar' },
   { to: 'intel',       label: 'Intel',      icon: 'intel' },
   { to: 'approvals',   label: 'Approvals',  icon: 'approvals' },
+  { to: 'settings',    label: 'AI',         icon: 'settings' },
   { to: 'history',     label: 'History',    icon: 'clock' },
 ]
 

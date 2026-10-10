@@ -20,6 +20,7 @@ import { OverviewTab } from './pages/card/OverviewTab'
 import { CardTab }     from './pages/card/CardTab'
 import { SiteTab }     from './pages/card/SiteTab'
 import { HistoryTab }  from './pages/card/HistoryTab'
+import { AiTab }       from './pages/card/AiTab'
 
 /** /company/:id → /card/:id, preserving the id. */
 function LegacyCompany() {
@@ -52,6 +53,7 @@ export default function App() {
           <Route path="schedule"       element={<SchedulePage />} />
           <Route path="intel"          element={<IntelPage />} />
           <Route path="approvals"      element={<ApprovalsPage scoped />} />
+          <Route path="settings"       element={<AiTab />} />
           <Route path="site"           element={<SiteTab />} />
           <Route path="history"        element={<HistoryTab />} />
         </Route>

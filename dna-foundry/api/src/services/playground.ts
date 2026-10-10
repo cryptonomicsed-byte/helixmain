@@ -295,9 +295,10 @@ export async function sendMessage(
   const aiResp = await aiGateway.call({
     prompt: conversationPrompt,
     systemPrompt: meta.systemPrompt,
-    provider: "deepseek",
     temperature: 0.7,
     maxTokens: 512,
+    orgId: (session as any).companyId,
+    operationType: "playground_message",
   });
 
   // Parse meta block

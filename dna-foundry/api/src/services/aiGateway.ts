@@ -14,8 +14,7 @@ import { createHash } from "crypto";
 import * as fs from "fs/promises";
 import * as path from "path";
 import { CostEntry, costLog } from "./costLog";
-import { keyFor, providerForEnv, getSettings } from "./settings";
-
+import { keyForProvider, resolveModel } from "./settings";
 // ---------------------------------------------------------------------------
 // Public types
 // ---------------------------------------------------------------------------
@@ -33,12 +32,19 @@ export interface AiRequest {
   jsonMode?: boolean;
   strategy?: InferenceStrategy;
   cacheKey?: string;
+  /** Business this call is for — drives per-business model + key resolution. */
+  orgId?: string;
+  /** Business aspect (e.g. sales_outreach) — drives per-aspect model override. */
+  operationType?: string;
 }
 
 export interface AiResponse {
   text: string;
   provider: Provider;
   model: string;
+  /** Where the provider/model came from (business · aspect / business default /
+   *  account default / built-in / explicit). */
+  modelSource: string;
   cached: boolean;
   fallbackTriggered: boolean;
   cost: CostEntry;
@@ -118,10 +124,9 @@ function cacheSet(key: string, response: AiResponse): void {
 }
 
 function makeCacheKey(req: AiRequest): string {
-  const s = getSettings();
-  const provider = req.provider ?? s.provider ?? "deepseek";
-  const model = req.model ?? s.model ?? "deepseek-chat";
-  const raw = `${provider}:${model}:${req.prompt}:${req.systemPrompt ?? ""}`;
+  // provider/model here are already resolved by call(); orgId + aspect are part
+  // of the key so two businesses never share a cached answer.
+  const raw = `${req.orgId ?? "-"}:${req.operationType ?? "-"}:${req.provider}:${req.model}:${req.prompt}:${req.systemPrompt ?? ""}`;
   return createHash("sha256").update(raw).digest("hex");
 }
 
@@ -324,12 +329,10 @@ async function callGemini(
 // Route to provider
 // ---------------------------------------------------------------------------
 
-function getEnvKey(name: string): string {
-  // Keys set from the dashboard (runtime settings) take precedence over env.
-  const provider = providerForEnv(name);
-  const fromSettings = provider ? keyFor(provider) : undefined;
-  const val = fromSettings || process.env[name];
-  if (!val) throw new Error(`Missing environment variable: ${name}`);
+/** Key for a provider, scoped to the business when known: business → account → env. */
+function keyForProviderOrThrow(provider: Provider, orgId?: string): string {
+  const val = keyForProvider(provider, orgId);
+  if (!val) throw new Error(`No API key configured for provider: ${provider}`);
   return val;
 }
 
@@ -341,12 +344,13 @@ async function callProvider(
   temperature: number,
   maxTokens: number,
   jsonMode: boolean,
+  orgId?: string,
 ): Promise<ProviderResult> {
   switch (provider) {
     case "deepseek":
       return callOpenAICompat(
         "https://api.deepseek.com/v1/chat/completions",
-        getEnvKey("DEEPSEEK_API_KEY"),
+        keyForProviderOrThrow("deepseek", orgId),
         model,
         systemPrompt,
         userPrompt,
@@ -357,7 +361,7 @@ async function callProvider(
     case "openai":
       return callOpenAICompat(
         "https://api.openai.com/v1/chat/completions",
-        getEnvKey("OPENAI_API_KEY"),
+        keyForProviderOrThrow("openai", orgId),
         model,
         systemPrompt,
         userPrompt,
@@ -368,7 +372,7 @@ async function callProvider(
     case "groq":
       return callOpenAICompat(
         "https://api.groq.com/openai/v1/chat/completions",
-        getEnvKey("GROQ_API_KEY"),
+        keyForProviderOrThrow("groq", orgId),
         model,
         systemPrompt,
         userPrompt,
@@ -378,7 +382,7 @@ async function callProvider(
       );
     case "anthropic":
       return callAnthropic(
-        getEnvKey("ANTHROPIC_API_KEY"),
+        keyForProviderOrThrow("anthropic", orgId),
         model,
         systemPrompt,
         userPrompt,
@@ -387,7 +391,7 @@ async function callProvider(
       );
     case "gemini":
       return callGemini(
-        getEnvKey("GEMINI_API_KEY"),
+        keyForProviderOrThrow("gemini", orgId),
         model,
         systemPrompt,
         userPrompt,
@@ -397,7 +401,7 @@ async function callProvider(
     case "openrouter":
       return callOpenAICompat(
         "https://openrouter.ai/api/v1/chat/completions",
-        getEnvKey("OPENROUTER_API_KEY"),
+        keyForProviderOrThrow("openrouter", orgId),
         model,
         systemPrompt,
         userPrompt,
@@ -408,7 +412,7 @@ async function callProvider(
     case "mistral":
       return callOpenAICompat(
         "https://api.mistral.ai/v1/chat/completions",
-        getEnvKey("MISTRAL_API_KEY"),
+        keyForProviderOrThrow("mistral", orgId),
         model,
         systemPrompt,
         userPrompt,
@@ -460,6 +464,7 @@ async function repairJson(
   temperature: number,
   maxTokens: number,
   attempt: number,
+  orgId?: string,
 ): Promise<{ text: string; attempts: number; extraTokensIn: number; extraTokensOut: number }> {
   let attempts = attempt;
   let extraTokensIn = 0;
@@ -487,6 +492,7 @@ async function repairJson(
       temperature,
       maxTokens,
       true,
+      orgId,
     );
     extraTokensIn += result.tokensIn;
     extraTokensOut += result.tokensOut;
@@ -517,11 +523,12 @@ async function selfConsistency(
   userPrompt: string,
   maxTokens: number,
   jsonMode: boolean,
+  orgId?: string,
 ): Promise<{ text: string; totalIn: number; totalOut: number }> {
   const TEMP = 0.7;
   const calls = await Promise.all(
     [0, 1, 2].map(() =>
-      callProvider(provider, model, systemPrompt, userPrompt, TEMP, maxTokens, jsonMode),
+      callProvider(provider, model, systemPrompt, userPrompt, TEMP, maxTokens, jsonMode, orgId),
     ),
   );
 
@@ -567,8 +574,12 @@ const DEFAULT_MAX_TOKENS = 2048;
 
 export class AiGateway {
   async call(req: AiRequest): Promise<AiResponse> {
-    const provider: Provider = req.provider ?? DEFAULT_PROVIDER;
-    const model = req.model ?? DEFAULT_MODEL;
+    // Per-business, per-aspect resolution: aspect override → business default
+    // → account default → built-in. Explicit req.provider/model always win.
+    const resolved = resolveModel(req.orgId, req.operationType);
+    const provider: Provider = req.provider ?? resolved.provider;
+    const model = req.model ?? resolved.model;
+    const modelSource = req.provider || req.model ? "explicit" : resolved.source;
     const temperature = req.temperature ?? DEFAULT_TEMP;
     const maxTokens = req.maxTokens ?? DEFAULT_MAX_TOKENS;
     const jsonMode = req.jsonMode ?? false;
@@ -608,10 +619,10 @@ export class AiGateway {
 
     const doCall = async (prov: Provider, mod: string): Promise<ProviderResult> => {
       if (strategy === "self_consistency") {
-        const r = await selfConsistency(prov, mod, systemPrompt, req.prompt, maxTokens, jsonMode);
+        const r = await selfConsistency(prov, mod, systemPrompt, req.prompt, maxTokens, jsonMode, req.orgId);
         return { text: r.text, tokensIn: r.totalIn, tokensOut: r.totalOut };
       }
-      return callProvider(prov, mod, systemPrompt, req.prompt, temperature, maxTokens, jsonMode);
+      return callProvider(prov, mod, systemPrompt, req.prompt, temperature, maxTokens, jsonMode, req.orgId);
     };
 
     let effectiveProvider: Provider = provider;
@@ -627,7 +638,7 @@ export class AiGateway {
       // Try openrouter before deepseek if key is available
       let openRouterResult: ProviderResult | null = null;
       try {
-        getEnvKey("OPENROUTER_API_KEY"); // throws if missing
+        keyForProviderOrThrow("openrouter", req.orgId); // throws if missing
         openRouterResult = await doCall("openrouter", "openrouter/auto");
       } catch {
         // openrouter key missing or call failed — fall through to deepseek
@@ -662,6 +673,7 @@ export class AiGateway {
         temperature,
         maxTokens,
         0,
+        req.orgId,
       );
       text = repaired.text;
       repairAttempts = repaired.attempts;
@@ -683,6 +695,7 @@ export class AiGateway {
       text,
       provider: effectiveProvider,
       model: effectiveModel,
+      modelSource,
       cached: false,
       fallbackTriggered,
       cost,

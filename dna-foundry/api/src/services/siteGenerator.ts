@@ -144,6 +144,8 @@ Return ONLY the complete HTML document starting with <!DOCTYPE html>. No markdow
     jsonMode: false,
     temperature: 0.6,
     maxTokens: 4000,
+    orgId: companyId,
+    operationType: "site_generate",
   });
 
   // Strip any accidental markdown fences the LLM might add

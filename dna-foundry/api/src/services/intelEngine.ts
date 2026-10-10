@@ -91,6 +91,8 @@ Return JSON: {"visual":{"winner":"","score":0,"analysis":""},"messaging":{"winne
     systemPrompt: "You are a competitive brand strategist. Return only valid JSON.",
     jsonMode: true,
     temperature: 0.4,
+    orgId: (cardA?.organizationId ?? cardA?.org_id) as string | undefined,
+    operationType: "intel_battle",
   });
 
   type BattleRaw = {

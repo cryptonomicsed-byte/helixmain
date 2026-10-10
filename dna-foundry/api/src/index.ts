@@ -12,7 +12,12 @@ import { promises as fs } from "fs";
 import path from "path";
 import Fastify from "fastify";
 import { extractor } from "./services/extractor";
-import { loadSettings, saveSettings, getSettings, publicSettings, PROVIDERS } from "./services/settings";
+import {
+  loadSettings, saveSettings, getSettings, publicSettings, PROVIDERS,
+  loadAllCompanyAi, saveCompanyAi, publicCompanyAi, getCompanyAi,
+  ASPECTS,
+  type CompanyAiSettings,
+} from "./services/settings";
 import { agentCompiler, AgentRole } from "./services/agentCompiler";
 import { compileGreeting } from "./services/greetingCompiler";
 import {
@@ -211,6 +216,83 @@ app.put("/settings", async (req, reply) => {
   return publicSettings();
 });
 
+// ---------------------------------------------------------------------------
+// Per-business AI settings — which provider/model each aspect of THIS business
+// uses, plus optional per-business keys. Resolution: aspect → business →
+// account → built-in; keys: business → account → env.
+// ---------------------------------------------------------------------------
+
+const VALID_ASPECTS = ASPECTS.map((a) => a.key);
+
+app.get("/settings/:orgId", async (req) => {
+  const { orgId } = req.params as { orgId: string };
+  return publicCompanyAi(orgId);
+});
+
+app.put("/settings/:orgId", async (req, reply) => {
+  const { orgId } = req.params as { orgId: string };
+  const body = (req.body ?? {}) as {
+    provider?: string | null;
+    model?: string | null;
+    scopes?: Record<string, { provider?: string | null; model?: string | null }>;
+    keys?: Record<string, string>;
+    budgetCredits?: number | null;
+  };
+
+  const cur = getCompanyAi(orgId);
+  const next: CompanyAiSettings = { ...cur, scopes: { ...(cur.scopes ?? {}) }, keys: { ...(cur.keys ?? {}) } };
+
+  if (body.provider !== undefined) {
+    if (body.provider === null || body.provider === "") delete next.provider;
+    else if (!PROVIDERS.includes(body.provider as (typeof PROVIDERS)[number])) {
+      return reply.code(400).send({ ok: false, error: `unknown provider: ${body.provider}` });
+    } else next.provider = body.provider as (typeof PROVIDERS)[number];
+  }
+  if (body.model !== undefined) {
+    if (body.model === null || body.model === "") delete next.model;
+    else next.model = String(body.model);
+  }
+
+  if (body.scopes && typeof body.scopes === "object") {
+    for (const [aspect, choice] of Object.entries(body.scopes)) {
+      if (!VALID_ASPECTS.includes(aspect)) continue;
+      const scope: { provider?: CompanyAiSettings["provider"]; model?: string } = { ...(next.scopes?.[aspect] ?? {}) };
+      if (choice?.provider !== undefined) {
+        if (choice.provider === null || choice.provider === "") delete scope.provider;
+        else if (!PROVIDERS.includes(choice.provider as (typeof PROVIDERS)[number])) {
+          return reply.code(400).send({ ok: false, error: `unknown provider for ${aspect}: ${choice.provider}` });
+        } else scope.provider = choice.provider as (typeof PROVIDERS)[number];
+      }
+      if (choice?.model !== undefined) {
+        if (choice.model === null || choice.model === "") delete scope.model;
+        else scope.model = String(choice.model);
+      }
+      // an empty override means "inherit" — drop it entirely
+      if (!scope.provider && !scope.model) delete next.scopes![aspect];
+      else next.scopes![aspect] = scope;
+    }
+  }
+
+  if (body.keys && typeof body.keys === "object") {
+    const keys: Record<string, string> = { ...(next.keys ?? {}) };
+    for (const [p, v] of Object.entries(body.keys)) {
+      if (!PROVIDERS.includes(p as (typeof PROVIDERS)[number])) continue;
+      if (!v) delete keys[p];                       // empty clears
+      else keys[p] = v;
+    }
+    next.keys = keys as CompanyAiSettings["keys"];
+  }
+
+  if (body.budgetCredits !== undefined) {
+    const n = Number(body.budgetCredits);
+    if (body.budgetCredits === null || !Number.isFinite(n) || n <= 0) delete next.budgetCredits;
+    else next.budgetCredits = Math.floor(n);
+  }
+
+  await saveCompanyAi(orgId, next);
+  return publicCompanyAi(orgId);
+});
+
 app.post("/extract", async (req, reply) => {
   const body = (req.body ?? {}) as { url?: string; orgId?: string; companyId?: string };
   if (!body.url) return reply.code(400).send({ ok: false, error: "url required" });
@@ -376,7 +458,7 @@ app.patch("/cards/:id", async (req, reply) => {
     card.id ?? id,
     companyId,
     fieldsChanged.length > 0 ? fieldsChanged : ["*"],
-    "owner",
+    "owner-confirmed",
     body.author ?? "owner",
     body.summary ?? "Card edited",
   ).catch(() => { /* changelog failure must not lose the edit */ });
@@ -2361,6 +2443,7 @@ async function main() {
   }, 60_000);
 
   await loadSettings();
+  await loadAllCompanyAi();
   await app.listen({ port: 3101, host: "127.0.0.1" });
 }
 

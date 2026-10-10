@@ -100,3 +100,156 @@ export function publicSettings() {
     providers,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Per-business AI configuration
+//
+// A business can point each *aspect* (the functions that actually call an LLM)
+// at its own provider/model, and optionally carry its own provider key.
+// Resolution is always: aspect override → business default → account default →
+// built-in, with keys as business → account → env. Stored 0600 at
+// /etc/helix/companies/<orgId>/ai.json.
+// ---------------------------------------------------------------------------
+
+export const ASPECTS: { key: string; label: string; hint: string }[] = [
+  { key: "extraction",         label: "DNA extraction",    hint: "Reading a website into a card" },
+  { key: "content_generation", label: "Content & copy",    hint: "Posts, emails, ad copy" },
+  { key: "campaign_prd",       label: "Campaign planning", hint: "Turning a goal into a plan" },
+  { key: "sales_qualify",      label: "Lead qualification",hint: "Scoring inbound leads" },
+  { key: "sales_outreach",     label: "Outreach drafting", hint: "Cold email, LinkedIn, call scripts" },
+  { key: "sales_review",       label: "Deal review",       hint: "Pipeline health reads" },
+  { key: "intel_battle",       label: "Competitive intel", hint: "Battle cards and trends" },
+  { key: "site_generate",      label: "Website builder",   hint: "Generating the landing page" },
+  { key: "greeting_compile",   label: "Voice greeting",    hint: "Compiling the phone greeting" },
+  { key: "playground_message", label: "Playground",        hint: "Test chats with the agent" },
+];
+
+export interface ScopeChoice {
+  provider?: Provider;
+  model?: string;
+}
+
+export interface CompanyAiSettings {
+  provider?: Provider;                       // this business's default
+  model?: string;
+  scopes?: Record<string, ScopeChoice>;      // aspect key → override
+  keys?: Partial<Record<Provider, string>>;  // optional per-business key
+  budgetCredits?: number;                    // monthly credit cap (0/absent = uncapped)
+}
+
+const COMPANIES_DIR = process.env.HELIX_COMPANIES_DIR ?? "/etc/helix/companies";
+
+/** orgId → settings. Filled at boot and on every save, read synchronously. */
+const companyAi = new Map<string, CompanyAiSettings>();
+
+export function getCompanyAi(orgId?: string): CompanyAiSettings {
+  if (!orgId) return {};
+  return companyAi.get(orgId) ?? {};
+}
+
+/** Populate the in-process cache from disk at boot. */
+export async function loadAllCompanyAi(): Promise<number> {
+  let n = 0;
+  try {
+    const entries = await fs.readdir(COMPANIES_DIR, { withFileTypes: true });
+    for (const e of entries) {
+      if (!e.isDirectory()) continue;
+      try {
+        const raw = JSON.parse(
+          await fs.readFile(path.join(COMPANIES_DIR, e.name, "ai.json"), "utf8"),
+        ) as CompanyAiSettings;
+        companyAi.set(e.name, raw);
+        n++;
+      } catch {
+        // no ai.json for this business — fine
+      }
+    }
+  } catch {
+    // companies dir does not exist yet
+  }
+  return n;
+}
+
+export async function saveCompanyAi(orgId: string, next: CompanyAiSettings): Promise<CompanyAiSettings> {
+  companyAi.set(orgId, next);
+  const dir = path.join(COMPANIES_DIR, orgId);
+  await fs.mkdir(dir, { recursive: true });
+  const file = path.join(dir, "ai.json");
+  await fs.writeFile(file, JSON.stringify(next, null, 2), { mode: 0o600 });
+  await fs.chmod(file, 0o600).catch(() => {});
+  return next;
+}
+
+function defaultModelFor(p: Provider): string {
+  return PROVIDER_MODELS[p]?.[0] ?? "deepseek-chat";
+}
+
+/**
+ * Model resolution for one call. Returns the source too, so the UI can say
+ * honestly where a given model choice is coming from.
+ */
+export function resolveModel(
+  orgId?: string,
+  aspect?: string,
+): { provider: Provider; model: string; source: string } {
+  const c = getCompanyAi(orgId);
+  const g = getSettings();
+  const scope = aspect ? c.scopes?.[aspect] : undefined;
+
+  if (scope?.model || scope?.provider) {
+    const provider = (scope.provider ?? c.provider ?? g.provider ?? "deepseek") as Provider;
+    return { provider, model: scope.model ?? defaultModelFor(provider), source: `business · ${aspect}` };
+  }
+  if (c.model || c.provider) {
+    const provider = (c.provider ?? g.provider ?? "deepseek") as Provider;
+    return { provider, model: c.model ?? defaultModelFor(provider), source: "business default" };
+  }
+  if (g.model || g.provider) {
+    const provider = (g.provider ?? "deepseek") as Provider;
+    return { provider, model: g.model ?? defaultModelFor(provider), source: "account default" };
+  }
+  return { provider: "deepseek", model: "deepseek-chat", source: "built-in" };
+}
+
+/** Key for a provider, scoped: business key → account key → env. */
+export function keyForProvider(provider: Provider, orgId?: string): string | undefined {
+  return getCompanyAi(orgId).keys?.[provider] || keyFor(provider);
+}
+
+/** Monthly credit cap for a business (0 / undefined = uncapped). */
+export function budgetCreditsFor(orgId?: string): number {
+  const b = getCompanyAi(orgId).budgetCredits;
+  return typeof b === "number" && b > 0 ? b : 0;
+}
+
+/** Never returns raw secrets — presence, hint and effective resolution only. */
+export function publicCompanyAi(orgId?: string) {
+  const c = getCompanyAi(orgId);
+  const g = getSettings();
+  return {
+    ok: true,
+    orgId: orgId ?? null,
+    provider: c.provider ?? null,
+    model: c.model ?? null,
+    scopes: c.scopes ?? {},
+    effective: Object.fromEntries(ASPECTS.map((a) => [a.key, resolveModel(orgId, a.key)])),
+    keys: Object.fromEntries(
+      PROVIDERS.map((p) => {
+        const k = keyForProvider(p, orgId);
+        return [
+          p,
+          {
+            hasKey: Boolean(k),
+            source: c.keys?.[p] ? "business" : g.keys?.[p] ? "account" : process.env[PROVIDER_ENV[p]] ? "env" : null,
+            hint: k ? `${k.slice(0, 4)}…${k.slice(-3)}` : "",
+            models: PROVIDER_MODELS[p],
+          },
+        ];
+      }),
+    ),
+    aspects: ASPECTS,
+    providers: PROVIDERS,
+    account: { provider: g.provider ?? "deepseek", model: g.model ?? "deepseek-chat" },
+    budgetCredits: budgetCreditsFor(orgId),
+  };
+}

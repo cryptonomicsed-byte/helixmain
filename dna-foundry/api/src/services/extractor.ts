@@ -593,7 +593,7 @@ Return ONLY this JSON structure:
 }`;
 }
 
-async function callLlm(url: string, dom: ParsedDom): Promise<LlmExtraction | null> {
+async function callLlm(url: string, dom: ParsedDom, orgId?: string): Promise<LlmExtraction | null> {
   const prompt = buildExtractionPrompt(url, dom);
   try {
     const res = await aiGateway.call({
@@ -601,6 +601,8 @@ async function callLlm(url: string, dom: ParsedDom): Promise<LlmExtraction | nul
       jsonMode: true,
       strategy: "cot",
       maxTokens: 2048,
+      orgId,
+      operationType: "extraction",
     });
 
     const parsed = JSON.parse(res.text) as Partial<LlmExtraction>;
@@ -781,7 +783,7 @@ export async function extractCard(req: ExtractionRequest): Promise<ExtractedCard
   const socials = extractSocials(dom.socialLinks);
 
   // ---- LLM extraction ----
-  const llm = await callLlm(finalUrl, dom);
+  const llm = await callLlm(finalUrl, dom, req.orgId);
   if (!llm) {
     return { ...fallbackCard(req), id };
   }

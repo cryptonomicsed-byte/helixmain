@@ -254,6 +254,41 @@ export function normalizeCard(raw: any): BusinessCard {
   }
 }
 
+// ---- Per-business AI settings -------------------------------------------
+
+export interface AiAspect { key: string; label: string; hint: string }
+
+export interface AiKeyInfo {
+  hasKey: boolean
+  source: 'business' | 'account' | 'env' | null
+  hint: string
+  models: string[]
+}
+
+export interface AiEffective { provider: string; model: string; source: string }
+
+export interface CompanyAiResponse {
+  ok: boolean
+  orgId: string | null
+  provider: string | null
+  model: string | null
+  scopes: Record<string, { provider?: string; model?: string }>
+  effective: Record<string, AiEffective>
+  keys: Record<string, AiKeyInfo>
+  aspects: AiAspect[]
+  providers: string[]
+  account: { provider: string; model: string }
+  budgetCredits: number
+}
+
+export interface CompanyAiPatch {
+  provider?: string | null
+  model?: string | null
+  scopes?: Record<string, { provider?: string | null; model?: string | null }>
+  keys?: Record<string, string>
+  budgetCredits?: number | null
+}
+
 export const api = {
   // Extraction & compilation
   extract: async (url: string, orgId: string) =>
@@ -426,4 +461,10 @@ export const api = {
   getSettings: () => get<SettingsResponse>('/settings'),
   saveSettings: (body: { provider?: string; model?: string; keys?: Record<string, string> }) =>
     request<SettingsResponse>('PUT', '/settings', body),
+
+  // Per-business AI — which model each aspect of THIS business runs on.
+  getCompanyAi: (orgId: string) =>
+    get<CompanyAiResponse>(`/settings/${encodeURIComponent(orgId)}`),
+  saveCompanyAi: (orgId: string, body: CompanyAiPatch) =>
+    request<CompanyAiResponse>('PUT', `/settings/${encodeURIComponent(orgId)}`, body),
 }

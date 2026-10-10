@@ -9,6 +9,7 @@
 import { randomUUID } from "crypto";
 import * as fs from "fs/promises";
 import * as path from "path";
+import { budgetCreditsFor } from "./settings";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -209,6 +210,21 @@ export async function deductCredits(
     throw new QuotaExceeded(
       `Insufficient credits for company ${companyId}. Balance: ${account.balance}, required: ${creditsDeducted}`,
     );
+  }
+
+  // Per-business monthly budget cap (0 = uncapped). Enforced here so the cap is
+  // real, not a note in the UI.
+  const cap = budgetCreditsFor(companyId);
+  if (cap > 0) {
+    const month = new Date().toISOString().slice(0, 7); // YYYY-MM
+    const spentThisMonth = account.usageLog
+      .filter((e) => !e.refunded && e.timestamp.slice(0, 7) === month && e.creditsDeducted > 0)
+      .reduce((s, e) => s + e.creditsDeducted, 0);
+    if (spentThisMonth + creditsDeducted > cap) {
+      throw new QuotaExceeded(
+        `Monthly budget cap reached for company ${companyId}. Spent: ${spentThisMonth}/${cap} credits this month.`,
+      );
+    }
   }
 
   const entry: UsageEntry = {

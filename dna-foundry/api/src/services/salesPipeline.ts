@@ -505,7 +505,7 @@ Lead: ${lead.name}, ${lead.company ?? "unknown company"}, ${lead.website ?? "no 
 Score this lead 0-100 and identify qualification signals.
 Return JSON: {"score": <number>, "signals": [<string>,...], "tier": "hot"|"warm"|"cold"}`;
 
-  const resp = await aiGateway.call({ prompt, jsonMode: true });
+  const resp = await aiGateway.call({ prompt, jsonMode: true, orgId: lead.companyId, operationType: "sales_qualify" });
 
   let parsed: { score?: number; signals?: string[]; tier?: string } = {};
   try {
@@ -609,7 +609,7 @@ Write personalized outreach across three channels. Return JSON: {
   "callScript": "<60-second cold-call opener ending in one clear question>"
 }`;
 
-  const resp = await aiGateway.call({ prompt, jsonMode: true, maxTokens: 2048 });
+  const resp = await aiGateway.call({ prompt, jsonMode: true, maxTokens: 2048, orgId: lead.companyId, operationType: "sales_outreach" });
 
   let parsed: {
     subjectLine?: string;
@@ -700,7 +700,7 @@ Return JSON:
   }
 }`;
 
-  const resp = await aiGateway.call({ prompt, jsonMode: true, maxTokens: 2048 });
+  const resp = await aiGateway.call({ prompt, jsonMode: true, maxTokens: 2048, orgId: lead.companyId, operationType: "sales_close" });
 
   let parsed: Partial<ClosingScriptResult> = {};
   try {
@@ -761,7 +761,7 @@ Assess deal health. Return JSON:
 
   let parsed: Partial<Omit<DealReview, "leadId" | "reviewedAt">> = {};
   try {
-    const resp = await aiGateway.call({ prompt, jsonMode: true, maxTokens: 1536 });
+    const resp = await aiGateway.call({ prompt, jsonMode: true, maxTokens: 1536, orgId: lead.companyId, operationType: "sales_review" });
     parsed = JSON.parse(resp.text) as typeof parsed;
   } catch (e) {
     console.warn("[salesPipeline] reviewDeal failed, using heuristic:", e);
