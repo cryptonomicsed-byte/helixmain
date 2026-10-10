@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Icon } from './Icon'
-import { auth, sessionInfo, getApiKey, setApiKey, setOwnerKey } from '../api'
+import { auth, sessionInfo, setApiKey, setOwnerKey } from '../api'
 
 /*
  * One credential. The owner unlocks with a passkey — no PIN, no pasted API key.
