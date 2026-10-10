@@ -301,6 +301,12 @@ function rgbToHex(rgb: string): string {
   );
 }
 
+/** Expand a 3-digit hex (#abc) to 6-digit form. */
+function expand3(hex: string): string {
+  const h = hex.slice(1).toUpperCase();
+  return `#${h[0]}${h[0]}${h[1]}${h[1]}${h[2]}${h[2]}`;
+}
+
 function resolveUrl(src: string, baseUrl: string): string {
   if (!src) return "";
   if (/^https?:\/\//i.test(src)) return src;
@@ -318,12 +324,12 @@ function resolveUrl(src: string, baseUrl: string): string {
  * Fail-safe: any error or non-200 is simply skipped.
  */
 async function fetchStyleSheets(html: string, baseUrl: string, limit = 2): Promise<string> {
+  // Any http(s) stylesheet the page links, minus well-known font/utility CDNs.
+  const BLOCK = /fonts\.googleapis|fonts\.gstatic|cdnjs\.cloudflare|jsdelivr|unpkg|bootstrapcdn|fontawesome|typekit/i;
   const hrefs = [...html.matchAll(/<link[^>]+rel=["']stylesheet["'][^>]*>/gi)]
     .map((m) => m[0].match(/href=["']([^"']+)["']/i)?.[1] ?? "")
     .map((h) => resolveUrl(h, baseUrl))
-    .filter((u) => {
-      try { return new URL(u).origin === new URL(baseUrl).origin; } catch { return false; }
-    });
+    .filter((u) => /^https?:\/\//i.test(u) && !BLOCK.test(u));
 
   const parts: string[] = [];
   for (const u of [...new Set(hrefs)].slice(0, limit)) {
@@ -356,9 +362,10 @@ export function extractVisual(html: string, baseUrl = "", externalCss = ""): Vis
   const inlineStyles = [...html.matchAll(/style=["']([^"']*)["']/gi)].map((m) => m[1]);
   for (const css of [...styleBlocks, ...inlineStyles, ...Object.values(cssVariables), externalCss]) {
     for (const m of css.matchAll(/#[0-9A-Fa-f]{6}\b/g)) bump(m[0].toUpperCase());
+    for (const m of css.matchAll(/#[0-9A-Fa-f]{3}\b/g)) bump(expand3(m[0]));
   }
   for (const css of [...inlineStyles, externalCss]) {
-    for (const m of css.matchAll(/rgb\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*\)/gi)) bump(rgbToHex(m[0]));
+    for (const m of css.matchAll(/rgba?\(\s*\d+\s*,\s*\d+\s*,\s*\d+/gi)) bump(rgbToHex(m[0]));
   }
 
   let colors = [...freq.entries()].sort((a, b) => b[1] - a[1]).map(([hex]) => hex);
