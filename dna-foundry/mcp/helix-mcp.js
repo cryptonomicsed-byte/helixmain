@@ -20,6 +20,14 @@
  *   content.generate  campaign PRD -> channel assets for a company
  *   leads.discover    hunt leads (Apollo text filters, or OSM/Overpass by GPS)
  *   site.publish      generate the company's landing site from its card
+ *   billing.status    credits + plan + usage history   (READ-ONLY — no charge)
+ *   analytics.query   a company's analytics for a period (READ-ONLY — no charge)
+ *   crm.manage        list/summary/by_stage/create/update CRM contacts
+ *
+ * Cost note: only voice.call, content.generate, leads.discover and site.publish
+ * spend credits, because only their API routes call deductCredits. The three
+ * read tools above wrap routes that do not charge, so they charge nothing —
+ * that is the API's behaviour passed through, not a decision made here.
  *
  * Env:
  *   HELIX_API_URL   default http://127.0.0.1:3101
@@ -146,22 +154,87 @@ const TOOLS = [
       required: ["companyId"],
     },
   },
+  {
+    name: "billing.status",
+    description:
+      "Read a company's billing standing: credit balance + tier, the latest plan, and " +
+      "the usage history. READ-ONLY — it spends no credits (the API's metering/plan " +
+      "endpoints do not charge). Each part is composed from the API and returned verbatim.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        companyId: { type: "string", description: "Company slug" },
+        from: { type: "string", description: "Optional ISO date — usage history lower bound" },
+        to: { type: "string", description: "Optional ISO date — usage history upper bound" },
+      },
+      required: ["companyId"],
+    },
+  },
+  {
+    name: "analytics.query",
+    description:
+      "Read a company's analytics for a period. READ-ONLY — spends no credits. With " +
+      "`enriched`, adds campaign/lead roll-ups; note the API computes the enriched " +
+      "lead totals system-wide (all companies), so treat those two numbers as platform " +
+      "totals, not this company's.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        companyId: { type: "string", description: "Company slug" },
+        period: {
+          type: "string",
+          enum: ["day", "week", "month"],
+          description: "Reporting period (default week)",
+        },
+        enriched: { type: "boolean", description: "Include the enriched roll-up" },
+      },
+      required: ["companyId"],
+    },
+  },
+  {
+    name: "crm.manage",
+    description:
+      "Work a company's CRM: list contacts, read the pipeline summary, list by stage, " +
+      "create a contact, or move/annotate one. The read actions (list/summary/by_stage) " +
+      "spend no credits; create/update write through to the API, which owns the store.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        companyId: { type: "string", description: "Company slug" },
+        action: {
+          type: "string",
+          enum: ["list", "summary", "by_stage", "create", "update"],
+          description: "What to do (default list)",
+        },
+        stage: { type: "string", description: "Pipeline stage — for action=by_stage" },
+        contactId: { type: "string", description: "Contact id — for action=update" },
+        contact: { type: "object", description: "Contact fields — for action=create" },
+        note: { type: "string", description: "Append a note — for action=update" },
+        updates: { type: "object", description: "Field updates — for action=update" },
+        cardId: { type: "string", description: "Card to validate a stage move — for action=update" },
+      },
+      required: ["companyId"],
+    },
+  },
 ];
 
 /** POST a JSON body to the API and normalise the answer. Never throws on a
  *  non-2xx — a 402 (out of credits) or 404 (no card) is a legitimate answer,
  *  not a transport failure. Only an unreachable API is an error. */
-async function api(pathname, body) {
+async function api(pathname, body, opts) {
+  const { method = "POST", companyId = null } = opts || {};
   const url = API_URL + pathname;
   const headers = { "content-type": "application/json" };
-  const key = keyFor(body && body.companyId);
+  // The tenant key comes from the path/args for reads (which carry no body) and
+  // from the body for writes. Either way it is the target company's OWN key.
+  const key = keyFor(companyId || (body && body.companyId));
   if (key) headers["x-api-key"] = key;
   let res;
   try {
     res = await fetch(url, {
-      method: "POST",
+      method,
       headers,
-      body: JSON.stringify(body ?? {}),
+      body: method === "GET" ? undefined : JSON.stringify(body ?? {}),
     });
   } catch (e) {
     return { httpStatus: 0, body: { ok: false, error: `API unreachable at ${url}: ${e.message}` } };
@@ -244,6 +317,94 @@ const HANDLERS = {
     // The API now publishes via the Hugo pipeline and returns the real public
     // URL in `url`; we surface it verbatim rather than inventing a path.
     return api("/site/generate", { companyId: a.companyId });
+  },
+
+  // Compose the billing picture from the API's own endpoints. Each part is the
+  // API's answer; nothing is derived here. None of these routes charge credits.
+  "billing.status": async (a) => {
+    const q = encodeURIComponent(a.companyId);
+    const credits = await api(`/metering/${q}`, null, { method: "GET", companyId: a.companyId });
+    if (credits.httpStatus !== 200) return credits; // 401/404 is the honest answer
+    const plan = await api(`/plan/${q}`, null, { method: "GET", companyId: a.companyId });
+    const qs = [];
+    if (a.from) qs.push(`from=${encodeURIComponent(a.from)}`);
+    if (a.to) qs.push(`to=${encodeURIComponent(a.to)}`);
+    const history = await api(
+      `/metering/${q}/history${qs.length ? `?${qs.join("&")}` : ""}`,
+      null,
+      { method: "GET", companyId: a.companyId }
+    );
+    const entries =
+      history.httpStatus === 200 && history.body && Array.isArray(history.body.entries)
+        ? history.body.entries
+        : history.httpStatus === 200
+          ? history.body
+          : null;
+    return {
+      httpStatus: 200,
+      body: {
+        ok: true,
+        companyId: a.companyId,
+        credits: credits.body,
+        // A 404 on the plan means "none generated yet" — a real answer, not an error.
+        plan: plan.httpStatus === 200 ? plan.body : null,
+        plan_http_status: plan.httpStatus,
+        history: entries,
+      },
+    };
+  },
+
+  "analytics.query": (a) => {
+    const period = a.period || "week";
+    if (!["day", "week", "month"].includes(period)) {
+      return { httpStatus: 0, body: { ok: false, error: "period must be day|week|month" } };
+    }
+    const q = encodeURIComponent(a.companyId);
+    const path = a.enriched
+      ? `/analytics/${q}/enriched?period=${period}`
+      : `/analytics/${q}?period=${period}`;
+    return api(path, null, { method: "GET", companyId: a.companyId });
+  },
+
+  "crm.manage": (a) => {
+    const q = encodeURIComponent(a.companyId);
+    switch (a.action || "list") {
+      case "list":
+        return api(`/crm/contacts/${q}`, null, { method: "GET", companyId: a.companyId });
+      case "summary":
+        return api(`/crm/summary/${q}`, null, { method: "GET", companyId: a.companyId });
+      case "by_stage":
+        if (!a.stage) {
+          return { httpStatus: 0, body: { ok: false, error: "action=by_stage needs `stage`" } };
+        }
+        return api(`/crm/contacts/${q}/stage/${encodeURIComponent(a.stage)}`, null, {
+          method: "GET",
+          companyId: a.companyId,
+        });
+      case "create":
+        if (!a.contact || typeof a.contact !== "object") {
+          return { httpStatus: 0, body: { ok: false, error: "action=create needs `contact`" } };
+        }
+        return api("/crm/contacts", { companyId: a.companyId, ...a.contact }, { companyId: a.companyId });
+      case "update": {
+        if (!a.contactId) {
+          return { httpStatus: 0, body: { ok: false, error: "action=update needs `contactId`" } };
+        }
+        if (!a.stage && !a.note && !a.updates) {
+          return { httpStatus: 0, body: { ok: false, error: "action=update needs one of stage/note/updates" } };
+        }
+        const body = { companyId: a.companyId };
+        if (a.stage) body.stage = a.stage;
+        if (a.note) body.note = a.note;
+        if (a.updates) body.updates = a.updates;
+        if (a.cardId) body.cardId = a.cardId;
+        // companyId rides along so requireAuth's tenant binding can 403 a mismatch
+        // rather than the write silently landing on another company's contact.
+        return api(`/crm/contacts/${encodeURIComponent(a.contactId)}`, body, { companyId: a.companyId });
+      }
+      default:
+        return { httpStatus: 0, body: { ok: false, error: `unknown action: ${a.action}` } };
+    }
   },
 };
 

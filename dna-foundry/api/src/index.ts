@@ -2257,6 +2257,14 @@ app.patch("/crm/contacts/:contactId", { preHandler: requireAuth }, async (req, r
 
   const existing = contactStore.get(contactId);
   if (!existing) return reply.code(404).send({ ok: false, error: "contact not found" });
+  // Tenant scope. This route carries no company in its path, so requireAuth has
+  // nothing to bind to — without an explicit check a valid key for company A
+  // could patch company B's contact by id alone. (Found while wiring crm.manage.)
+  const authCompany = (req as AuthCarrier).auth?.companyId;
+  const owner = (existing as { companyId?: string }).companyId;
+  if (owner && authCompany && owner !== authCompany) {
+    return reply.code(403).send({ ok: false, error: "contact belongs to another company" });
+  }
 
   try {
     let contact = existing;
