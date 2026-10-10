@@ -142,8 +142,8 @@ export function OverviewTab() {
                 borderBottom: i < Math.min(entries.length, 6) - 1 ? '1px solid var(--line)' : undefined,
               }}>
                 <span className="mono" style={{ fontSize: '.74rem', color: 'var(--brand)', minWidth: 32 }}>v{e.version}</span>
-                <span style={{ flex: 1, fontSize: '.84rem', color: 'var(--fg-2)' }}>{e.summary || (e.fields_changed ?? []).join(', ')}</span>
-                <span className="sub" style={{ fontSize: '.74rem' }}>{e.ts ? new Date(e.ts).toLocaleDateString() : ''}</span>
+                <span style={{ flex: 1, fontSize: '.84rem', color: 'var(--fg-2)' }}>{e.note || (e.fieldsChanged ?? []).join(', ') || e.mutationType}</span>
+                <span className="sub" style={{ fontSize: '.74rem' }}>{e.timestamp ? new Date(e.timestamp).toLocaleDateString() : ''}</span>
               </div>
             ))}
           </div>

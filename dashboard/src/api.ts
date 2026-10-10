@@ -141,17 +141,20 @@ export interface HealthResult {
 
 export interface ChangelogEntry {
   version: number
-  ts: string
+  timestamp: string
+  fieldsChanged: string[]
+  mutationType: string
+  previousHash: string
+  entryHash: string
   author: string
-  summary: string
-  fields_changed: string[]
-  hash: string
-  prev_hash: string | null
+  note?: string
 }
 
 export interface Changelog {
-  company_id: string
+  cardId: string
+  companyId: string
   entries: ChangelogEntry[]
+  headHash: string
 }
 
 export interface GreetingResult {

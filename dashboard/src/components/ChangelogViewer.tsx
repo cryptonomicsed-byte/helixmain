@@ -34,7 +34,7 @@ export function ChangelogViewer({ changelog, loading }: Props) {
       }} />
 
       {changelog.entries.map((entry, i) => (
-        <div key={entry.hash} style={{
+        <div key={entry.entryHash} style={{
           position: 'relative', paddingLeft: 52, marginBottom: '1.5rem',
         }}>
           {/* Dot */}
@@ -60,17 +60,17 @@ export function ChangelogViewer({ changelog, loading }: Props) {
                   v{entry.version}
                 </span>
                 <span style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--fg)' }}>
-                  {entry.summary}
+                  {entry.note || entry.mutationType}
                 </span>
               </div>
               <span style={{ fontSize: '0.72rem', color: 'var(--fg-3)', whiteSpace: 'nowrap', marginLeft: '0.5rem' }}>
-                {formatDate(entry.ts)}
+                {formatDate(entry.timestamp)}
               </span>
             </div>
 
-            {entry.fields_changed.length > 0 && (
+            {entry.fieldsChanged.length > 0 && (
               <div style={{ marginBottom: '0.4rem' }}>
-                {entry.fields_changed.map((f) => (
+                {entry.fieldsChanged.map((f) => (
                   <span key={f} style={{
                     display: 'inline-block', fontSize: '0.7rem', color: 'var(--fg-2)',
                     background: 'var(--bg)', borderRadius: 3, padding: '0.1rem 0.4rem',
@@ -84,9 +84,9 @@ export function ChangelogViewer({ changelog, loading }: Props) {
 
             <div style={{ display: 'flex', gap: '1.5rem', fontSize: '0.7rem', color: 'var(--fg-3)', marginTop: '0.25rem' }}>
               <span>by {entry.author}</span>
-              <span title={entry.hash}>hash {truncateHash(entry.hash)}</span>
-              {entry.prev_hash && (
-                <span title={entry.prev_hash}>prev {truncateHash(entry.prev_hash)}</span>
+              <span title={entry.entryHash}>hash {truncateHash(entry.entryHash)}</span>
+              {entry.previousHash && (
+                <span title={entry.previousHash}>prev {truncateHash(entry.previousHash)}</span>
               )}
             </div>
           </div>

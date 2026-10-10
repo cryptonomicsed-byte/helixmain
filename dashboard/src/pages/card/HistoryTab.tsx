@@ -60,7 +60,7 @@ export function HistoryTab() {
         <div className="panel" style={{ overflow: 'hidden' }}>
           {ordered.map((e, i) => {
             const isOpen = open === e.version
-            const changed: string[] = Array.isArray(e.fields_changed) ? e.fields_changed : []
+            const changed: string[] = Array.isArray(e.fieldsChanged) ? e.fieldsChanged : []
             return (
               <div key={i} style={{ borderBottom: i < ordered.length - 1 ? '1px solid var(--line)' : undefined }}>
                 <button onClick={() => setOpen(isOpen ? null : e.version)}
@@ -69,9 +69,9 @@ export function HistoryTab() {
                     border: 0, padding: '.65rem 1rem', cursor: 'pointer', color: 'var(--fg)', textAlign: 'left',
                   }}>
                   <span className="mono" style={{ fontSize: '.78rem', color: 'var(--brand)', minWidth: 34 }}>v{e.version}</span>
-                  <span style={{ flex: 1, fontSize: '.86rem' }}>{e.summary || 'change'}</span>
+                  <span style={{ flex: 1, fontSize: '.86rem' }}>{e.note || e.mutationType || 'change'}</span>
                   <span className="pill" style={{ fontSize: '.66rem' }}>{e.author || 'system'}</span>
-                  <span className="sub" style={{ fontSize: '.74rem' }}>{e.ts ? new Date(e.ts).toLocaleString() : ''}</span>
+                  <span className="sub" style={{ fontSize: '.74rem' }}>{e.timestamp ? new Date(e.timestamp).toLocaleString() : ''}</span>
                   <Icon name="arrow" size={13} style={{ transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform 160ms', opacity: .6 }} />
                 </button>
                 {isOpen && (
@@ -88,8 +88,8 @@ export function HistoryTab() {
                       Chain
                     </div>
                     <div className="mono" style={{ fontSize: '.72rem', color: 'var(--fg-3)', wordBreak: 'break-all', lineHeight: 1.6 }}>
-                      hash {e.hash || '—'}<br />
-                      prev {e.prev_hash || 'genesis'}
+                      hash {e.entryHash || '—'}<br />
+                      prev {e.previousHash || 'genesis'}
                     </div>
                   </div>
                 )}
