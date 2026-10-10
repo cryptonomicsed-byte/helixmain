@@ -170,6 +170,41 @@
     };
   }
 
+  /* Registration — used by SIGNUP. Same shapes as AuthGate.tsx's createPasskey.
+     This is what makes self-serve possible: the ceremony that creates the account
+     IS the passkey ceremony, so there is no token and no operator between a
+     stranger and their company. */
+  async function createPasskey(options) {
+    var pk = options.publicKey || options;
+    var cred = await navigator.credentials.create({
+      publicKey: {
+        challenge: b64urlToBuf(pk.challenge),
+        rp: pk.rp,
+        user: Object.assign({}, pk.user, { id: b64urlToBuf(pk.user.id) }),
+        pubKeyCredParams: pk.pubKeyCredParams,
+        timeout: pk.timeout || 60000,
+        attestation: pk.attestation || "none",
+        excludeCredentials: (pk.excludeCredentials || []).map(function (c) {
+          return Object.assign({}, c, { id: b64urlToBuf(c.id) });
+        }),
+        authenticatorSelection:
+          pk.authenticatorSelection || { userVerification: "required", residentKey: "required" },
+      },
+    });
+    var r = cred.response;
+    return {
+      id: cred.id,
+      rawId: bufToB64url(cred.rawId),
+      type: cred.type,
+      response: {
+        attestationObject: bufToB64url(r.attestationObject),
+        clientDataJSON: bufToB64url(r.clientDataJSON),
+        transports: (r.getTransports && r.getTransports()) || [],
+      },
+      extensions: (cred.getClientExtensionResults && cred.getClientExtensionResults()) || {},
+    };
+  }
+
   /* ── login: one button, one tap ───────────────────────────────────── */
   var loginBtn = document.getElementById("passkey-btn");
   var loginMsg = document.getElementById("login-msg");
@@ -208,7 +243,7 @@
     });
   }
 
-  /* ── register: record the request ─────────────────────────────────── */
+  /* ── register: signup IS the passkey ceremony ─────────────────────── */
   var form = document.getElementById("register-form");
   if (form) {
     form.addEventListener("submit", function (e) {
@@ -228,23 +263,68 @@
         nameEl.setAttribute("aria-invalid", "true"); nameEl.focus();
         return say(rMsg, "Please give us your business name.", "err");
       }
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
         emailEl.setAttribute("aria-invalid", "true"); emailEl.focus();
         return say(rMsg, "That email doesn't look right.", "err");
       }
+      if (!passkeysSupported()) {
+        return say(
+          rMsg,
+          "This browser can't create a passkey — it needs https and a modern browser.",
+          "err"
+        );
+      }
 
       rBtn.setAttribute("aria-busy", "true");
-      say(rMsg, "Sending…");
-      post("/auth/signup", { business: business, email: email, website: website })
-        .then(function (r) {
-          if (!r.ok) throw new Error((r.data && r.data.error) || "Request failed (" + r.status + ").");
-          say(rMsg, "Request received. We'll email your access link — that link is what creates your passkey.", "ok");
-          form.reset();
+      say(rMsg, "Creating your card…");
+      post("/auth/signup/options", {
+        business: business,
+        email: email || undefined,
+        website: website || undefined,
+      })
+        .then(function (opt) {
+          if (!opt.ok || !opt.data || !opt.data.options) {
+            throw new Error((opt.data && opt.data.error) || "Could not start signup.");
+          }
+          return createPasskey(opt.data.options);
+        })
+        .then(function (attestation) {
+          return post("/auth/signup/verify", { response: attestation });
+        })
+        .then(function (ver) {
+          if (!ver.ok) {
+            throw new Error((ver.data && ver.data.error) || "Signup failed (" + ver.status + ").");
+          }
+          say(rMsg, "You're in — opening your dashboard…", "ok");
+          window.location.href = "/dashboard/";
         })
         .catch(function (err) {
-          say(rMsg, (err && err.message) || String(err), "err");
+          var m = (err && err.message) || String(err);
+          if (err && err.name === "NotAllowedError") {
+            m = "Passkey creation was dismissed. Try again, or use Google instead.";
+          }
+          say(rMsg, m, "err");
         })
         .finally(function () { rBtn.removeAttribute("aria-busy"); });
+    });
+  }
+
+  /* ── Google: offered only when this deployment actually has it ────── */
+  fetch(API + "/auth/providers")
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (p) {
+      if (!p || !p.google) return;
+      var gb = document.getElementById("google-btn");
+      var or = document.getElementById("google-or");
+      if (gb) gb.hidden = false;
+      if (or) or.hidden = false;
+    })
+    .catch(function () { /* not configured — the button stays hidden */ });
+
+  var googleBtn = document.getElementById("google-btn");
+  if (googleBtn) {
+    googleBtn.addEventListener("click", function () {
+      window.location.href = API + "/auth/google/start";
     });
   }
 

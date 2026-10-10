@@ -311,26 +311,33 @@ hash: sha256:9abb3682…
         <p class="pane-foot">Already enrolled on another device? Sign in there, or use your API key on the dashboard's break-glass link.</p>
       </div>
 
-      {{/* Register — a REQUEST, not an open door. passkeys.ts is explicit:
-           enrollment is bootstrapped by an operator-issued one-time token,
-           "there is no permanent open enrollment door". So we collect the
-           request and the operator issues the access link. */}}
+      {{/* Register — SELF-SERVE. The account is created by the passkey ceremony
+           itself: /auth/signup/options reserves the slug and returns registration
+           options, /auth/signup/verify provisions the company and starts a
+           session. No operator, no invite token, and no email — this host has no
+           mail transport at all, so nothing may promise one. */}}
       <div class="pane" data-pane="register">
-        <p class="pane-lede">Tell us who you are and we'll send your access link.</p>
+        <p class="pane-lede">Name your business. Your device creates a passkey, your card and dashboard open, and nothing is emailed to you.</p>
+
+        <button id="google-btn" class="btn btn-google btn-block" type="button" hidden>
+          <span class="g-glyph" aria-hidden="true">G</span> Continue with Google
+        </button>
+        <p id="google-or" class="or" hidden><span>or</span></p>
+
         <form id="register-form" novalidate>
           <label for="rg-name">Business name</label>
           <input id="rg-name" name="business" type="text" autocomplete="organization" placeholder="King's Cut Barbershop" required maxlength="120">
 
-          <label for="rg-email">Email</label>
-          <input id="rg-email" name="email" type="email" autocomplete="email" placeholder="you@yourbusiness.com" required maxlength="200">
+          <label for="rg-email">Email <span class="opt">(optional)</span></label>
+          <input id="rg-email" name="email" type="email" autocomplete="email" placeholder="you@yourbusiness.com" maxlength="200">
 
-          <label for="rg-site">Website <span class="opt">(optional)</span></label>
+          <label for="rg-site">Website <span class="opt">(optional — we can build the card from it)</span></label>
           <input id="rg-site" name="website" type="url" autocomplete="url" placeholder="https://yourbusiness.com" maxlength="300">
 
-          <button class="btn btn-primary btn-block" type="submit" id="register-btn">Request my card</button>
+          <button class="btn btn-primary btn-block" type="submit" id="register-btn">Create my card</button>
           <p class="pane-msg" id="register-msg" role="status" aria-live="polite"></p>
         </form>
-        <p class="pane-foot">We onboard businesses personally — that's why the card comes out right.</p>
+        <p class="pane-foot">Your passkey is your login — fingerprint, face or device PIN. Nothing to remember and nothing to reset.</p>
       </div>
     </div>
   </div>

@@ -287,6 +287,20 @@ button { font: inherit; color: inherit; }
   font-size: 0.9rem; font-weight: 600; color: var(--muted); cursor: pointer; transition: background 0.16s ease, color 0.16s ease;
 }
 .tab.is-on { background: var(--accent); color: #fff; }
+
+/* "Continue with Google" — rendered only when /auth/providers reports it is
+   configured, so the button never exists purely to fail. */
+.btn-google { background: #fff; color: #1f2430; border-color: #fff; font-weight: 600; }
+.btn-google:hover { background: #eef0f3; border-color: #eef0f3; }
+.g-glyph {
+  display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%;
+  background: #4285f4; color: #fff; font-weight: 700; font-size: 0.78rem;
+}
+.or {
+  display: flex; align-items: center; gap: 0.75rem;
+  margin: 1.1rem 0 0.1rem; color: var(--muted-2); font-size: 0.78rem;
+}
+.or::before, .or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
 .pane { display: none; }
 .pane.is-on { display: block; }
 .pane-lede { font-size: 0.9rem; color: var(--muted); margin-bottom: 1.2rem; }
