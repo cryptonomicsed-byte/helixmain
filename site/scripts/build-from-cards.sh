@@ -12,6 +12,11 @@ QR_OUT="${SITE_DIR}/static/qr"
 
 mkdir -p "$OUT" "$CONTENT_B" "$QR_OUT"
 
+# Wipe previously generated QRs: static/qr is build output (gitignored) and is
+# fully regenerated below, so removing files first drops codes for companies
+# that no longer have an identity file — no stale QR is served forever.
+rm -f "$QR_OUT"/*.png 2>/dev/null || true
+
 RELAY="${HELIX_RELAY:-wss://omokoda.duckdns.org:3443}"
 CALLER_BASE="${HELIX_CALLER_BASE:-https://omokoda.duckdns.org/caller/}"
 
@@ -86,14 +91,26 @@ out = {
     "id":           company_id,
     "name":         identity.get("name", ""),
     "tagline":      identity.get("elevator_pitch", ""),
+    "mission":      identity.get("mission", ""),
+    "values":       identity.get("values", []) or [],
+    "founded":      identity.get("founded", ""),
     "phone":        identity.get("phone", ""),
+    "email":        identity.get("email", ""),
+    "website":      identity.get("website") or identity.get("source_url", ""),
     "address":      identity.get("location", ""),
     "hours":        ops.get("hours", ""),
+    "channels":     ops.get("channels", []) or [],
     "offerings":    offerings,
+    "policies":     card.get("policies", []) or [],
+    "knowledge":    card.get("knowledge", []) or [],
     "voice_tone":   card.get("voice", {}).get("tone", ""),
+    "voice_personality": card.get("voice", {}).get("personality", ""),
     "npub":         npub,
     "caller_url":   caller_url,
     "review_url":   identity.get("review_url", ""),
+    # `status` is what gates the "Verified" badge on the page: a draft card
+    # must never present as verified.
+    "status":       card.get("status", ""),
     "card_version": card.get("version", 1),
     "card_hash":    (card.get("hash", "") or "")[:16],
     "specials":     active_specials,

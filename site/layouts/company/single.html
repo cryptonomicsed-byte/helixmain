@@ -14,6 +14,8 @@
   "name": "{{ $c.name }}",
   "description": "{{ $c.tagline }}",
   "telephone": "{{ $c.phone }}",
+  {{ with $c.email }}"email": "{{ . }}",{{ end }}
+  {{ with $c.website }}"url": "{{ . }}",{{ end }}
   "address": {
     "@type": "PostalAddress",
     "streetAddress": "{{ $c.address }}"
@@ -52,6 +54,10 @@
     margin-bottom: 1.5rem;
   }
   .call-button:hover { opacity: 0.85; text-decoration: none; }
+  .call-pending {
+    background: var(--surface); border: 1px dashed var(--border); border-radius: 6px;
+    padding: 0.7rem 1rem; color: var(--muted); font-size: 0.85rem; margin-bottom: 1.5rem;
+  }
   .qr-pair { display: flex; gap: 1.5rem; flex-wrap: wrap; }
   .qr-pair figure { text-align: center; }
   .qr-pair img { width: 140px; height: 140px; border-radius: 6px; border: 1px solid var(--border); }
@@ -67,13 +73,27 @@
   .socials-row a{font-size:.85rem;color:var(--muted);border:1px solid var(--border);padding:.25rem .6rem;border-radius:4px}
   .socials-row a:hover{color:var(--text);border-color:var(--text);text-decoration:none}
   .response-sla{font-size:.82rem;color:var(--accent);margin-top:.35rem}
-  .trust-badge{display:flex;gap:.75rem;align-items:center;margin-top:1.5rem;padding-top:1rem;border-top:1px solid var(--border);font-size:.75rem;color:var(--muted)}
+  .values-list{list-style:none;display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.25rem}
+  .values-list li{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:.2rem .7rem;font-size:.82rem;color:var(--text)}
+  .founded{font-size:.82rem;color:var(--muted)}
+  .voice-note{font-size:.85rem;color:var(--muted);font-style:italic}
+  .policies-list{margin-top:.25rem}
+  .policies-list dt{font-size:.85rem;font-weight:600;color:var(--text);text-transform:capitalize;margin-top:.5rem}
+  .policies-list dd{font-size:.85rem;color:var(--muted);margin-left:0}
+  .faq-list{list-style:none;display:flex;flex-direction:column;gap:.5rem}
+  .faq-list li{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:.6rem .9rem;font-size:.88rem}
+  .faq-kind{font-family:var(--mono);font-size:.7rem;color:var(--muted);margin-left:.5rem;text-transform:uppercase}
+  .review-cta{display:inline-block;font-size:.85rem;color:var(--amber);margin-top:.5rem}
+  .trust-badge{display:flex;gap:.75rem;align-items:center;margin-top:1.5rem;padding-top:1rem;border-top:1px solid var(--border);font-size:.75rem;color:var(--muted);flex-wrap:wrap}
   .trust-version{background:var(--surface);padding:.15rem .4rem;border-radius:3px;border:1px solid var(--border)}
   .trust-excellent{color:var(--accent)}
   .trust-good{color:var(--amber)}
   .trust-needs\.work{color:#f87171}
   .trust-npub{color:var(--accent)}
+  .trust-draft{color:var(--muted)}
 </style>
+
+{{ $verified := and (eq $c.status "live") $c.card_hash }}
 
 <article class="company-page">
   <header class="company-header">
@@ -81,14 +101,31 @@
     {{ with $c.tagline }}<p class="tagline">{{ . }}</p>{{ end }}
     <div class="contact-line">
       {{ with $c.phone }}<a href="tel:{{ . }}">{{ . }}</a>{{ end }}
+      {{ with $c.email }}<a href="mailto:{{ . }}">{{ . }}</a>{{ end }}
       {{ with $c.address }}<address>{{ . }}</address>{{ end }}
+      {{ with $c.website }}<a href="{{ . }}" target="_blank" rel="noopener">Website</a>{{ end }}
+      {{ with $c.review_url }}<a class="review-cta" href="{{ . }}" target="_blank" rel="noopener">Leave a review</a>{{ end }}
     </div>
   </header>
 
-  {{ with $c.hours }}
+  {{ if or $c.mission $c.values $c.founded $c.voice_personality }}
+  <section>
+    <h2>About</h2>
+    {{ with $c.mission }}<p>{{ . }}</p>{{ end }}
+    {{ with $c.values }}
+    <ul class="values-list">
+      {{ range . }}<li>{{ . }}</li>{{ end }}
+    </ul>
+    {{ end }}
+    {{ with $c.founded }}<p class="founded">Serving the community since {{ . }}.</p>{{ end }}
+    {{ with $c.voice_personality }}<p class="voice-note">{{ . }}</p>{{ end }}
+  </section>
+  {{ end }}
+
+  {{ if $c.hours }}
   <section>
     <h2>Hours</h2>
-    <p class="hours-val">{{ . }}</p>
+    <p class="hours-val">{{ $c.hours }}</p>
     {{ with $c.response_sla }}
     <div class="response-sla">⚡ {{ . }}</div>
     {{ end }}
@@ -124,10 +161,38 @@
   </section>
   {{ end }}
 
+  {{ with $c.policies }}
+  <section>
+    <h2>Good to know</h2>
+    <dl class="policies-list">
+      {{ range . }}
+      {{ with .topic }}<dt>{{ . }}</dt>{{ end }}
+      {{ with .rule }}<dd>{{ . }}</dd>{{ end }}
+      {{ end }}
+    </dl>
+  </section>
+  {{ end }}
+
+  {{ with $c.knowledge }}
+  <section>
+    <h2>Questions</h2>
+    <ul class="faq-list">
+      {{ range . }}
+      <li>
+        {{ if hasPrefix (printf "%v" .ref) "http" }}<a href="{{ .ref }}">{{ .title }}</a>{{ else }}<span class="faq-title">{{ .title }}</span>{{ end }}
+        {{ with .kind }}<span class="faq-kind">{{ . }}</span>{{ end }}
+      </li>
+      {{ end }}
+    </ul>
+  </section>
+  {{ end }}
+
   <section class="connect-section">
     <h2>Talk to us</h2>
-    {{ with $c.caller_url }}
-    <a class="call-button" href="{{ . }}">Call now (browser)</a>
+    {{ if $c.caller_url }}
+    <a class="call-button" href="{{ $c.caller_url }}">Call now (browser)</a>
+    {{ else }}
+    <p class="call-pending">📞 Call setup pending — the AI front desk isn't live for this business yet.</p>
     {{ end }}
 
     {{ if $c.socials }}
@@ -140,26 +205,36 @@
     </div>
     {{ end }}
 
+    {{ if or $c.caller_url $c.review_url }}
     <div class="qr-pair">
+      {{ if $c.caller_url }}
       <figure>
         <img src="/qr/{{ $id }}-talk.png" alt="Scan to call {{ $c.name }}">
         <figcaption>Scan to talk to our AI</figcaption>
       </figure>
-      {{ with $c.review_url }}
+      {{ end }}
+      {{ if $c.review_url }}
       <figure>
         <img src="/qr/{{ $id }}-review.png" alt="Leave a review">
         <figcaption>Scan to leave a review</figcaption>
       </figure>
       {{ end }}
     </div>
+    {{ end }}
   </section>
 
   <footer class="card-proof">
+    {{ if $verified }}
     <small>Verified business profile · v{{ $c.card_version }} · {{ $c.card_hash }}</small>
+    {{ else }}
+    <small>Business profile · v{{ $c.card_version }}{{ with $c.card_hash }} · {{ . }}{{ end }} · not verified</small>
+    {{ end }}
     <div class="trust-badge">
       <span class="trust-version">v{{ $c.card_version }}</span>
-      <span class="trust-health trust-{{ $c.health_label }}">{{ $c.health_label }}</span>
-      {{ if $c.npub }}<span class="trust-npub" title="{{ $c.npub }}">✓ verified</span>{{ end }}
+      {{ with $c.health_label }}<span class="trust-health trust-{{ . }}">{{ . }}</span>{{ end }}
+      {{ if $verified }}<span class="trust-verified trust-excellent">✓ verified</span>
+      {{ else }}<span class="trust-draft">draft</span>{{ end }}
+      {{ if $c.npub }}<span class="trust-npub" title="{{ $c.npub }}">✓ voice identity bound</span>{{ end }}
     </div>
   </footer>
 </article>
