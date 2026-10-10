@@ -10,7 +10,7 @@ import { randomUUID } from "crypto";
 import * as fs from "fs/promises";
 import * as path from "path";
 import { budgetCreditsFor } from "./settings";
-import { isOnboardedCompany } from "./companies";
+import { isProvisionedCompany } from "./companies";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -179,8 +179,10 @@ export function initAccount(companyId: string): CreditAccount {
 
   // NEVER auto-create for an arbitrary id. This used to hand 100 free credits to
   // anyone who named a company in a request body — the account store was a money
-  // printer. Only an onboarded company gets an account.
-  if (!isOnboardedCompany(companyId)) {
+  // printer. Only a PROVISIONED company gets an account: one that actually exists
+  // on disk (self-serve signup or operator onboarding wrote its keys there). The
+  // guard is "does this company exist", never "did the caller type this name".
+  if (!isProvisionedCompany(companyId)) {
     throw new Error(`no credit account for unknown company: ${companyId}`);
   }
 
@@ -200,7 +202,7 @@ export function initAccount(companyId: string): CreditAccount {
 function accountFor(companyId: string): CreditAccount | null {
   const a = accountStore.get(companyId);
   if (a) return a;
-  return isOnboardedCompany(companyId) ? initAccount(companyId) : null;
+  return isProvisionedCompany(companyId) ? initAccount(companyId) : null;
 }
 
 export function getCreditSummary(companyId: string): CreditAccount {

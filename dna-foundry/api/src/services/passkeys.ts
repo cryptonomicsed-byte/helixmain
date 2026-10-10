@@ -16,7 +16,7 @@
 import * as crypto from "crypto";
 import * as fs from "fs";
 import * as path from "path";
-import { HELIX_COMPANIES, listOnboardedCompanies } from "./companies";
+import { HELIX_COMPANIES, listProvisionedCompanies } from "./companies";
 
 export interface StoredCredential {
   id: string; // base64url credential id
@@ -66,7 +66,7 @@ export function updateCounter(company: string, id: string, counter: number): voi
 export function findCompanyByCredentialId(
   id: string,
 ): { company: string; cred: StoredCredential } | null {
-  for (const company of listOnboardedCompanies()) {
+  for (const company of listProvisionedCompanies()) {
     const c = loadCreds(company).find((x) => x.id === id);
     if (c) return { company, cred: c };
   }
@@ -119,7 +119,7 @@ export function issueEnrollToken(company: string, ttlMs: number, label?: string)
 export function resolveEnrollToken(token: string): string | null {
   if (!token) return null;
   const want = hashToken(token);
-  for (const company of listOnboardedCompanies()) {
+  for (const company of listProvisionedCompanies()) {
     try {
       const f = JSON.parse(fs.readFileSync(tokenPath(company), "utf8")) as EnrollTokenFile;
       if (f.exp < Date.now()) continue;

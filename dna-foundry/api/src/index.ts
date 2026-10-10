@@ -174,8 +174,17 @@ import {
   verifyRegistration,
   authenticationOptions,
   verifyAuthentication,
+  RP_ORIGIN,
 } from "./services/webauthn";
-import { isOnboardedCompany } from "./services/companies";
+import { isOnboardedCompany, isProvisionedCompany, slugify, uniqueSlug } from "./services/companies";
+import {
+  savePending,
+  loadPending,
+  clearPending,
+  pendingSlugs,
+  provisionCompany,
+  findByGoogleSub,
+} from "./services/signup";
 
 const app = Fastify({ logger: true });
 const ROOT = path.resolve(__dirname, "..", "..");
@@ -394,12 +403,44 @@ app.put("/settings/:orgId", { preHandler: requireAuth }, async (req, reply) => {
   return publicCompanyAi(orgId);
 });
 
+/** Extraction ceiling per account per day. Extraction runs a crawl AND an LLM
+ *  call, so a free grant has to be bounded in COMPUTE, not just in credits. This
+ *  is the guardrail that replaces the operator gate. */
+const EXTRACTIONS_PER_DAY = 25;
+
 app.post("/extract", { preHandler: requireAuth }, async (req, reply) => {
   const body = (req.body ?? {}) as { url?: string; orgId?: string; companyId?: string };
   if (!body.url) return reply.code(400).send({ ok: false, error: "url required" });
-  if (!body.orgId) return reply.code(400).send({ ok: false, error: "orgId required" });
 
-  const companyId = body.companyId ?? body.orgId ?? "default";
+  // THE TENANT IS THE AUTHENTICATED COMPANY — never a caller-supplied id. This
+  // route writes <orgId>/card.json, so trusting body.orgId let any valid key drop
+  // a card into any name it chose: a directory-creation primitive. requireAuth
+  // already 403s a body that NAMES another provisioned company; it does NOT stop a
+  // name that belongs to nobody, which is exactly the name an attacker would pick.
+  const companyId = (req as AuthCarrier).auth?.companyId ?? "";
+  if (!companyId) return reply.code(400).send({ ok: false, error: "no company for this credential" });
+  if (body.orgId && body.orgId !== companyId)
+    return reply.code(403).send({ ok: false, error: "orgId must be your own company" });
+  if (!isProvisionedCompany(companyId))
+    return reply.code(403).send({ ok: false, error: "this company is not provisioned" });
+
+  // Per-account daily ceiling — see EXTRACTIONS_PER_DAY.
+  const acct = getCreditSummary(companyId);
+  const dayStart = new Date();
+  dayStart.setUTCHours(0, 0, 0, 0);
+  const usedToday = (acct.usageLog ?? []).filter(
+    (u) => u.operationType === "extraction" && Date.parse(u.timestamp) >= dayStart.getTime()
+  ).length;
+  if (usedToday >= EXTRACTIONS_PER_DAY) {
+    return reply.code(429).send({
+      ok: false,
+      error: "extraction_daily_cap",
+      message: `Daily limit of ${EXTRACTIONS_PER_DAY} extractions reached. Resets 00:00 UTC.`,
+      usedToday,
+      limit: EXTRACTIONS_PER_DAY,
+    });
+  }
+
   let usageEntry: UsageEntry | null = null;
   try {
     usageEntry = await deductCredits(companyId, "extraction");
@@ -409,7 +450,7 @@ app.post("/extract", { preHandler: requireAuth }, async (req, reply) => {
   }
 
   try {
-    const card = await extractor.extractCard({ url: body.url, orgId: body.orgId });
+    const card = await extractor.extractCard({ url: body.url, orgId: companyId });
     // A fallback card means the crawl/LLM produced nothing — never charge for that.
     const failed =
       typeof card.identity?.elevatorPitch === "string" &&
@@ -427,14 +468,19 @@ app.post("/extract", { preHandler: requireAuth }, async (req, reply) => {
     await ensureDirs();
     const cardFile = path.join(CARDS, `${card.id}.json`);
     await fs.writeFile(cardFile, JSON.stringify(card, null, 2));
-    // Also persist under the company dir so GET /cards/<orgId> (and the company
-    // page, which keys off the org id) can find it. Without this the onboard
-    // flow lands on a company page that 404s.
+
+    // And under the company dir. This write is what turns a PROVISIONED company
+    // into an ONBOARDED one, so it is no longer swallowed — a card the company
+    // cannot see is a charge for nothing.
     try {
-      const companyDir = path.join(HELIX_COMPANIES, body.orgId);
+      const companyDir = path.join(HELIX_COMPANIES, companyId);
       await fs.mkdir(companyDir, { recursive: true });
       await fs.writeFile(path.join(companyDir, "card.json"), JSON.stringify(card, null, 2));
-    } catch { /* non-fatal — card is still saved by card id */ }
+    } catch (e) {
+      if (usageEntry) await refundCredits(usageEntry.id).catch(() => {});
+      const msg = e instanceof Error ? e.message : String(e);
+      return reply.code(500).send({ ok: false, error: `card could not be stored: ${msg}` });
+    }
     return reply.code(200).send(card);
   } catch (e) {
     if (usageEntry) await refundCredits(usageEntry.id).catch(() => {});
@@ -2910,9 +2956,15 @@ app.get("/admin/sessions", { preHandler: requireAuth }, async (_req, reply) => {
 
 function readChallenge(
   req: FastifyRequest,
-): { challenge?: string; company?: string; kind?: string } | null {
+): { challenge?: string; company?: string; kind?: string; state?: string } | null {
   const raw = parseCookies(req.headers.cookie)[CHALLENGE_COOKIE];
-  return verifyJson<{ exp: number; challenge?: string; company?: string; kind?: string }>(raw);
+  return verifyJson<{
+    exp: number;
+    challenge?: string;
+    company?: string;
+    kind?: string;
+    state?: string; // OAuth round-trip nonce
+  }>(raw);
 }
 
 // Step 1 of enrollment: an operator-issued token buys the registration options.
@@ -3082,6 +3134,229 @@ app.post("/auth/signup", async (req, reply) => {
   }
 
   return reply.code(202).send({ ok: true, status: "pending" });
+});
+
+// ---------------------------------------------------------------------------
+// Self-serve signup — the front door.
+//
+// A stranger becomes a company in ONE passkey ceremony: no operator, no email,
+// no invite token. The gate that used to sit here was solving ABUSE, and abuse is
+// better solved by guardrails — a bounded Starter grant, a per-IP signup limit,
+// and a per-account daily extraction cap (see /extract). Making a human approve
+// every signup solved the abuse problem by making the product unusable.
+//
+// Step 1 reserves a slug and stashes a pending record. Step 2 verifies the
+// attestation and provisions the company. The ceremony challenge rides in the
+// same signed cookie the enrollment flow uses.
+// ---------------------------------------------------------------------------
+
+const SIGNUPS_PER_IP_PER_HOUR = 3;
+
+app.post("/auth/signup/options", async (req, reply) => {
+  const body = (req.body ?? {}) as { business?: string; email?: string; website?: string };
+  const business = String(body.business ?? "").trim();
+  const email = String(body.email ?? "").trim().toLowerCase();
+  const website = String(body.website ?? "").trim();
+
+  if (business.length < 2 || business.length > 120)
+    return reply.code(400).send({ ok: false, error: "a business name is required" });
+  if (email && (email.length > 200 || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)))
+    return reply.code(400).send({ ok: false, error: "that email doesn't look right" });
+  if (website.length > 300)
+    return reply.code(400).send({ ok: false, error: "that website is too long" });
+
+  const ip = (req.headers["x-real-ip"] as string) || req.ip || "unknown";
+  const now = Date.now();
+  const recent = (signupHits.get(ip) ?? []).filter((t) => now - t < 3_600_000);
+  if (recent.length >= SIGNUPS_PER_IP_PER_HOUR)
+    return reply.code(429).send({ ok: false, error: "too many signups from here — try again later" });
+  recent.push(now);
+  signupHits.set(ip, recent);
+
+  // Reserve the slug now, and treat other PENDING signups as taken too, so two
+  // people signing up at the same moment cannot both be handed the same name.
+  const slug = uniqueSlug(slugify(business), pendingSlugs());
+  await savePending({ slug, business, email: email || null, website: website || null });
+
+  const options = await registrationOptions(slug, []);
+  reply.header(
+    "Set-Cookie",
+    setCookie(
+      CHALLENGE_COOKIE,
+      signJson({
+        challenge: String(options.challenge),
+        company: slug,
+        kind: "reg",
+        exp: Date.now() + CHALLENGE_TTL_MS,
+      }),
+      300,
+    ),
+  );
+  return { ok: true, slug, options };
+});
+
+app.post("/auth/signup/verify", async (req, reply) => {
+  const body = (req.body ?? {}) as { response?: unknown };
+  if (!body.response) return reply.code(400).send({ ok: false, error: "response required" });
+
+  const chal = readChallenge(req);
+  if (!chal || chal.kind !== "reg" || !chal.company || !chal.challenge)
+    return reply.code(400).send({ ok: false, error: "no pending signup for this browser" });
+
+  const slug = String(chal.company);
+  const pending = await loadPending(slug);
+  if (!pending)
+    return reply.code(410).send({ ok: false, error: "that signup expired — please start again" });
+
+  let outcome;
+  try {
+    outcome = await verifyRegistration(body.response, chal.challenge);
+  } catch (e) {
+    return reply
+      .code(400)
+      .send({ ok: false, error: e instanceof Error ? e.message : "registration failed" });
+  }
+
+  const account = await provisionCompany({
+    slug,
+    business: pending.business,
+    email: pending.email,
+    website: pending.website,
+    provider: "passkey",
+    credential: {
+      id: outcome.id,
+      publicKey: outcome.publicKey,
+      counter: outcome.counter,
+      transports: outcome.transports,
+      createdAt: new Date().toISOString(),
+    },
+  });
+  await clearPending(slug);
+
+  reply.header("Set-Cookie", [
+    setCookie(SESSION_COOKIE, mintSession(slug, "owner"), Math.floor(SESSION_TTL_MS / 1000)),
+    clearCookie(CHALLENGE_COOKIE),
+  ]);
+  return { ok: true, company: slug, business: account.business, role: "owner" };
+});
+
+/** Which sign-in methods THIS deployment offers. The landing shows the Google
+ *  button only when it is actually configured — never a button that 503s. */
+app.get("/auth/providers", async () => ({
+  ok: true,
+  passkey: true,
+  google: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
+}));
+
+// ---------------------------------------------------------------------------
+// Google OAuth — the familiar button, offered ALONGSIDE passkeys, not instead.
+//
+// Google proves who someone is; it is not the durable credential. Signing in
+// with Google provisions the company and starts a session, and the dashboard
+// nudges the owner to add a passkey so their login stops depending on Google.
+//
+// Dormant unless GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET are set — and
+// /auth/providers reports that, so the button hides rather than fails.
+// ---------------------------------------------------------------------------
+
+const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
+const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
+const GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo";
+
+function googleRedirectUri(): string {
+  return process.env.HELIX_GOOGLE_REDIRECT || `${RP_ORIGIN}/api/auth/google/callback`;
+}
+
+app.get("/auth/google/start", async (req, reply) => {
+  const id = process.env.GOOGLE_CLIENT_ID;
+  if (!id || !process.env.GOOGLE_CLIENT_SECRET)
+    return reply.code(503).send({ ok: false, error: "Google sign-in is not configured" });
+
+  const state = randomUUID();
+  const params = new URLSearchParams({
+    client_id: id,
+    redirect_uri: googleRedirectUri(),
+    response_type: "code",
+    scope: "openid email profile",
+    state,
+    prompt: "select_account",
+  });
+  reply.header(
+    "Set-Cookie",
+    setCookie(
+      CHALLENGE_COOKIE,
+      signJson({ kind: "oauth", state, exp: Date.now() + CHALLENGE_TTL_MS }),
+      600,
+    ),
+  );
+  return reply.redirect(`${GOOGLE_AUTH_URL}?${params.toString()}`);
+});
+
+app.get("/auth/google/callback", async (req, reply) => {
+  const q = req.query as { code?: string; state?: string; error?: string };
+  if (q.error) return reply.redirect("/?google=denied");
+
+  const id = process.env.GOOGLE_CLIENT_ID;
+  const secret = process.env.GOOGLE_CLIENT_SECRET;
+  if (!id || !secret)
+    return reply.code(503).send({ ok: false, error: "Google sign-in is not configured" });
+
+  const chal = readChallenge(req);
+  if (!chal || chal.kind !== "oauth" || !chal.state || chal.state !== q.state)
+    return reply.redirect("/?google=badstate");
+  if (!q.code) return reply.redirect("/?google=nocode");
+
+  let profile: { sub?: string; email?: string; name?: string };
+  try {
+    const tok = await fetch(GOOGLE_TOKEN_URL, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        code: q.code,
+        client_id: id,
+        client_secret: secret,
+        redirect_uri: googleRedirectUri(),
+        grant_type: "authorization_code",
+      }).toString(),
+    });
+    if (!tok.ok) throw new Error(`token exchange failed (${tok.status})`);
+    const t = (await tok.json()) as { access_token?: string };
+    if (!t.access_token) throw new Error("no access token");
+
+    const me = await fetch(GOOGLE_USERINFO_URL, {
+      headers: { authorization: `Bearer ${t.access_token}` },
+    });
+    if (!me.ok) throw new Error(`userinfo failed (${me.status})`);
+    profile = (await me.json()) as typeof profile;
+  } catch (e) {
+    app.log.error(`google oauth: ${e instanceof Error ? e.message : String(e)}`);
+    return reply.redirect("/?google=failed");
+  }
+
+  const sub = String(profile.sub ?? "");
+  if (!sub) return reply.redirect("/?google=failed");
+
+  // A returning Google user gets the company they already own; a new one is
+  // provisioned here, exactly as a passkey signup would be.
+  let company = findByGoogleSub(sub);
+  if (!company) {
+    const name = (profile.name || (profile.email ?? "").split("@")[0] || "business").trim();
+    const slug = uniqueSlug(slugify(name), pendingSlugs());
+    await provisionCompany({
+      slug,
+      business: profile.name || name,
+      email: profile.email ?? null,
+      provider: "google",
+      googleSub: sub,
+    });
+    company = slug;
+  }
+
+  reply.header("Set-Cookie", [
+    setCookie(SESSION_COOKIE, mintSession(company, "owner"), Math.floor(SESSION_TTL_MS / 1000)),
+    clearCookie(CHALLENGE_COOKIE),
+  ]);
+  return reply.redirect("/dashboard/");
 });
 
 // Mint a fresh one-time enrollment link. Owner-gated: issuing a token is the same

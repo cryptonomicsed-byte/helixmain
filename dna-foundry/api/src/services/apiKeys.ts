@@ -15,7 +15,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { randomBytes, timingSafeEqual } from "crypto";
-import { HELIX_COMPANIES, listOnboardedCompanies } from "./companies";
+import { HELIX_COMPANIES, listProvisionedCompanies } from "./companies";
 
 export type KeyLevel = "company" | "owner";
 export interface KeyRecord {
@@ -62,7 +62,7 @@ let cache: { at: number; entries: Array<[string, KeyRecord]> } | null = null;
 
 function build(): Array<[string, KeyRecord]> {
   const entries: Array<[string, KeyRecord]> = [];
-  for (const id of listOnboardedCompanies()) {
+  for (const id of listProvisionedCompanies()) {
     try {
       const raw = JSON.parse(fs.readFileSync(keysPath(id), "utf8"));
       if (typeof raw.company === "string" && raw.company)
