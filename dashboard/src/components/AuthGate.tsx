@@ -34,7 +34,10 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   function submit(e: React.FormEvent) {
     e.preventDefault()
     if (MISCONFIGURED) return
-    if (pin !== CONFIGURED_PIN) {
+    // Trim before comparing: the PIN file is 20 chars + a trailing newline, so a
+    // value copy-pasted from `cat` arrives with whitespace and would otherwise
+    // read as "Incorrect PIN".
+    if (pin.trim() !== CONFIGURED_PIN) {
       setError('Incorrect PIN')
       setPin('')
       return
