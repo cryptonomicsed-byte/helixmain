@@ -407,13 +407,64 @@ test("billing.status composes metering + plan + history; a missing plan is not a
   }
 });
 
+test("billing.status config/checkout/portal map to the billing routes", async () => {
+  const { rpc, calls, close } = await setup({
+    "/billing/config": { status: 200, body: { tiers: { free: {} }, packs: [] } },
+    "/billing/checkout": { status: 200, body: { ok: true, checkoutUrl: "https://checkout.stripe.com/x" } },
+    "/billing/portal/demo-barber": { status: 200, body: { ok: false, error: "Stripe not configured" } },
+  });
+  try {
+    const cfg = await rpc("tools/call", {
+      name: "billing.status",
+      arguments: { companyId: "demo-barber", action: "config" },
+    });
+    const co = await rpc("tools/call", {
+      name: "billing.status",
+      arguments: { companyId: "demo-barber", action: "checkout", priceId: "price_123" },
+    });
+    const po = await rpc("tools/call", {
+      name: "billing.status",
+      arguments: { companyId: "demo-barber", action: "portal" },
+    });
+    assert.equal(cfg.result.isError, false);
+    assert.equal(co.result.isError, false);
+    assert.deepEqual(calls.map((c) => c.path), [
+      "/billing/config",
+      "/billing/checkout",
+      "/billing/portal/demo-barber",
+    ]);
+    // checkout posts the companyId + priceId — and NOTHING else. It must never
+    // touch the top-up route; credits only ever arrive via Stripe's webhook.
+    assert.deepEqual(calls[1].body, { companyId: "demo-barber", priceId: "price_123" });
+    assert.equal(calls.some((c) => /topup/.test(c.path)), false);
+    // a portal that answers "not configured" is the API's honest answer, passed through
+    assert.equal(JSON.parse(po.result.content[0].text).ok, false);
+  } finally {
+    await close();
+  }
+});
+
+test("billing.status checkout without a priceId fails without calling the API", async () => {
+  const { rpc, calls, close } = await setup();
+  try {
+    const r = await rpc("tools/call", {
+      name: "billing.status",
+      arguments: { companyId: "demo-barber", action: "checkout" },
+    });
+    assert.equal(r.result.isError, true);
+    assert.equal(calls.length, 0);
+  } finally {
+    await close();
+  }
+});
+
 test("crm.manage maps each action to its real endpoint", async () => {
   const { rpc, calls, close } = await setup({
     "/crm/contacts/demo-barber": { status: 200, body: [] },
     "/crm/summary/demo-barber": { status: 200, body: { total: 0 } },
     "/crm/contacts/demo-barber/stage/won": { status: 200, body: [] },
-    "/crm/contacts": { status: 201, body: { id: "c1", companyId: "demo-barber" } },
-    "/crm/contacts/c1": { status: 200, body: { id: "c1", stage: "won" } },
+    "/crm/contacts": { status: 202, body: { ok: true, status: "pending", proposal: { id: "crp_1" } } },
+    "/crm/contacts/c1": { status: 202, body: { ok: true, status: "pending", proposal: { id: "crp_2" } } },
   });
   try {
     await rpc("tools/call", { name: "crm.manage", arguments: { companyId: "demo-barber" } });
@@ -432,8 +483,48 @@ test("crm.manage maps each action to its real endpoint", async () => {
       "/crm/contacts",
       "/crm/contacts/c1",
     ]);
-    assert.deepEqual(calls[3].body, { companyId: "demo-barber", name: "Ada" });
+    // create/update now PROPOSE: the contact arrives nested under `contact`, and
+    // both land as a 202 (a pending proposal) — neither has created anything.
+    assert.deepEqual(calls[3].body, { companyId: "demo-barber", contact: { name: "Ada" } });
     assert.deepEqual(calls[4].body, { companyId: "demo-barber", stage: "won" });
+    assert.equal(JSON.parse(upd.result.content[0].text).status, "pending");
+  } finally {
+    await close();
+  }
+});
+
+test("crm.manage confirm/deny apply a proposal and carry the owner credential", async () => {
+  const { rpc, calls, close } = await setup(
+    {
+      "/crm/proposals/demo-barber": { status: 200, body: { ok: true, proposals: [{ id: "crp_1" }] } },
+      "/crm/proposals/crp_1/confirm": { status: 200, body: { ok: true, status: "applied", contact: { id: "c1" } } },
+      "/crm/proposals/crp_2/deny": { status: 200, body: { ok: true, status: "denied" } },
+    },
+    { HELIX_API_KEY: "k_company", HELIX_OWNER_KEY: "k_owner" }
+  );
+  try {
+    await rpc("tools/call", { name: "crm.manage", arguments: { companyId: "demo-barber", action: "proposals" } });
+    const c = await rpc("tools/call", {
+      name: "crm.manage",
+      arguments: { companyId: "demo-barber", action: "confirm", proposalId: "crp_1" },
+    });
+    const d = await rpc("tools/call", {
+      name: "crm.manage",
+      arguments: { companyId: "demo-barber", action: "deny", proposalId: "crp_2" },
+    });
+    assert.equal(c.result.isError, false);
+    assert.equal(d.result.isError, false);
+    assert.deepEqual(calls.map((x) => x.path), [
+      "/crm/proposals/demo-barber",
+      "/crm/proposals/crp_1/confirm",
+      "/crm/proposals/crp_2/deny",
+    ]);
+    // apply is owner-gated: BOTH keys ride along — the company key and the owner key
+    assert.equal(calls[1].headers["x-api-key"], "k_company");
+    assert.equal(calls[1].headers["x-owner-key"], "k_owner");
+    // ...but the plain read carries no owner key; the elevated credential is only
+    // presented on the apply.
+    assert.equal(calls[0].headers["x-owner-key"], undefined);
   } finally {
     await close();
   }
@@ -452,6 +543,11 @@ test("crm.manage refuses an incomplete action without calling the API", async ()
       arguments: { companyId: "cafe", action: "update", contactId: "c1" },
     });
     assert.equal(b.result.isError, true);
+    const c = await rpc("tools/call", {
+      name: "crm.manage",
+      arguments: { companyId: "cafe", action: "confirm" },
+    });
+    assert.equal(c.result.isError, true);
     assert.equal(calls.length, 0);
   } finally {
     await close();

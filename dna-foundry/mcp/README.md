@@ -38,13 +38,19 @@ The server exposes two groups, and they are **not** the same card world:
 | `content.generate` | `POST /content/prd` then `/content/generate` | 30 + 30 |
 | `leads.discover` | `POST /sales/hunt` *(text)* or `/sales/hunt/gps` *(lat/lng)* | 20 |
 | `site.publish` | `POST /site/generate` | 40 |
-| `billing.status` | `GET /metering/:id` + `/plan/:id` + `/metering/:id/history` | 0 (read) |
+| `billing.status` | `action=status` (default): `GET /metering/:id` + `/plan/:id` + `/metering/:id/history` · `config`: `GET /billing/config` · `checkout`: `POST /billing/checkout` · `portal`: `GET /billing/portal/:id` | 0 (only `checkout` writes — and it mints no credits) |
 | `analytics.query` | `GET /analytics/:id?period=` (+ `/enriched`) | 0 (read) |
-| `crm.manage` | `GET /crm/contacts/:id`, `GET /crm/summary/:id`, `POST /crm/contacts`, `PATCH /crm/contacts/:contactId` | 0 |
+| `crm.manage` | reads: `GET /crm/contacts/:id`, `/crm/summary/:id`, `/crm/proposals/:id` · propose: `POST /crm/contacts`, `PATCH /crm/contacts/:contactId` (**202**) · apply: `POST /crm/proposals/:pid/confirm` / `/deny` | 0 |
 
 **Cost note:** only voice / content / leads / site charge, because only those API
 routes call `deductCredits`. The read tools wrap routes that do not, so they charge
 nothing — that is the API's behaviour passed through, not a decision made here.
+**Credits enter only through Stripe's webhook**, after a real payment; no tool here
+can mint them, and the API's `POST /metering/topup/:id` route is deliberately not
+exposed. **Write note:** the only tools that change platform state are `site.publish`
+(a real build), `billing.status action=checkout` (a Stripe session), and `crm.manage`'s
+propose→confirm pair — `crm.manage`'s `create`/`update` record a *proposal* (202) and
+change nothing until an owner credential confirms it.
 
 Arguments:
 
@@ -59,17 +65,26 @@ Arguments:
 - `site.publish` — `companyId` (req). Returns the API's real public `url`
   (`https://helixmain.duckdns.org/b/<companyId>/`), charged only after a
   successful build.
-- `billing.status` — `companyId` (req), optional `from`/`to`. Composes credits +
-  latest plan + usage history. A company with no plan yet answers `plan: null`
-  with `plan_http_status: 404` — a real answer, not an error.
+- `billing.status` — `companyId` (req), `action` (`status` default | `config` |
+  `checkout` | `portal`), optional `from`/`to` (status), `priceId` (checkout).
+  `status` composes credits + latest plan + usage history; a company with no plan
+  yet answers `plan: null` with `plan_http_status: 404` — a real answer, not an
+  error. `checkout` returns the API's `checkoutUrl` verbatim (or the API's honest
+  `"Stripe not configured"` + `mockUrl` when no Stripe key is set) and adds no
+  credits.
 - `analytics.query` — `companyId` (req), `period` (`day|week|month`, default
   week), `enriched` (bool). With `enriched`, note the API computes the **lead
   totals system-wide** (all companies), so treat those as platform numbers.
 - `crm.manage` — `companyId` (req), `action` (`list` | `summary` | `by_stage` |
-  `create` | `update`), plus `stage` (by_stage), `contactId`/`note`/`updates`/
-  `cardId` (update), `contact` (create). Read actions spend no credits.
+  `proposals` | `create` | `update` | `confirm` | `deny`), plus `stage` (by_stage),
+  `contactId`/`note`/`updates`/`cardId`/`summary` (update), `contact` (create),
+  `proposalId` (confirm/deny). **Mutations are proposals:** `create`/`update` return
+  **202** with a `pending` proposal and change nothing; `confirm`/`deny` apply or
+  discard it and need the **owner** credential (`x-owner-key`, read from the same
+  tenant key file, or `HELIX_OWNER_KEY`). Read/propose actions spend no credits.
   **Caveat:** `crmLite` is in-memory only, so CRM contacts do not survive an API
-  restart.
+  restart — a proposal can therefore outlive the contact it targets, and confirming
+  a vanished contact is an honest 404.
 
 ### `dna.*` tools — the foundry surface
 

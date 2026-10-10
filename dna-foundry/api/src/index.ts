@@ -2215,20 +2215,135 @@ app.get("/sites", { preHandler: requireAuth }, async (_req, reply) => {
 
 // ---------------------------------------------------------------------------
 // CRM routes
+//
+// Mutations are PROPOSED, then CONFIRMED — the same two-step the card routes
+// use. crm.manage is reachable by any agent holding a company key, and a CRM
+// write changes a business record an owner is accountable for; so the write
+// routes below only ever RECORD a proposal (202, nothing touched), and a
+// separate confirm route applies it under the owner credential.
+//
+// NOTE: crmLite is in-memory (no filesystem writes). The proposals ARE durable
+// on disk, so a proposal can outlive the contact it targets: confirming an
+// update whose contact vanished on an API restart is an honest 404, never a
+// silent no-op.
 // ---------------------------------------------------------------------------
 
-// POST /crm/contacts — create a new contact
-app.post("/crm/contacts", { preHandler: requireAuth }, async (req, reply) => {
-  const body = (req.body ?? {}) as { companyId?: string } & Record<string, unknown>;
-  if (!body.companyId) return reply.code(400).send({ ok: false, error: "companyId required" });
+function crmProposalsDir(companyId: string): string {
+  return path.join(HELIX_COMPANIES, companyId, "crm-proposals");
+}
 
+interface CrmProposalBody {
+  companyId?: string;
+  op?: "create" | "update";
+  contactId?: string;
+  contact?: Record<string, unknown>;
+  stage?: string;
+  note?: string;
+  updates?: Record<string, unknown>;
+  cardId?: string;
+  author?: string;
+  summary?: string;
+}
+
+/** Apply a recorded CRM proposal to the in-memory store. */
+async function applyCrmProposal(
+  p: Record<string, any>
+): Promise<{ ok: true; op: string; contact: any } | { ok: false; error: string; code: number }> {
   try {
-    const contact = createContact(body.companyId, body as any);
-    return reply.code(201).send(contact);
+    if (p.op === "create") {
+      return { ok: true, op: "create", contact: createContact(p.companyId, (p.contact ?? {}) as any) };
+    }
+    if (p.op !== "update") return { ok: false, error: `unknown op: ${p.op}`, code: 400 };
+
+    const existing = contactStore.get(p.contactId);
+    if (!existing) return { ok: false, error: "contact not found", code: 404 };
+    // Tenant scope: the proposal names a company; the contact must belong to it.
+    const owner = (existing as { companyId?: string }).companyId;
+    if (owner && p.companyId && owner !== p.companyId) {
+      return { ok: false, error: "contact belongs to another company", code: 403 };
+    }
+
+    let contact = existing;
+    if (p.stage) {
+      // Stage move requires a card for validation; load it if cardId provided
+      let card: any = {};
+      if (p.cardId) {
+        const cardPath = await findCard(p.cardId);
+        if (cardPath) card = JSON.parse(await fs.readFile(cardPath, "utf8"));
+      }
+      contact = moveStage(p.contactId, p.stage, card);
+    }
+    if (p.note) contact = addContactNote(p.contactId, p.note, "owner");
+    if (p.updates && typeof p.updates === "object") {
+      contact = updateContact(p.contactId, p.updates as any);
+    }
+    return { ok: true, op: "update", contact };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    return reply.code(500).send({ ok: false, error: msg });
+    const code = msg.includes("not found") ? 404 : msg.includes("Invalid stage") ? 400 : 500;
+    return { ok: false, error: msg, code };
   }
+}
+
+/** Record a CRM proposal. Writes nothing to any contact. */
+async function createCrmProposal(
+  companyId: string,
+  body: CrmProposalBody
+): Promise<
+  | { ok: true; proposal: Record<string, any> }
+  | { ok: false; error: string; code: number }
+> {
+  const op = body.op;
+  if (op !== "create" && op !== "update")
+    return { ok: false, error: "op must be create|update", code: 400 };
+  if (op === "create" && (!body.contact || typeof body.contact !== "object"))
+    return { ok: false, error: "op=create needs a `contact` object", code: 400 };
+  if (op === "update") {
+    if (!body.contactId) return { ok: false, error: "op=update needs `contactId`", code: 400 };
+    if (!body.stage && !body.note && !body.updates)
+      return { ok: false, error: "op=update needs one of stage/note/updates", code: 400 };
+    // This route carries no company in its path, so requireAuth has nothing to
+    // bind to — without an explicit check a valid key for company A could draft
+    // a change to company B's contact by id alone. (Same shape as the PATCH bug.)
+    const existing = contactStore.get(body.contactId);
+    if (!existing) return { ok: false, error: "contact not found", code: 404 };
+    const owner = (existing as { companyId?: string }).companyId;
+    if (owner && owner !== companyId)
+      return { ok: false, error: "contact belongs to another company", code: 403 };
+  }
+
+  const id = "crp_" + randomUUID().slice(0, 8);
+  const proposal = {
+    id,
+    companyId,
+    op,
+    contactId: body.contactId ?? null,
+    contact: body.contact ?? null,
+    stage: body.stage ?? null,
+    note: body.note ?? null,
+    updates: body.updates ?? null,
+    cardId: body.cardId ?? null,
+    author: body.author ?? "owner",
+    summary: body.summary ?? (op === "create" ? "Create contact" : "Update contact"),
+    status: "pending" as const,
+    createdAt: new Date().toISOString(),
+    appliedAt: null as string | null,
+  };
+  const dir = crmProposalsDir(companyId);
+  await fs.mkdir(dir, { recursive: true });
+  await fs.writeFile(path.join(dir, `${id}.json`), JSON.stringify(proposal, null, 2));
+  return { ok: true, proposal };
+}
+
+// POST /crm/contacts — PROPOSE a new contact. Records a proposal, returns 202;
+// it does NOT create the contact. Confirm applies it.
+app.post("/crm/contacts", { preHandler: requireAuth }, async (req, reply) => {
+  const body = (req.body ?? {}) as CrmProposalBody;
+  const companyId = body.companyId ?? (req as AuthCarrier).auth?.companyId;
+  if (!companyId) return reply.code(400).send({ ok: false, error: "companyId required" });
+  const made = await createCrmProposal(companyId, { ...body, op: "create" });
+  if (!made.ok) return reply.code(made.code).send({ ok: false, error: made.error });
+  return reply.code(202).send({ ok: true, status: "pending", proposal: made.proposal });
 });
 
 // GET /crm/contacts/:companyId — all contacts for a company
@@ -2245,55 +2360,99 @@ app.get("/crm/contacts/:companyId/stage/:stage", { preHandler: requireAuth }, as
   return reply.code(200).send(contacts);
 });
 
-// PATCH /crm/contacts/:contactId — update stage, add note, or apply field updates
+// PATCH /crm/contacts/:contactId — PROPOSE a stage move / note / field update.
+// Records a proposal, returns 202; it does NOT mutate the contact.
 app.patch("/crm/contacts/:contactId", { preHandler: requireAuth }, async (req, reply) => {
   const { contactId } = req.params as { contactId: string };
-  const body = (req.body ?? {}) as {
-    stage?: string;
-    note?: string;
-    cardId?: string;
-    updates?: Record<string, unknown>;
-  };
-
-  const existing = contactStore.get(contactId);
-  if (!existing) return reply.code(404).send({ ok: false, error: "contact not found" });
-  // Tenant scope. This route carries no company in its path, so requireAuth has
-  // nothing to bind to — without an explicit check a valid key for company A
-  // could patch company B's contact by id alone. (Found while wiring crm.manage.)
-  const authCompany = (req as AuthCarrier).auth?.companyId;
-  const owner = (existing as { companyId?: string }).companyId;
-  if (owner && authCompany && owner !== authCompany) {
-    return reply.code(403).send({ ok: false, error: "contact belongs to another company" });
-  }
-
-  try {
-    let contact = existing;
-
-    if (body.stage) {
-      // Stage move requires a card for validation; load it if cardId provided
-      let card: any = {};
-      if (body.cardId) {
-        const cardPath = await findCard(body.cardId);
-        if (cardPath) card = JSON.parse(await fs.readFile(cardPath, "utf8"));
-      }
-      contact = moveStage(contactId, body.stage, card);
-    }
-
-    if (body.note) {
-      contact = addContactNote(contactId, body.note, "owner");
-    }
-
-    if (body.updates && typeof body.updates === "object") {
-      contact = updateContact(contactId, body.updates as any);
-    }
-
-    return reply.code(200).send(contact);
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    const code = msg.includes("not found") ? 404 : msg.includes("Invalid stage") ? 400 : 500;
-    return reply.code(code).send({ ok: false, error: msg });
-  }
+  const body = (req.body ?? {}) as CrmProposalBody;
+  const companyId = body.companyId ?? (req as AuthCarrier).auth?.companyId;
+  if (!companyId) return reply.code(400).send({ ok: false, error: "companyId required" });
+  const made = await createCrmProposal(companyId, { ...body, op: "update", contactId });
+  if (!made.ok) return reply.code(made.code).send({ ok: false, error: made.error });
+  return reply.code(202).send({ ok: true, status: "pending", proposal: made.proposal });
 });
+
+// GET /crm/proposals/:companyId — proposal history for a company
+app.get("/crm/proposals/:companyId", { preHandler: requireAuth }, async (req, reply) => {
+  const { companyId } = req.params as { companyId: string };
+  const dir = crmProposalsDir(companyId);
+  const files = await fs.readdir(dir).catch(() => [] as string[]);
+  const out: any[] = [];
+  for (const f of files.filter((n) => n.endsWith(".json"))) {
+    try {
+      out.push(JSON.parse(await fs.readFile(path.join(dir, f), "utf8")));
+    } catch { /* skip unreadable */ }
+  }
+  return reply.code(200).send({ ok: true, proposals: out });
+});
+
+// POST /crm/proposals/:pid/confirm — step 2: apply a pending CRM proposal.
+// Owner credential: proposing is cheap, applying a business-record change is not.
+app.post(
+  "/crm/proposals/:pid/confirm",
+  { preHandler: [requireAuth, requireOwner] },
+  async (req, reply) => {
+    const { pid } = req.params as { pid: string };
+    if (!/^crp_[A-Za-z0-9]+$/.test(pid))
+      return reply.code(400).send({ ok: false, error: "bad proposal id" });
+
+    // Proposals live under the CALLER's own company dir — requireAuth already
+    // fixed the tenant, so there is no cross-company pid to guess.
+    const companyId = (req as AuthCarrier).auth?.companyId;
+    if (!companyId) return reply.code(400).send({ ok: false, error: "companyId required" });
+    const file = path.join(crmProposalsDir(companyId), `${pid}.json`);
+
+    let proposal: any;
+    try {
+      proposal = JSON.parse(await fs.readFile(file, "utf8"));
+    } catch {
+      return reply.code(404).send({ ok: false, error: "proposal not found" });
+    }
+    if (proposal.status !== "pending")
+      return reply.code(409).send({ ok: false, error: `proposal is ${proposal.status}` });
+
+    const applied = await applyCrmProposal(proposal);
+    if (!applied.ok) return reply.code(applied.code).send({ ok: false, error: applied.error });
+
+    proposal.status = "applied";
+    proposal.appliedAt = new Date().toISOString();
+    await fs.writeFile(file, JSON.stringify(proposal, null, 2)).catch(() => {});
+
+    return reply.code(200).send({
+      ok: true,
+      status: "applied",
+      proposalId: pid,
+      op: applied.op,
+      contact: applied.contact,
+    });
+  }
+);
+
+// POST /crm/proposals/:pid/deny — discard a pending CRM proposal. Nothing is applied.
+app.post(
+  "/crm/proposals/:pid/deny",
+  { preHandler: [requireAuth, requireOwner] },
+  async (req, reply) => {
+    const { pid } = req.params as { pid: string };
+    if (!/^crp_[A-Za-z0-9]+$/.test(pid))
+      return reply.code(400).send({ ok: false, error: "bad proposal id" });
+    const companyId = (req as AuthCarrier).auth?.companyId;
+    if (!companyId) return reply.code(400).send({ ok: false, error: "companyId required" });
+    const file = path.join(crmProposalsDir(companyId), `${pid}.json`);
+    let proposal: any;
+    try {
+      proposal = JSON.parse(await fs.readFile(file, "utf8"));
+    } catch {
+      return reply.code(404).send({ ok: false, error: "proposal not found" });
+    }
+    if (proposal.status !== "pending")
+      return reply.code(409).send({ ok: false, error: `proposal is ${proposal.status}` });
+    proposal.status = "denied";
+    proposal.appliedAt = new Date().toISOString();
+    await fs.writeFile(file, JSON.stringify(proposal, null, 2)).catch(() => {});
+    return reply.code(200).send({ ok: true, status: "denied", proposalId: pid });
+  }
+);
 
 // GET /crm/summary/:companyId — CRM summary with stage counts and recent activity
 app.get("/crm/summary/:companyId", { preHandler: requireAuth }, async (req, reply) => {

@@ -20,9 +20,12 @@
  *   content.generate  campaign PRD -> channel assets for a company
  *   leads.discover    hunt leads (Apollo text filters, or OSM/Overpass by GPS)
  *   site.publish      generate the company's landing site from its card
- *   billing.status    credits + plan + usage history   (READ-ONLY — no charge)
+ *   billing.status    credits/plan/usage + tier&pack prices; action=checkout creates
+ *                     a real Stripe session (the only write; still mints no credits)
  *   analytics.query   a company's analytics for a period (READ-ONLY — no charge)
- *   crm.manage        list/summary/by_stage/create/update CRM contacts
+ *   crm.manage        list/summary/by_stage/proposals (reads) plus propose->confirm
+ *                     for contacts — create/update only RECORD a proposal, nothing
+ *                     is written until an owner confirms
  *
  *   dna.extract         run the extractor swarm against a URL -> a DNA card
  *   dna.get             fetch a card by id
@@ -43,7 +46,14 @@
  * spend credits, because only their API routes call deductCredits. The read tools
  * above wrap routes that do not charge, so they charge nothing — that is the
  * API's behaviour passed through, not a decision made here. dna.* never reach the
- * API, so they cost nothing either.
+ * API, so they cost nothing either. Credits enter ONLY through Stripe's webhook
+ * after a real payment; no tool here can mint them, and the API's top-up route is
+ * deliberately not exposed.
+ *
+ * Write note: the only tools that change platform state are site.publish (a real
+ * build), billing.status action=checkout (a Stripe session), and crm.manage's
+ * propose->confirm pair. crm.manage create/update are PROPOSALS — they record an
+ * intent and return 202; an owner credential applies it via confirm/deny.
  *
  * Env:
  *   HELIX_API_URL   default http://127.0.0.1:3101
@@ -51,6 +61,8 @@
  *                   the target company's own company-level key from
  *                   <HELIX_CARD_ROOT>/<companyId>/api-keys.json — the presented
  *                   key IS the tenant identity, so we never hard-code one.
+ *   HELIX_OWNER_KEY optional override for owner-gated routes (crm.manage confirm/
+ *                   deny). When unset, the owner key is read from the same file.
  *
  * Transport: stdio MCP, newline-delimited JSON-RPC 2.0.
  */
@@ -64,9 +76,21 @@ const { spawnSync } = require("child_process");
 const API_URL = (process.env.HELIX_API_URL || "http://127.0.0.1:3101").replace(/\/+$/, "");
 const KEY_ROOT = process.env.HELIX_CARD_ROOT || "/etc/helix/companies";
 const ENV_KEY = process.env.HELIX_API_KEY || "";
+const ENV_OWNER_KEY = process.env.HELIX_OWNER_KEY || "";
 const SERVER_NAME = "helix-mcp";
 const SERVER_VERSION = "0.1.0";
 const PROTOCOL_VERSION = "2024-11-05";
+
+/** Read the target company's own key file. Values are NEVER hard-coded here. */
+function keyRec(companyId) {
+  if (!companyId) return null;
+  try {
+    return JSON.parse(
+      fs.readFileSync(path.join(KEY_ROOT, String(companyId), "api-keys.json"), "utf8"));
+  } catch {
+    return null; // no key on disk — the API will answer 401, which is honest
+  }
+}
 
 /** Resolve the credential to present for a call against `companyId`.
  *
@@ -75,14 +99,16 @@ const PROTOCOL_VERSION = "2024-11-05";
  *  the tenant's own key rather than carrying a copy. HELIX_API_KEY overrides. */
 function keyFor(companyId) {
   if (ENV_KEY) return ENV_KEY;
-  if (!companyId) return null;
-  try {
-    const rec = JSON.parse(
-      fs.readFileSync(path.join(KEY_ROOT, String(companyId), "api-keys.json"), "utf8"));
-    return typeof rec.company === "string" && rec.company ? rec.company : null;
-  } catch {
-    return null; // no key on disk — the API will answer 401, which is honest
-  }
+  const rec = keyRec(companyId);
+  return rec && typeof rec.company === "string" && rec.company ? rec.company : null;
+}
+
+/** The owner key for `companyId` — for owner-gated routes (proposal confirm/deny).
+ *  requireOwner reads `x-owner-key`; the company key cannot stand in for it. */
+function ownerKeyFor(companyId) {
+  if (ENV_OWNER_KEY) return ENV_OWNER_KEY;
+  const rec = keyRec(companyId);
+  return rec && typeof rec.owner === "string" && rec.owner ? rec.owner : null;
 }
 
 const ROLES = ["front-desk", "sales", "content", "owner-manager"];
@@ -174,13 +200,26 @@ const TOOLS = [
   {
     name: "billing.status",
     description:
-      "Read a company's billing standing: credit balance + tier, the latest plan, and " +
-      "the usage history. READ-ONLY — it spends no credits (the API's metering/plan " +
-      "endpoints do not charge). Each part is composed from the API and returned verbatim.",
+      "A company's billing surface. `action=status` (default) is READ-ONLY: credit " +
+      "balance + tier, latest plan, usage history — it spends no credits. " +
+      "`action=config` lists tier/pack prices. `action=checkout` CREATES a real Stripe " +
+      "Checkout session for a `priceId` and returns the API's checkoutUrl verbatim " +
+      "(the one write here); `action=portal` opens the customer portal. No action can " +
+      "mint credits — credits are added ONLY by Stripe's webhook after a real payment, " +
+      "so the API's top-up route is deliberately not exposed.",
     inputSchema: {
       type: "object",
       properties: {
         companyId: { type: "string", description: "Company slug" },
+        action: {
+          type: "string",
+          enum: ["status", "config", "checkout", "portal"],
+          description: "status (default) | config | checkout | portal",
+        },
+        priceId: {
+          type: "string",
+          description: "Stripe price id — required for action=checkout (see action=config)",
+        },
         from: { type: "string", description: "Optional ISO date — usage history lower bound" },
         to: { type: "string", description: "Optional ISO date — usage history upper bound" },
       },
@@ -211,16 +250,19 @@ const TOOLS = [
   {
     name: "crm.manage",
     description:
-      "Work a company's CRM: list contacts, read the pipeline summary, list by stage, " +
-      "create a contact, or move/annotate one. The read actions (list/summary/by_stage) " +
-      "spend no credits; create/update write through to the API, which owns the store.",
+      "Work a company's CRM. Reads (list/summary/by_stage) and `proposals` are free. " +
+      "`create`/`update` do NOT write — they RECORD a pending proposal (202) and change " +
+      "nothing; `confirm`/`deny` APPLY or discard a proposal and require the owner " +
+      "credential. This is propose → confirm, the same two-step as card edits: an agent " +
+      "drafts, an owner applies. (The CRM store is in-memory, so a proposal can outlive " +
+      "the contact it targets — confirming a vanished contact is an honest 404.)",
     inputSchema: {
       type: "object",
       properties: {
         companyId: { type: "string", description: "Company slug" },
         action: {
           type: "string",
-          enum: ["list", "summary", "by_stage", "create", "update"],
+          enum: ["list", "summary", "by_stage", "create", "update", "proposals", "confirm", "deny"],
           description: "What to do (default list)",
         },
         stage: { type: "string", description: "Pipeline stage — for action=by_stage" },
@@ -229,6 +271,8 @@ const TOOLS = [
         note: { type: "string", description: "Append a note — for action=update" },
         updates: { type: "object", description: "Field updates — for action=update" },
         cardId: { type: "string", description: "Card to validate a stage move — for action=update" },
+        proposalId: { type: "string", description: "Proposal id (crp_…) — for action=confirm|deny" },
+        summary: { type: "string", description: "Human summary recorded on the proposal" },
       },
       required: ["companyId"],
     },
@@ -335,13 +379,21 @@ const TOOLS = [
  *  non-2xx — a 402 (out of credits) or 404 (no card) is a legitimate answer,
  *  not a transport failure. Only an unreachable API is an error. */
 async function api(pathname, body, opts) {
-  const { method = "POST", companyId = null } = opts || {};
+  const { method = "POST", companyId = null, owner = false } = opts || {};
   const url = API_URL + pathname;
   const headers = { "content-type": "application/json" };
   // The tenant key comes from the path/args for reads (which carry no body) and
   // from the body for writes. Either way it is the target company's OWN key.
-  const key = keyFor(companyId || (body && body.companyId));
+  const tenant = companyId || (body && body.companyId);
+  const key = keyFor(tenant);
   if (key) headers["x-api-key"] = key;
+  // Owner-gated routes (proposal confirm/deny) need BOTH: requireAuth reads
+  // x-api-key, requireOwner reads x-owner-key. Both come from the same tenant's
+  // own key file — this tool never holds a shared or elevated credential.
+  if (owner) {
+    const ok = ownerKeyFor(tenant);
+    if (ok) headers["x-owner-key"] = ok;
+  }
   let res;
   try {
     res = await fetch(url, {
@@ -477,6 +529,35 @@ const HANDLERS = {
   // API's answer; nothing is derived here. None of these routes charge credits.
   "billing.status": async (a) => {
     const q = encodeURIComponent(a.companyId);
+    const action = a.action || "status";
+
+    if (action === "config") {
+      // Tier + pack prices, straight from the API.
+      return api("/billing/config", null, { method: "GET", companyId: a.companyId });
+    }
+    if (action === "portal") {
+      return api(`/billing/portal/${q}`, null, { method: "GET", companyId: a.companyId });
+    }
+    if (action === "checkout") {
+      if (!a.priceId) {
+        return {
+          httpStatus: 0,
+          body: { ok: false, error: "action=checkout needs `priceId` (see action=config)" },
+        };
+      }
+      // The one write in this tool: create a Stripe Checkout session. It adds NO
+      // credits — only Stripe's webhook does that, after a real payment. We never
+      // call the API's top-up route; that would be a money printer.
+      return api(
+        "/billing/checkout",
+        { companyId: a.companyId, priceId: a.priceId },
+        { companyId: a.companyId }
+      );
+    }
+    if (action !== "status") {
+      return { httpStatus: 0, body: { ok: false, error: `unknown action: ${action}` } };
+    }
+
     const credits = await api(`/metering/${q}`, null, { method: "GET", companyId: a.companyId });
     if (credits.httpStatus !== 200) return credits; // 401/404 is the honest answer
     const plan = await api(`/plan/${q}`, null, { method: "GET", companyId: a.companyId });
@@ -535,11 +616,19 @@ const HANDLERS = {
           method: "GET",
           companyId: a.companyId,
         });
+      case "proposals":
+        return api(`/crm/proposals/${q}`, null, { method: "GET", companyId: a.companyId });
       case "create":
         if (!a.contact || typeof a.contact !== "object") {
           return { httpStatus: 0, body: { ok: false, error: "action=create needs `contact`" } };
         }
-        return api("/crm/contacts", { companyId: a.companyId, ...a.contact }, { companyId: a.companyId });
+        // PROPOSE: records a pending proposal (202). No contact exists yet —
+        // action=confirm applies it.
+        return api(
+          "/crm/contacts",
+          { companyId: a.companyId, contact: a.contact, summary: a.summary },
+          { companyId: a.companyId }
+        );
       case "update": {
         if (!a.contactId) {
           return { httpStatus: 0, body: { ok: false, error: "action=update needs `contactId`" } };
@@ -552,9 +641,31 @@ const HANDLERS = {
         if (a.note) body.note = a.note;
         if (a.updates) body.updates = a.updates;
         if (a.cardId) body.cardId = a.cardId;
-        // companyId rides along so requireAuth's tenant binding can 403 a mismatch
-        // rather than the write silently landing on another company's contact.
+        if (a.summary) body.summary = a.summary;
+        // PROPOSE: records a pending proposal (202), mutating nothing. companyId
+        // rides along so the API records it under the right tenant.
         return api(`/crm/contacts/${encodeURIComponent(a.contactId)}`, body, { companyId: a.companyId });
+      }
+      case "confirm": {
+        if (!a.proposalId) {
+          return { httpStatus: 0, body: { ok: false, error: "action=confirm needs `proposalId`" } };
+        }
+        // APPLY: owner credential required — propose is company-level, apply is not.
+        return api(
+          `/crm/proposals/${encodeURIComponent(a.proposalId)}/confirm`,
+          {},
+          { method: "POST", companyId: a.companyId, owner: true }
+        );
+      }
+      case "deny": {
+        if (!a.proposalId) {
+          return { httpStatus: 0, body: { ok: false, error: "action=deny needs `proposalId`" } };
+        }
+        return api(
+          `/crm/proposals/${encodeURIComponent(a.proposalId)}/deny`,
+          {},
+          { method: "POST", companyId: a.companyId, owner: true }
+        );
       }
       default:
         return { httpStatus: 0, body: { ok: false, error: `unknown action: ${a.action}` } };
@@ -631,9 +742,12 @@ async function handle(msg) {
       const out = await handler(params?.arguments || {});
       // Local tools (dna.*) never touch HTTP, so they carry no http_status and we
       // do not invent one. Their success is the handler's own `ok`.
+      // NB: any 2xx is success — a proposal is a 202 ("recorded, not applied") and
+      // a created record is a 201. Only treating 200 as success made a legitimate
+      // 2xx look like an error. The exact status still travels in http_status.
       const ok = out.local
         ? !!out.body && out.body.ok !== false
-        : out.httpStatus === 200 && (!out.body || out.body.ok !== false);
+        : out.httpStatus >= 200 && out.httpStatus < 300 && (!out.body || out.body.ok !== false);
       const payload = out.local
         ? { tool: name, ...(out.body ?? {}) }
         : { tool: name, http_status: out.httpStatus, ...(out.body ?? {}) };
