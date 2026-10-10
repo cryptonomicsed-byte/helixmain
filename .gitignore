@@ -31,3 +31,8 @@ site/content/b/
 dna-foundry/compiled/org_*/
 dna-foundry/compiled/test_*/
 dna-foundry/compiled/e2e-*/
+
+# Cards the API extracts at /extract — runtime output, not source. The single
+# committed demo fixture in this dir stays tracked (tracked files are unaffected
+# by ignore rules).
+dna-foundry/api/data/cards/dna_*.json
