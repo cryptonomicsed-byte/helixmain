@@ -1,0 +1,3 @@
+[submodule "vendor/card-protocol"]
+	path = vendor/card-protocol
+	url = https://github.com/cryptonomicsed-byte/card-protocol.git
