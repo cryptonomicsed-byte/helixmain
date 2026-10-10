@@ -149,7 +149,11 @@ export function emitCardMd(card: any, changelog: string[]): string {
   fm.push(["acting_hash", "sha256:" + ahash]);
   fm.push(["organization_id", card.organization_id]);
   fm.push(["status", card.status || "draft"]);
-  fm.push(["updated", card.updated_at || card.created_at]);
+  // Omit `updated` entirely when the card carries no timestamp. Writing the
+  // literal string "undefined" here (the old behaviour) put that string straight
+  // back into the card on parse — a card with no created_at could never verify.
+  const updatedTs = card.updated_at || card.created_at;
+  if (updatedTs) fm.push(["updated", updatedTs]);
 
   const L: string[] = [];
   L.push("---");

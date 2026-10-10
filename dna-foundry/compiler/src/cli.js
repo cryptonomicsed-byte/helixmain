@@ -180,7 +180,36 @@ if (diffPath) {
 }
 
 const cl = changelogPath ? JSON.parse(fs.readFileSync(changelogPath, "utf8")) : [];
-const compiled = compileCard(card, new Date().toISOString(), cl, openshellRuntime());
+
+// The compiler owns the version CHANGELOG, not the caller. When --out already
+// holds a compiled card and this is a NEWER version, carry the prior changelog
+// forward and append a line for this version. An empty CHANGELOG.json beside a
+// real previous_hash is half a chain: the hash says "v2 follows v1" and the
+// changelog says nothing happened. Doing it here means no caller can forget it.
+let changelog = Array.isArray(cl) ? cl.slice() : [];
+if (outDir) {
+  const priorMdPath = path.join(outDir, "CARD.md");
+  const priorClPath = path.join(outDir, "CHANGELOG.json");
+  if (fs.existsSync(priorMdPath)) {
+    try {
+      const prior = parseCardMd(fs.readFileSync(priorMdPath, "utf8"));
+      const priorVersion = Number(prior.frontmatter && prior.frontmatter.version) || 0;
+      if ((card.version || 1) > priorVersion) {
+        if (fs.existsSync(priorClPath)) {
+          const prev = JSON.parse(fs.readFileSync(priorClPath, "utf8"));
+          if (Array.isArray(prev) && prev.length) changelog = prev.slice();
+        }
+        changelog = changelog.concat([
+          changelogLine || `**v${card.version}** (${new Date().toISOString()}): card updated`,
+        ]);
+      }
+    } catch {
+      /* prior card unreadable — compile as a fresh card, no chain */
+    }
+  }
+}
+
+const compiled = compileCard(card, new Date().toISOString(), changelog, openshellRuntime());
 
 if (outDir) {
   fs.mkdirSync(outDir, { recursive: true });
@@ -190,7 +219,7 @@ if (outDir) {
   fs.writeFileSync(path.join(outDir, "rag-manifest.json"), JSON.stringify(compiled.ragManifest, null, 2));
   fs.writeFileSync(path.join(outDir, "dna-fields-used.json"), JSON.stringify(compiled.dnaFieldsUsed, null, 2));
   fs.writeFileSync(path.join(outDir, "CARD.md"), compiled.cardMd);
-  fs.writeFileSync(path.join(outDir, "CHANGELOG.json"), JSON.stringify(cl, null, 2));
+  fs.writeFileSync(path.join(outDir, "CHANGELOG.json"), JSON.stringify(changelog, null, 2));
   // card.compile_openshell_policy -> the sandbox egress/landlock policy OpenShell consumes.
   // The policy object came out of compileCard (one call, no double compute); the
   // CLI only serialises it. Deterministic: same card + runtime -> byte-identical YAML.

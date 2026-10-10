@@ -442,7 +442,12 @@ export function parseCardMd(
     card.previous_hash = fm.previous_hash.replace(/^sha256:/, "");
   card.organization_id = fm.organization_id;
   card.status = fm.status || "draft";
-  card.created_at = fm.updated;
+  // Restore created_at only when `updated` is actually present. An absent
+  // timestamp must stay absent: the emitter omits the line, and materialising a
+  // value here that the hashed card never had breaks the hash. (The emitter used
+  // to write the literal string "undefined" for a missing timestamp, and this
+  // line then stored that string — a card corrupted by its own compiler.)
+  if (fm.updated !== undefined) card.created_at = fm.updated;
 
   // 1. Identity — identity_value anchors are authoritative; fall back to prose
   const identityResult = parseIdentityAnchors(sec["Identity"] || [], opts?.prevProvenance);

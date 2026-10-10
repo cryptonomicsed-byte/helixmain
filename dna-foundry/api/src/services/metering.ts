@@ -137,8 +137,13 @@ function startOfMonthUtc(): Date {
 }
 
 function usageInWindow(entries: UsageEntry[], since: Date): number {
+  // Only real SPEND counts. A top-up carries a NEGATIVE creditsDeducted, and
+  // summing those in silently inflated the measured usage — a company that
+  // topped up today effectively had its daily and monthly caps cancelled
+  // (demo-barber's -600 of top-ups made usedToday -485, so its "20/day" limit
+  // became ~505). Mirrors the creditsDeducted > 0 filter in the budget cap.
   return entries
-    .filter((e) => !e.refunded && new Date(e.timestamp) >= since)
+    .filter((e) => !e.refunded && e.creditsDeducted > 0 && new Date(e.timestamp) >= since)
     .reduce((sum, e) => sum + e.creditsDeducted, 0);
 }
 
