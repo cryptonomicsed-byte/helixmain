@@ -187,6 +187,33 @@ print(f"    card.json: hash={card['hash'][:16]}... acting_hash={card['acting_has
 PYEOF
 }
 
+# Issue the company's API credentials if it has none. Idempotent — re-onboarding
+# must not rotate a credential out from under a deployed agent. Written 0600 next
+# to the card; the values are never printed (read them from the file).
+issue_api_keys() {
+  local id="$1"
+  ssh "$VPS" python3 - "'${HELIX_DIR}/${id}'" << 'PYEOF'
+import json, os, secrets, sys
+d = sys.argv[1]
+p = os.path.join(d, "api-keys.json")
+if os.path.exists(p):
+    try:
+        k = json.load(open(p))
+        if k.get("company") and k.get("owner"):
+            print("    api keys: already present (kept)")
+            raise SystemExit(0)
+    except SystemExit:
+        raise
+    except Exception:
+        pass
+keys = {"company": "hk_" + secrets.token_hex(24), "owner": "hk_" + secrets.token_hex(24)}
+with open(p, "w") as fh:
+    json.dump(keys, fh, indent=2)
+os.chmod(p, 0o600)
+print(f"    api keys: written to {p} (0600, company + owner)")
+PYEOF
+}
+
 # Show QR for caller URL locally using Python
 show_qr() {
   local url="$1"
@@ -441,6 +468,7 @@ cmd_create() {
 
   # 5. Compile the card -> CARD.md + system-prompt + policy-seed + allowlist + hugo
   compile_card "$id"
+  issue_api_keys "$id"
   post_compile_roles "$id"
 
   # 6. Write env file
@@ -545,6 +573,7 @@ cmd_update() {
       "$existing_file"
 
     compile_card "$id"
+    issue_api_keys "$id"
   fi
 
   cmd_reload_inner "$id"

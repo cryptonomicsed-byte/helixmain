@@ -386,10 +386,16 @@ export const api = {
   /** Generated landing site for a company (if one has been produced). */
   getSite: (companyId: string) => get<any>(`/site/${companyId}`),
 
-  /** Owner edit / confirm. Server merges the patch, marks named provenance
-   *  keys as owner-confirmed, bumps the version and logs a changelog entry. */
-  updateCard: (cardId: string, patch: Record<string, unknown>, confirm: string[] = [], summary?: string) =>
-    request<{ ok: boolean; card: any; fieldsChanged: string[] }>('PATCH', `/cards/${cardId}`, { patch, confirm, author: 'owner', summary }),
+  /** Owner edit. The server never writes the card directly: PATCH records a
+   *  proposal (202) and the confirm step applies it — merging, marking named
+   *  provenance keys owner-confirmed, bumping the version and logging the
+   *  changelog. Two calls, one user action. */
+  updateCard: async (cardId: string, patch: Record<string, unknown>, confirm: string[] = [], summary?: string) => {
+    const made = await request<{ ok: boolean; status: string; proposal: { id: string } }>(
+      'PATCH', `/cards/${cardId}`, { patch, confirm, author: 'owner', summary })
+    return request<{ ok: boolean; card: any; fieldsChanged: string[] }>(
+      'POST', `/cards/${cardId}/proposals/${made.proposal.id}/confirm`)
+  },
 
   // SparkGatekeeper (proxied at /gk → 127.0.0.1:9100)
   // The gatekeeper's real contract: GET /held, POST /held/:id/deny,
