@@ -1,9 +1,12 @@
 /**
  * apiKeys.ts — API credentials, one set per onboarded company.
  *
- * Two levels:
- *   company — normal operations for that company.
- *   owner   — additionally allowed to mutate the card (PATCH /cards/:id).
+ * Three levels:
+ *   company  — normal operations for that company.
+ *   owner    — additionally allowed to mutate the card (PATCH /cards/:id).
+ *   operator — ONE deliberate cross-company grant: sight across companies (the
+ *              dashboard switcher). Not a tenant; any route that needs a real
+ *              company still requires that company's own key or session.
  *
  * Stored per company at <HELIX_COMPANIES>/<id>/api-keys.json (0600), written by
  * onboarding. The KEY is the tenant identity: requireAuth derives the company from
@@ -17,7 +20,7 @@ import * as path from "path";
 import { randomBytes, timingSafeEqual } from "crypto";
 import { HELIX_COMPANIES, listProvisionedCompanies } from "./companies";
 
-export type KeyLevel = "company" | "owner";
+export type KeyLevel = "company" | "owner" | "operator";
 export interface KeyRecord {
   companyId: string;
   level: KeyLevel;
@@ -60,6 +63,26 @@ export function rotateKeys(companyId: string): { company: string; owner: string 
 const TTL_MS = 10_000;
 let cache: { at: number; entries: Array<[string, KeyRecord]> } | null = null;
 
+/** Operator keys live in ONE file (0600, issued by infra/issue-operator-key.py).
+ *  They grant exactly one extra power: sight across companies (the dashboard
+ *  switcher). A record is `{ companyId: "*", level: "operator" }` — routes that
+ *  need a real tenant still require that company's own key or session. */
+const OPERATOR_KEYS_PATH =
+  process.env.HELIX_OPERATOR_KEYS || "/etc/helix/operator-keys.json";
+
+function operatorEntries(): Array<[string, KeyRecord]> {
+  try {
+    const raw = JSON.parse(fs.readFileSync(OPERATOR_KEYS_PATH, "utf8"));
+    const keys: unknown = Array.isArray(raw) ? raw : (raw as { keys?: unknown })?.keys;
+    if (!Array.isArray(keys)) return [];
+    return keys
+      .filter((k): k is string => typeof k === "string" && k.length > 0)
+      .map((k) => [k, { companyId: "*", level: "operator" } as KeyRecord]);
+  } catch {
+    return []; // no operator keys configured — the normal case
+  }
+}
+
 function build(): Array<[string, KeyRecord]> {
   const entries: Array<[string, KeyRecord]> = [];
   for (const id of listProvisionedCompanies()) {
@@ -73,7 +96,7 @@ function build(): Array<[string, KeyRecord]> {
       /* company has no keys yet — it simply can't authenticate */
     }
   }
-  return entries;
+  return [...entries, ...operatorEntries()];
 }
 
 function entriesNow(): Array<[string, KeyRecord]> {

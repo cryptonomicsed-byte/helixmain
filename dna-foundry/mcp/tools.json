@@ -1,6 +1,255 @@
 {
-  "description": "Helix DNA Foundry MCP tools. Everything the foundry does is invocable: extract, get, compile, diff, propose_change, decide_proposal, sense.",
+  "description": "HelixMain MCP tools — the full server surface, 14 tools in TWO groups that are NOT the same card world. API tools (7) are thin clients of the platform API at http://127.0.0.1:3101 carrying a company key; foundry tools (dna.*, 7) run locally on the dna-foundry tree with NO tenant key and are a filesystem trust level, not an API-key one. Names + schemas here mirror dna-foundry/mcp/helix-mcp.js exactly; the dna.* implementations are handlers.py.",
   "tools": [
+    {
+      "name": "voice.call",
+      "description": "Run one turn of a company's card-grounded voice agent: send what the caller said, get the agent's reply. The agent is compiled from the company's DNA card (identity, voice, policies) — it answers only from that card. This is the same turn the AI front desk runs; it does not place a PSTN call.",
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "companyId": {
+            "type": "string",
+            "description": "Company/card slug, e.g. demo-barber"
+          },
+          "message": {
+            "type": "string",
+            "description": "What the caller said"
+          },
+          "role": {
+            "type": "string",
+            "enum": ["front-desk", "sales", "content", "owner-manager"],
+            "description": "Which agent role answers (default front-desk)"
+          },
+          "cardId": {
+            "type": "string",
+            "description": "Card id, if it differs from companyId"
+          }
+        },
+        "required": ["companyId", "message"]
+      }
+    },
+    {
+      "name": "content.generate",
+      "description": "Generate a marketing campaign for a company, grounded in its card. Supply either a ready `prd`, or a `goal` plus non-empty `channels[]` (the tool builds the PRD first). Returns the generated per-channel assets. This costs credits (PRD + asset generation).",
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "companyId": {
+            "type": "string",
+            "description": "Company slug (metering + card lookup)"
+          },
+          "cardId": {
+            "type": "string",
+            "description": "Card id, if it differs from companyId"
+          },
+          "goal": {
+            "type": "string",
+            "description": "Campaign goal, e.g. 'fill weekday lunch slots'"
+          },
+          "channels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Channels to generate for, e.g. ['instagram','email']"
+          },
+          "prd": {
+            "type": "object",
+            "description": "A ready PRD — skips PRD generation when supplied"
+          }
+        },
+        "required": ["companyId"]
+      }
+    },
+    {
+      "name": "leads.discover",
+      "description": "Hunt leads for a company. With lat/lng, uses the OSM/Overpass path (real nearby businesses); with text filters (industry/location/keywords), uses the Apollo path. Returns the discovered leads. Costs credits per hunt.",
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "companyId": {
+            "type": "string",
+            "description": "Company slug (metering + card lookup)"
+          },
+          "cardId": {
+            "type": "string",
+            "description": "Card id, if it differs from companyId"
+          },
+          "industry": {
+            "type": "string",
+            "description": "Target industry, e.g. 'barbershop'"
+          },
+          "location": {
+            "type": "string",
+            "description": "Target location text, e.g. 'Parlin, NJ'"
+          },
+          "size": {
+            "type": "string",
+            "description": "Company size band, if the backend supports it"
+          },
+          "keywords": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Extra keywords"
+          },
+          "lat": {
+            "type": "number",
+            "description": "Latitude — switches to the OSM path"
+          },
+          "lng": {
+            "type": "number",
+            "description": "Longitude — switches to the OSM path"
+          },
+          "radiusMeters": {
+            "type": "number",
+            "description": "OSM search radius in meters"
+          }
+        },
+        "required": ["companyId"]
+      }
+    },
+    {
+      "name": "site.publish",
+      "description": "Publish the company's landing page to the public site and return its real URL (https://helixmain.duckdns.org/b/{companyId}/). The page is built deterministically from the card — the card stays the source of truth — and deployed to the web root. Credits are charged only after a successful publish, so a failed build costs nothing.",
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "companyId": {
+            "type": "string",
+            "description": "Company slug whose card drives the site"
+          }
+        },
+        "required": ["companyId"]
+      }
+    },
+    {
+      "name": "billing.status",
+      "description": "A company's billing surface. `action=status` (default) is READ-ONLY: credit balance + tier, latest plan, usage history — it spends no credits. `action=config` lists tier/pack prices. `action=checkout` CREATES a real Stripe Checkout session for a `priceId` and returns the API's checkoutUrl verbatim (the one write here); `action=portal` opens the customer portal. No action can mint credits — credits are added ONLY by Stripe's webhook after a real payment, so the API's top-up route is deliberately not exposed.",
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "companyId": {
+            "type": "string",
+            "description": "Company slug"
+          },
+          "action": {
+            "type": "string",
+            "enum": ["status", "config", "checkout", "portal"],
+            "description": "status (default) | config | checkout | portal"
+          },
+          "priceId": {
+            "type": "string",
+            "description": "Stripe price id — required for action=checkout (see action=config)"
+          },
+          "from": {
+            "type": "string",
+            "description": "Optional ISO date — usage history lower bound"
+          },
+          "to": {
+            "type": "string",
+            "description": "Optional ISO date — usage history upper bound"
+          }
+        },
+        "required": ["companyId"]
+      }
+    },
+    {
+      "name": "analytics.query",
+      "description": "Read a company's analytics for a period. READ-ONLY — spends no credits. With `enriched`, adds campaign/lead roll-ups; note the API computes the enriched lead totals system-wide (all companies), so treat those two numbers as platform totals, not this company's.",
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "companyId": {
+            "type": "string",
+            "description": "Company slug"
+          },
+          "period": {
+            "type": "string",
+            "enum": ["day", "week", "month"],
+            "description": "Reporting period (default week)"
+          },
+          "enriched": {
+            "type": "boolean",
+            "description": "Include the enriched roll-up"
+          }
+        },
+        "required": ["companyId"]
+      }
+    },
+    {
+      "name": "crm.manage",
+      "description": "Work a company's CRM. Reads (list/summary/by_stage) and `proposals` are free. `create`/`update` do NOT write — they RECORD a pending proposal (202) and change nothing; `confirm`/`deny` APPLY or discard a proposal and require the owner credential. This is propose → confirm, the same two-step as card edits: an agent drafts, an owner applies. (The CRM store is in-memory, so a proposal can outlive the contact it targets — confirming a vanished contact is an honest 404.)",
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "companyId": {
+            "type": "string",
+            "description": "Company slug"
+          },
+          "action": {
+            "type": "string",
+            "enum": ["list", "summary", "by_stage", "create", "update", "proposals", "confirm", "deny"],
+            "description": "What to do (default list)"
+          },
+          "stage": {
+            "type": "string",
+            "description": "Pipeline stage — for action=by_stage"
+          },
+          "contactId": {
+            "type": "string",
+            "description": "Contact id — for action=update"
+          },
+          "contact": {
+            "type": "object",
+            "description": "Contact fields — for action=create"
+          },
+          "note": {
+            "type": "string",
+            "description": "Append a note — for action=update"
+          },
+          "updates": {
+            "type": "object",
+            "description": "Field updates — for action=update"
+          },
+          "cardId": {
+            "type": "string",
+            "description": "Card to validate a stage move — for action=update"
+          },
+          "proposalId": {
+            "type": "string",
+            "description": "Proposal id (crp_…) — for action=confirm|deny"
+          },
+          "summary": {
+            "type": "string",
+            "description": "Human summary recorded on the proposal"
+          }
+        },
+        "required": ["companyId"]
+      }
+    },
     {
       "annotations": {
         "readOnlyHint": false

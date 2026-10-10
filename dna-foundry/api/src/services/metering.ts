@@ -37,7 +37,7 @@ export interface UsageEntry {
 // Cost tables
 // ---------------------------------------------------------------------------
 
-const CREDIT_COSTS: Record<string, number> = {
+export const CREDIT_COSTS: Record<string, number> = {
   extraction:           5,
   compilation:           5,
   campaign_prd:         30,
@@ -70,7 +70,7 @@ const USD_PER_CREDIT = 0.01;
 // real budget. Free's old daily:20 let a funded company do one site_generate (40)
 // but could not complete a campaign (PRD 30 + assets 30 = 60) without waiting for
 // the next day. free 20->75, pro 100->150 so a whole workflow fits in a day.
-const TIER_LIMITS: Record<CreditAccount["tier"], { monthly: number; daily: number }> = {
+export const TIER_LIMITS: Record<CreditAccount["tier"], { monthly: number; daily: number }> = {
   free:   { monthly: 100,   daily: 75  },
   pro:    { monthly: 1000,  daily: 150 },
   agency: { monthly: 10000, daily: 500 },

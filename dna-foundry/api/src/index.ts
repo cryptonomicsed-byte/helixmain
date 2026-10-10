@@ -136,6 +136,8 @@ import {
   PRICE_TO_CREDITS,
   TIER_PRICES,
   CREDIT_PACKS,
+  TIER_LIMITS,
+  CREDIT_COSTS,
   upgradeTier,
 } from "./services/metering";
 import {
@@ -144,7 +146,7 @@ import {
   getAffiliateStats,
   loadAffiliateStore,
 } from "./services/affiliate";
-import { createHmac, randomUUID } from "crypto";
+import { createHmac, randomUUID, timingSafeEqual } from "crypto";
 import { type FastifyRequest, type FastifyReply } from "fastify";
 import { lookupKey, type KeyRecord } from "./services/apiKeys";
 import {
@@ -176,7 +178,7 @@ import {
   verifyAuthentication,
   RP_ORIGIN,
 } from "./services/webauthn";
-import { isOnboardedCompany, isProvisionedCompany, slugify, uniqueSlug } from "./services/companies";
+import { isOnboardedCompany, isProvisionedCompany, listProvisionedCompanies, slugify, uniqueSlug } from "./services/companies";
 import {
   savePending,
   loadPending,
@@ -188,6 +190,25 @@ import {
 } from "./services/signup";
 
 const app = Fastify({ logger: true });
+
+// Keep the RAW request body for the one route that needs the true bytes: the
+// Stripe webhook verifies an HMAC over exactly what Stripe signed. Re-serialising
+// the parsed object (JSON.stringify(req.body)) can NOT reproduce those bytes, so
+// the old signature check could never pass — and it "processed anyway". This
+// parser is behaviour-identical to Fastify's default JSON parser and additionally
+// stashes the raw buffer on req.rawBody.
+app.addContentTypeParser(
+  "application/json",
+  { parseAs: "buffer" },
+  (req, body, done) => {
+    (req as FastifyRequest & { rawBody?: Buffer }).rawBody = body as Buffer;
+    try {
+      done(null, JSON.parse((body as Buffer).toString("utf8")));
+    } catch (e) {
+      done(e as Error, undefined);
+    }
+  },
+);
 const ROOT = path.resolve(__dirname, "..", "..");
 const DATA = path.join(ROOT, "api", "data");
 const CARDS = path.join(DATA, "cards");
@@ -266,9 +287,12 @@ async function requireAuth(req: FastifyRequest, reply: FastifyReply): Promise<vo
     return;
   }
   (req as AuthCarrier).auth = rec;
-  // Tenant binding: naming a DIFFERENT onboarded company is 403, never a silent
+  // An operator credential is the ONE deliberate cross-company grant (the
+  // dashboard switcher): it may name other companies. Everyone else is bound to
+  // their own tenant — naming a DIFFERENT onboarded company is 403, never a silent
   // cross-tenant read/write. Ids that are not onboarded companies (e.g. test cards
   // under api/data/cards) are left to the route's own lookup.
+  if (rec.level === "operator") return;
   for (const named of namedCompanyIds(req)) {
     if (named !== rec.companyId && isOnboardedCompany(named)) {
       await reply.code(403).send({ ok: false, error: "key does not belong to that company" });
@@ -405,9 +429,19 @@ app.put("/settings/:orgId", { preHandler: requireAuth }, async (req, reply) => {
 });
 
 /** Extraction ceiling per account per day. Extraction runs a crawl AND an LLM
- *  call, so a free grant has to be bounded in COMPUTE, not just in credits. This
- *  is the guardrail that replaces the operator gate. */
-const EXTRACTIONS_PER_DAY = 25;
+ *  call, so a free grant has to be bounded in COMPUTE, not just in credits.
+ *
+ *  A FLAT 25 was a lie on the tier that matters: the free tier grants 100 credits
+ *  and caps daily spend at 75, and an extraction costs 5 — so the credit meter
+ *  bound at 15/day and the cap never fired. Derive it from the tier's daily
+ *  credit budget so the number is reachable, and keep an absolute ceiling. */
+const EXTRACTIONS_PER_DAY_CAP = 25;
+function extractionsPerDay(tier: string): number {
+  const limits = TIER_LIMITS[tier as keyof typeof TIER_LIMITS] ?? TIER_LIMITS.free;
+  const opCost = CREDIT_COSTS.extraction ?? 5;
+  if (opCost <= 0) return EXTRACTIONS_PER_DAY_CAP;
+  return Math.max(1, Math.min(EXTRACTIONS_PER_DAY_CAP, Math.floor(limits.daily / opCost)));
+}
 
 app.post("/extract", { preHandler: requireAuth }, async (req, reply) => {
   const body = (req.body ?? {}) as { url?: string; orgId?: string; companyId?: string };
@@ -432,13 +466,14 @@ app.post("/extract", { preHandler: requireAuth }, async (req, reply) => {
   const usedToday = (acct.usageLog ?? []).filter(
     (u) => u.operationType === "extraction" && Date.parse(u.timestamp) >= dayStart.getTime()
   ).length;
-  if (usedToday >= EXTRACTIONS_PER_DAY) {
+  const cap = extractionsPerDay(acct.tier);
+  if (usedToday >= cap) {
     return reply.code(429).send({
       ok: false,
       error: "extraction_daily_cap",
-      message: `Daily limit of ${EXTRACTIONS_PER_DAY} extractions reached. Resets 00:00 UTC.`,
+      message: `Daily limit of ${cap} extractions reached for the ${acct.tier} tier. Resets 00:00 UTC.`,
       usedToday,
-      limit: EXTRACTIONS_PER_DAY,
+      limit: cap,
     });
   }
 
@@ -760,36 +795,45 @@ app.get("/companies", { preHandler: requireAuth }, async (req, reply) => {
   // You see YOUR company. Seeing others is a deliberate grant (multi-company
   // membership), never the default. There is no card or account for anyone else
   // in this response to leak.
-  const mine = (req as AuthCarrier).auth?.companyId ?? "";
-  if (!mine) return reply.code(403).send({ ok: false, error: "no company for this credential" });
+  const auth = (req as AuthCarrier).auth;
+  const mine = auth?.companyId ?? "";
+  const isOperator = auth?.level === "operator";
+  if (!mine && !isOperator) return reply.code(403).send({ ok: false, error: "no company for this credential" });
 
-  const results: object[] = [];
-
-  // Onboarded: the card exists.
-  try {
-    const card = JSON.parse(await fs.readFile(path.join(HELIX_COMPANIES, mine, "card.json"), "utf8"));
-    results.push({
-      id: mine,
-      name: card.identity?.name ?? mine,
-      cardVersion: card.version ?? 1,
-      lastUpdated: card.created_at ?? "",
-      source: "helix",
-    });
-  } catch {
-    // Provisioned but not yet onboarded: the account exists, the card does not.
-    // Returned deliberately, so a brand-new signup sees itself in the dashboard
-    // instead of an empty list.
-    const acct = readAccount(mine);
-    if (acct) {
-      results.push({
-        id: mine,
-        name: acct.business ?? mine,
-        cardVersion: 0,
-        lastUpdated: acct.createdAt ?? "",
-        source: "signup",
-        hasCard: false,
-      });
+  // One company's dashboard entry — the card if it exists, else the signup
+  // record (so a brand-new company sees itself rather than an empty list).
+  const entryFor = async (id: string): Promise<object | null> => {
+    try {
+      const card = JSON.parse(await fs.readFile(path.join(HELIX_COMPANIES, id, "card.json"), "utf8"));
+      return {
+        id,
+        name: card.identity?.name ?? id,
+        cardVersion: card.version ?? 1,
+        lastUpdated: card.created_at ?? "",
+        source: "helix",
+      };
+    } catch {
+      const acct = readAccount(id);
+      return acct
+        ? {
+            id,
+            name: acct.business ?? id,
+            cardVersion: 0,
+            lastUpdated: acct.createdAt ?? "",
+            source: "signup",
+            hasCard: false,
+          }
+        : null;
     }
+  };
+
+  // An operator sees every company (that IS the switcher grant); a normal key
+  // sees only its own.
+  const ids = isOperator ? listProvisionedCompanies() : [mine];
+  const results: object[] = [];
+  for (const id of ids) {
+    const e = await entryFor(id);
+    if (e) results.push(e);
   }
 
   return reply.code(200).send(results);
@@ -2757,35 +2801,50 @@ app.post("/billing/checkout", { preHandler: requireAuth }, async (req, reply) =>
 });
 
 // POST /billing/webhook — Stripe webhook handler
-app.post("/billing/webhook", { preHandler: requireAuth }, async (req, reply) => {
-  const sig     = req.headers["stripe-signature"] as string | undefined;
-  const secret  = process.env.STRIPE_WEBHOOK_SECRET;
-  const rawBody = JSON.stringify(req.body);   // Fastify already parsed — re-stringify for HMAC
+app.post("/billing/webhook", async (req, reply) => {
+  const sig    = req.headers["stripe-signature"] as string | undefined;
+  const secret = process.env.STRIPE_WEBHOOK_SECRET;
 
-  // Best-effort signature verification
-  if (secret && sig) {
-    try {
-      // sig format: t=<timestamp>,v1=<hmac>,...
-      const parts = sig.split(",").reduce<Record<string, string>>((acc, part) => {
-        const [k, v] = part.split("=");
-        if (k && v) acc[k] = v;
-        return acc;
-      }, {});
+  // FAIL CLOSED. Credits enter the ledger through exactly one door — a VERIFIED
+  // Stripe event — so an unverifiable body must never mint any. This route is
+  // deliberately NOT behind requireAuth: Stripe cannot present our API key; its
+  // signature IS the authentication. The previous version re-stringified the
+  // parsed body (which can never reproduce Stripe's signed bytes, so the check
+  // always failed) and then "processed anyway" — i.e. any POST minted credits.
+  if (!secret) {
+    req.log.warn("Stripe webhook hit but STRIPE_WEBHOOK_SECRET is unset — refusing");
+    return reply.code(503).send({ ok: false, error: "webhook not configured" });
+  }
+  if (!sig) return reply.code(400).send({ ok: false, error: "missing stripe-signature" });
 
-      const t        = parts["t"];
-      const v1       = parts["v1"];
-      const payload  = `${t}.${rawBody}`;
-      const expected = createHmac("sha256", secret).update(payload).digest("hex");
+  const raw = (req as FastifyRequest & { rawBody?: Buffer }).rawBody;
+  if (!raw) return reply.code(400).send({ ok: false, error: "no raw body to verify" });
 
-      if (v1 !== expected) {
-        app.log.warn("Stripe webhook signature mismatch — processing anyway (dev mode)");
-      }
-    } catch (e) {
-      app.log.warn(`Stripe webhook sig check failed: ${e} — continuing`);
-    }
+  // sig format: t=<timestamp>,v1=<hmac>,...
+  const parts = sig.split(",").reduce<Record<string, string>>((acc, part) => {
+    const [k, v] = part.split("=");
+    if (k && v) acc[k] = v;
+    return acc;
+  }, {});
+  const t  = parts["t"];
+  const v1 = parts["v1"];
+  if (!t || !v1) return reply.code(400).send({ ok: false, error: "malformed signature" });
+
+  // Replay window — Stripe's own guidance is 5 minutes.
+  const ageSec = Math.abs(Date.now() / 1000 - Number(t));
+  if (!Number.isFinite(ageSec) || ageSec > 300)
+    return reply.code(400).send({ ok: false, error: "signature timestamp outside tolerance" });
+
+  const expected = createHmac("sha256", secret)
+    .update(`${t}.${raw.toString("utf8")}`)
+    .digest("hex");
+  const got = Buffer.from(v1, "utf8");
+  const exp = Buffer.from(expected, "utf8");
+  if (got.length !== exp.length || !timingSafeEqual(got, exp)) {
+    req.log.warn("Stripe webhook signature verification FAILED");
+    return reply.code(400).send({ ok: false, error: "signature verification failed" });
   }
 
-  // Always return 200 immediately — Stripe needs it
   try {
     const event = req.body as {
       type: string;
@@ -2828,6 +2887,14 @@ app.post("/billing/webhook", { preHandler: requireAuth }, async (req, reply) => 
 // GET /billing/portal/:companyId — Stripe customer portal
 app.get("/billing/portal/:companyId", { preHandler: requireAuth }, async (req, reply) => {
   const { companyId } = req.params as { companyId: string };
+  // Tenant binding, stated where the route lives rather than leaning on the
+  // blanket check: the portal is scoped to the caller's OWN company. (requireAuth
+  // already 403s naming another ONBOARDED company; this also covers a company
+  // that is provisioned but not yet onboarded, and survives any future refactor of
+  // the blanket check.)
+  const auth = (req as AuthCarrier).auth;
+  if (auth && auth.level !== "operator" && auth.companyId !== companyId)
+    return reply.code(403).send({ ok: false, error: "not your company" });
   const STRIPE_KEY = process.env.STRIPE_SECRET_KEY;
   if (!STRIPE_KEY) {
     return reply.code(200).send({ ok: false, error: "Stripe not configured" });
@@ -3083,64 +3150,32 @@ app.post("/auth/logout", async (_req, reply) => {
 });
 
 // ---------------------------------------------------------------------------
-// Signup requests
+// Signup rate limiting
 //
-// /auth/signup RECORDS A REQUEST. It deliberately does NOT create a company, a
-// card, credits, or an enrollment token. passkeys.ts is explicit that enrollment
-// is bootstrapped by an operator-issued one-time token and that "there is no
-// permanent open enrollment door" — an unauthenticated route that minted accounts
-// would BE that door, and would repeat the initAccount money-printer mistake
-// (auto-creating an account for any stranger who named a company). The operator
-// reviews these with infra/approve-signup.py.
+// The legacy POST /auth/signup — "record a request, an operator reviews it" —
+// was RETIRED when the self-serve passkey flow landed. It forced an email the
+// new flow made optional, wrote a second record shape into the same directory,
+// and shared this counter with a different threshold, so the two endpoints ate
+// each other's budget. Its replacement is /auth/signup/options below. Existing
+// pending records (if any) are still reviewable with infra/approve-signup.py.
 // ---------------------------------------------------------------------------
 
-const SIGNUP_DIR = process.env.HELIX_SIGNUP_DIR || "/etc/helix/signups";
-
-/** Best-effort flood friction, per IP, in-memory. Not a security boundary. */
+/** Best-effort flood friction, in-memory. NOT a security boundary — the real
+ *  abuse bound is the bounded credit grant, which no unauthenticated route can
+ *  mint more of. Keyed on the client address, so it is genuinely per-IP only if
+ *  the stream layer forwards the real one (nginx SNI router + PROXY protocol);
+ *  otherwise every caller collapses into one shared bucket. */
 const signupHits = new Map<string, number[]>();
 
-app.post("/auth/signup", async (req, reply) => {
-  const body = (req.body ?? {}) as { business?: string; email?: string; website?: string };
-  const business = String(body.business ?? "").trim();
-  const email = String(body.email ?? "").trim().toLowerCase();
-  const website = String(body.website ?? "").trim();
-
-  if (business.length < 2 || business.length > 120)
-    return reply.code(400).send({ ok: false, error: "a business name is required" });
-  if (email.length > 200 || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email))
-    return reply.code(400).send({ ok: false, error: "a valid email is required" });
-  if (website.length > 300)
-    return reply.code(400).send({ ok: false, error: "that website is too long" });
-
-  const ip = (req.headers["x-real-ip"] as string) || req.ip || "unknown";
-  const now = Date.now();
-  const recent = (signupHits.get(ip) ?? []).filter((t) => now - t < 3_600_000);
-  if (recent.length >= 5)
-    return reply.code(429).send({ ok: false, error: "too many requests — try again later" });
-  recent.push(now);
-  signupHits.set(ip, recent);
-
-  const id = randomUUID().slice(0, 8);
-  const record = {
-    id,
-    business,
-    email,
-    website: website || null,
-    requestedAt: new Date().toISOString(),
-    ip,
-    status: "pending",
-  };
-  try {
-    await fs.mkdir(SIGNUP_DIR, { recursive: true });
-    await fs.writeFile(path.join(SIGNUP_DIR, `${id}.json`), JSON.stringify(record, null, 2), {
-      mode: 0o600,
-    });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    return reply.code(500).send({ ok: false, error: `could not record the request: ${msg}` });
-  }
-
-  return reply.code(202).send({ ok: true, status: "pending" });
+app.post("/auth/signup", async (_req, reply) => {
+  // RETIRED — the self-serve flow below (/auth/signup/options → /verify) replaced
+  // it. Kept as an explicit 410 so any stale client learns the door moved rather
+  // than seeing a confusing 404.
+  return reply.code(410).send({
+    ok: false,
+    error: "gone",
+    message: "This endpoint is retired. Sign up with a passkey at /auth/signup/options.",
+  });
 });
 
 // ---------------------------------------------------------------------------
