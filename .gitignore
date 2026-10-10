@@ -14,3 +14,20 @@ tmp/
 dna-foundry/swarm/.venv/
 dna-foundry/swarm/a2a/run_*.jsonl
 dna-foundry/swarm/memory/
+
+# Hugo build OUTPUT. site/ is source (layouts, content, hugo.toml, build script)
+# and stays tracked — only what `hugo` generates is ignored.
+site/public/
+site/resources/
+site/.hugo_build.lock
+site/data/
+site/static/
+site/content/b/
+
+# Per-run compiled card output. The load-bearing demo cards under
+# dna-foundry/compiled/ (notably dna_c1640d90_v4/openshell-policy.yaml, which
+# ws5-boot.sh and deploy/zeroclaw/ws5-job3-apply.sh READ) stay tracked on
+# purpose — do not blanket-ignore dna-foundry/compiled/.
+dna-foundry/compiled/org_*/
+dna-foundry/compiled/test_*/
+dna-foundry/compiled/e2e-*/
