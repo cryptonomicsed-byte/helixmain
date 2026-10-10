@@ -17,8 +17,12 @@ HELIX_DIR="/etc/helix/companies"
 RELAY="wss://omokoda.duckdns.org:3443"
 CALLER_BASE="https://omokoda.duckdns.org/caller/"
 SPARK_BASE="https://omokoda.duckdns.org/spark/"
-DEEPSEEK_KEY="sk-da9a7ddf0b694d06877f10dce57b0196"
 COMPILER="/opt/helixmain/dna-foundry/compiler"
+
+# LLM key: never hardcode. Provide via env (or a 0600 file) before running.
+#   export DEEPSEEK_KEY=sk-...   # or set LLM_API_KEY instead
+DEEPSEEK_KEY="${DEEPSEEK_KEY:-${LLM_API_KEY:-}}"
+[[ -z "$DEEPSEEK_KEY" ]] && { echo "ERROR: DEEPSEEK_KEY (or LLM_API_KEY) is not set in the environment." >&2; exit 1; }
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
