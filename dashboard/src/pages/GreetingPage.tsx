@@ -13,6 +13,15 @@ export function GreetingPage() {
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState<string | null>(null)
 
+  // Auto-load currentCard when company is selected but no card is in store
+  useEffect(() => {
+    if (!currentCompany) return
+    if (currentCard) return
+    api.getCard(currentCompany.id)
+      .then((c) => useHelixStore.getState().setCurrentCard(c))
+      .catch(() => {/* no card yet */})
+  }, [currentCompany, currentCard])
+
   useEffect(() => {
     api.voices().then(setVoices).catch(() => {})
   }, [])

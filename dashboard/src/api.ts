@@ -120,7 +120,8 @@ export interface GreetingResult {
 
 export interface Voice {
   id: string
-  name: string
+  name: string        // normalised from voiceName at fetch time
+  voiceName?: string  // raw field from API (kept for compat)
   provider: 'kokoro' | 'elevenlabs' | 'openai'
   gender?: string
   style?: string
@@ -232,7 +233,7 @@ export function normalizeCard(raw: any): BusinessCard {
   return {
     id: raw?.id ?? '',
     version: raw?.version ?? 1,
-    org_id: raw?.organizationId ?? raw?.org_id ?? '',
+    org_id: raw?.organizationId ?? raw?.org_id ?? raw?.organization_id ?? '',
     name:    cardField(identity.name, conf('identity.name'), inf('identity.name')),
     tagline: cardField(identity.tagline, conf('identity.tagline'), inf('identity.tagline')),
     phone:   cardField(identity.phone, conf('identity.phone'), inf('identity.phone')),
@@ -264,7 +265,10 @@ export const api = {
     post<GreetingResult>('/greeting', { cardId, companyId }),
 
   // Voices
-  voices: () => get<Voice[]>('/voices'),
+  voices: async (): Promise<Voice[]> => {
+    const raw = await get<any[]>('/voices')
+    return raw.map((v) => ({ ...v, name: v.name ?? v.voiceName ?? v.id }))
+  },
 
   // Health
   health: (companyId: string) =>

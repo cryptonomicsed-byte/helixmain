@@ -53,7 +53,7 @@ export function CompanyPage() {
   const activeTab = (searchParams.get('tab') as Tab) || 'overview'
   const setTab = (t: Tab) => setSearchParams({ tab: t })
 
-  const { setCurrentCompany } = useHelixStore()
+  const { setCurrentCompany, setCurrentCard } = useHelixStore()
 
   const [card, setCard]           = useState<BusinessCard | null>(null)
   const [health, setHealth]       = useState<HealthResult | null>(null)
@@ -83,6 +83,7 @@ export function CompanyPage() {
         setSpecials(c.specials ?? [])
         setSocials(c.socials ?? {})
         setCurrentCompany({ id: id!, name: c.name?.value ?? id!, cardVersion: c.version, lastUpdated: c.updated_at ?? '' })
+        setCurrentCard(c)
 
         // Load secondary data best-effort in parallel
         const [h, cl, vl] = await Promise.allSettled([
@@ -101,8 +102,8 @@ export function CompanyPage() {
       }
     }
     load()
-    return () => { live = false }
-  }, [id, setCurrentCompany])
+    return () => { live = false; setCurrentCard(null) }
+  }, [id, setCurrentCompany, setCurrentCard])
 
   function fieldVal(key: keyof BusinessCard): string {
     if (key in edits) return edits[key as string] ?? ''
@@ -124,7 +125,7 @@ export function CompanyPage() {
     setSaving(true)
     setSaveMsg(null)
     try {
-      await api.compile(card.id, card.org_id)
+      await api.compile(card.id, id ?? card.org_id)
       setSaveMsg('Saved & compiled successfully.')
     } catch (e) {
       setSaveMsg('Error: ' + (e instanceof Error ? e.message : String(e)))
@@ -136,7 +137,7 @@ export function CompanyPage() {
   async function loadGreeting() {
     if (!card) return
     try {
-      const g = await api.greeting(card.id, card.org_id)
+      const g = await api.greeting(card.id, id ?? card.org_id)
       setGreeting(g)
     } catch (e) {
       console.error('greeting failed', e)
