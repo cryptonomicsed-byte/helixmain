@@ -3,9 +3,11 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useHelixStore } from '../store'
 import { Icon } from './Icon'
+import { useIsMobile } from '../hooks'
 
 export function CompanySwitcher() {
   const { companies, currentCompany, setCurrentCompany } = useHelixStore()
+  const isMobile = useIsMobile()
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
   const ref = useRef<HTMLDivElement>(null)
@@ -33,10 +35,10 @@ export function CompanySwitcher() {
 
   return (
     <div ref={ref} style={{ position: 'relative' }}>
-      <button className="btn" onClick={() => setOpen((o) => !o)} style={{ minWidth: 190, justifyContent: 'space-between' }}>
+      <button className="btn" onClick={() => setOpen((o) => !o)} style={{ minWidth: isMobile ? 0 : 190, maxWidth: isMobile ? '58vw' : undefined, justifyContent: 'space-between' }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: '.5rem', overflow: 'hidden' }}>
           <Icon name="company" size={15} />
-          <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 130 }}>
+          <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: isMobile ? 110 : 130 }}>
             {currentCompany?.name ?? 'Select company'}
           </span>
         </span>

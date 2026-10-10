@@ -158,3 +158,19 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
   outline: 2px solid var(--brand);
   outline-offset: 2px;
 }
+
+/* ── phone refinements ───────────────────────────────────────── */
+@media (max-width: 860px){
+  html, body { overflow-x: hidden; }
+  .bento { gap: 10px; }
+  .h1 { font-size: 1.25rem; }
+  .h2 { font-size: .98rem; }
+  .stat-val { font-size: 1.5rem; }
+  .glass { padding: 12px; }
+  /* comfortable touch targets */
+  .btn { min-height: 38px; }
+  /* wide tables / pre scroll instead of breaking the page */
+  table, pre { display: block; overflow-x: auto; max-width: 100%; }
+  img { max-width: 100%; height: auto; }
+}
+

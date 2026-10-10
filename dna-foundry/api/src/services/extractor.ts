@@ -100,6 +100,14 @@ export interface ExtractedCard {
     }>;
   };
   competitors: Array<{ name: string; positioning: string }>;
+  // Visual identity — scraped from the site's real CSS/HTML, not inferred by the LLM.
+  visual: {
+    colors: Array<{ hex: string; name: string; usage: string }>;
+    fonts: Array<{ family: string; usage: string }>;
+    logoUrl: string;
+    ogImage: string;
+    ctas: string[];
+  };
   field_provenance: Record<string, ProvenanceEntry>;
   confidenceScore: number; // 0–100
 }
@@ -120,6 +128,19 @@ interface ParsedDom {
   socialLinks: string[];
   hours: string;
   schemaOrg: string;
+  visual: VisualExtraction;
+}
+
+/** Real visual identity pulled straight from the page's CSS/HTML. */
+interface VisualExtraction {
+  colors: string[];   // hex, frequency-ordered (brand palette)
+  fonts: string[];    // font families, first-in-stack
+  ctas: string[];     // button / CTA anchor text
+  ogImage: string;
+  ogTitle: string;
+  logoUrl: string;
+  heroImages: string[];
+  cssVariables: Record<string, string>;
 }
 
 // ---------------------------------------------------------------------------
@@ -253,7 +274,121 @@ function extractTagText(html: string, tag: string): string[] {
   return results;
 }
 
-function parseDom(html: string): ParsedDom {
+// ---------------------------------------------------------------------------
+// 2b. Visual identity extraction
+//     Absorbed (reimplemented natively) from the reference family's scraper:
+//     real CSS colour palette, font stacks, CTAs, OG image and logo — read
+//     straight from the page, never inferred by the LLM. Regex-based so it
+//     needs no DOM dependency, matching this file's existing parse style.
+// ---------------------------------------------------------------------------
+
+const NAMED_COLORS: Record<string, string> = {
+  "#000000": "black", "#FFFFFF": "white", "#FF0000": "red", "#00FF00": "green",
+  "#0000FF": "blue", "#FFFF00": "yellow", "#FFA500": "orange", "#800080": "purple",
+  "#808080": "gray", "#FFC0CB": "pink", "#00FFFF": "cyan", "#A52A2A": "brown",
+};
+
+export function colorName(hex: string): string {
+  return NAMED_COLORS[hex.toUpperCase()] ?? hex.toUpperCase();
+}
+
+function rgbToHex(rgb: string): string {
+  const m = rgb.match(/\d+/g);
+  if (!m || m.length < 3) return "#000000";
+  return (
+    "#" +
+    m.slice(0, 3).map((n) => parseInt(n, 10).toString(16).padStart(2, "0")).join("").toUpperCase()
+  );
+}
+
+function resolveUrl(src: string, baseUrl: string): string {
+  if (!src) return "";
+  if (/^https?:\/\//i.test(src)) return src;
+  if (src.startsWith("//")) return `https:${src}`;
+  try {
+    return new URL(src, baseUrl).href;
+  } catch {
+    return src;
+  }
+}
+
+export function extractVisual(html: string, baseUrl = ""): VisualExtraction {
+  // CSS custom properties
+  const cssVariables: Record<string, string> = {};
+  for (const m of html.matchAll(/(--[\w-]+)\s*:\s*([^;"'}]+)/g)) {
+    cssVariables[m[1]] = m[2].trim();
+  }
+
+  // Colour frequency across <style> blocks, inline styles and CSS vars
+  const freq = new Map<string, number>();
+  const bump = (hex: string) => freq.set(hex, (freq.get(hex) ?? 0) + 1);
+
+  const styleBlocks = [...html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi)].map((m) => m[1]);
+  const inlineStyles = [...html.matchAll(/style=["']([^"']*)["']/gi)].map((m) => m[1]);
+  for (const css of [...styleBlocks, ...inlineStyles, ...Object.values(cssVariables)]) {
+    for (const m of css.matchAll(/#[0-9A-Fa-f]{6}\b/g)) bump(m[0].toUpperCase());
+  }
+  for (const css of inlineStyles) {
+    for (const m of css.matchAll(/rgb\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*\)/gi)) bump(rgbToHex(m[0]));
+  }
+
+  let colors = [...freq.entries()].sort((a, b) => b[1] - a[1]).map(([hex]) => hex);
+  // Drop default ink/paper when a real palette remains
+  const noNeutral = colors.filter((h) => h !== "#FFFFFF" && h !== "#000000");
+  if (noNeutral.length >= 3) colors = noNeutral;
+  colors = colors.slice(0, 6);
+
+  // Fonts — first family in each stack, minus generic keywords
+  const GENERIC = /^(inherit|initial|unset|revert|sans-serif|serif|monospace|cursive|fantasy|system-ui|ui-[\w-]+|emoji|math)$/i;
+  const fonts = [...new Set(
+    [...html.matchAll(/font-family\s*:\s*([^;"'}]+)/gi)]
+      .map((m) => m[1].split(",")[0].replace(/['"]/g, "").trim())
+      .filter((f) => f && !GENERIC.test(f) && f.length < 60),
+  )].slice(0, 3);
+
+  // CTAs — button text + button/cta-styled anchor text
+  const ctas: string[] = [];
+  for (const m of html.matchAll(/<button[^>]*>([\s\S]*?)<\/button>/gi)) {
+    const t = stripTags(m[1]).trim();
+    if (t.length > 1 && t.length <= 40) ctas.push(t);
+  }
+  for (const m of html.matchAll(/<a[^>]+class=["'][^"']*(?:btn|button|cta)[^"']*["'][^>]*>([\s\S]*?)<\/a>/gi)) {
+    const t = stripTags(m[1]).trim();
+    if (t.length > 1 && t.length <= 40) ctas.push(t);
+  }
+
+  const meta = (prop: string) =>
+    html.match(new RegExp(`<meta[^>]+(?:property|name)=["']${prop}["'][^>]+content=["']([^"']+)["']`, "i"))?.[1] ??
+    html.match(new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["']${prop}["']`, "i"))?.[1] ??
+    "";
+
+  const ogImage = resolveUrl(meta("og:image"), baseUrl);
+  const ogTitle = meta("og:title");
+
+  const logoUrl = resolveUrl(
+    html.match(/<img[^>]+(?:src|data-src)=["']([^"']*(?:logo|brand)[^"']*)["']/i)?.[1] ?? "",
+    baseUrl,
+  );
+
+  const heroImages = [...new Set(
+    [...html.matchAll(/<img[^>]+(?:src|data-src)=["']([^"']+)["']/gi)]
+      .map((m) => m[1])
+      .filter((src) => /hero|banner|cover/i.test(src)),
+  )].slice(0, 3).map((s) => resolveUrl(s, baseUrl));
+
+  return {
+    colors,
+    fonts,
+    ctas: [...new Set(ctas)].slice(0, 6),
+    ogImage,
+    ogTitle,
+    logoUrl,
+    heroImages,
+    cssVariables,
+  };
+}
+
+function parseDom(html: string, baseUrl = ""): ParsedDom {
   // title
   const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
   const title = titleMatch ? stripTags(titleMatch[1]).trim() : "";
@@ -324,6 +459,7 @@ function parseDom(html: string): ParsedDom {
     socialLinks,
     hours,
     schemaOrg,
+    visual: extractVisual(html, baseUrl),
   };
 }
 
@@ -376,6 +512,9 @@ Page title: ${dom.title}
 Meta description: ${dom.metaDesc}
 Headings: ${headings}
 Page text (first 3000 chars): ${dom.bodyText}
+Detected CSS colors: ${dom.visual.colors.join(", ") || "(none)"}
+Detected fonts: ${dom.visual.fonts.join(", ") || "(none)"}
+Button / CTA text on page: ${dom.visual.ctas.join(" | ") || "(none)"}
 ${dom.schemaOrg ? `Schema.org JSON-LD: ${dom.schemaOrg.slice(0, 1000)}` : ""}
 
 Extract the following as JSON. If a field cannot be determined from the page, use null or empty array.
@@ -562,6 +701,7 @@ function fallbackCard(req: ExtractionRequest): ExtractedCard {
     },
     customers: { personas: [] },
     competitors: [],
+    visual: { colors: [], fonts: [], logoUrl: "", ogImage: "", ctas: [] },
     field_provenance: {
       "identity.website": prov([req.url], 1.0, now),
     },
@@ -587,7 +727,7 @@ export async function extractCard(req: ExtractionRequest): Promise<ExtractedCard
   const finalUrl = fetched.finalUrl;
 
   // ---- DOM parse ----
-  const dom = parseDom(fetched.html);
+  const dom = parseDom(fetched.html, finalUrl);
   const socials = extractSocials(dom.socialLinks);
 
   // ---- LLM extraction ----
@@ -648,6 +788,13 @@ export async function extractCard(req: ExtractionRequest): Promise<ExtractedCard
   fp["strategy.swot"] = inferredProv([finalUrl], baseConf * 0.9, now);
   fp["customers.personas"] = inferredProv([finalUrl], baseConf * 0.85, now);
   fp["competitors"] = inferredProv(["category:inference"], 0.4, now);
+
+  // Visual identity — scraped from real CSS/HTML, so high confidence
+  if (dom.visual.colors.length > 0) fp["visual.colors"] = prov([finalUrl], 0.9, now);
+  if (dom.visual.fonts.length > 0)  fp["visual.fonts"]  = prov([finalUrl], 0.85, now);
+  if (dom.visual.logoUrl)           fp["visual.logoUrl"] = prov([finalUrl], 0.95, now);
+  if (dom.visual.ogImage)           fp["visual.ogImage"] = prov([finalUrl], 0.95, now);
+  if (dom.visual.ctas.length > 0)   fp["visual.ctas"]   = prov([finalUrl], 0.85, now);
 
   // Overall confidence score 0–100
   const fieldConfs = Object.values(fp).map((p) => p.confidence);
@@ -743,6 +890,13 @@ export async function extractCard(req: ExtractionRequest): Promise<ExtractedCard
     },
     customers: { personas },
     competitors,
+    visual: {
+      colors: dom.visual.colors.map((hex) => ({ hex, name: colorName(hex), usage: "" })),
+      fonts: dom.visual.fonts.map((family) => ({ family, usage: "" })),
+      logoUrl: dom.visual.logoUrl,
+      ogImage: dom.visual.ogImage,
+      ctas: dom.visual.ctas,
+    },
     field_provenance: fp,
     confidenceScore,
   };

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useHelixStore } from '../store'
+import { useIsMobile } from '../hooks'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -113,6 +114,7 @@ interface PanelProps {
 }
 
 function LeadPanel({ lead, companyId, cardId, onClose, onLeadUpdate }: PanelProps) {
+  const isMobile = useIsMobile()
   const [outreach, setOutreach]   = useState<OutreachDraft | null>(null)
   const [outLoading, setOutLoading] = useState(false)
   const [submitLoading, setSubmitLoading] = useState(false)
@@ -189,7 +191,7 @@ function LeadPanel({ lead, companyId, cardId, onClose, onLeadUpdate }: PanelProp
 
   return (
     <div style={{
-      position: 'fixed', top: 0, right: 0, bottom: 0, width: 420,
+      position: 'fixed', top: 0, right: 0, bottom: 0, width: isMobile ? '100%' : 420,
       background: 'var(--surface)', borderLeft: '1px solid var(--line-2)',
       zIndex: 100, display: 'flex', flexDirection: 'column',
       boxShadow: '-4px 0 24px #00000066',
@@ -405,13 +407,15 @@ interface ColumnProps {
 }
 
 function KanbanColumn({ col, leads, onView, onMove }: ColumnProps) {
+  const isMobile = useIsMobile()
   const nextStatuses = COLUMNS
     .filter((c) => c.key !== col.key)
     .map((c) => c)
 
   return (
     <div style={{
-      flex: '1 1 0', minWidth: 180, background: 'var(--surface)',
+      flex: isMobile ? '0 0 78%' : '1 1 0', minWidth: isMobile ? 220 : 180,
+      background: 'var(--surface)',
       border: '1px solid var(--line-2)', borderRadius: 10,
       display: 'flex', flexDirection: 'column', overflow: 'hidden',
     }}>
