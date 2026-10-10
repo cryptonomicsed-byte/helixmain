@@ -240,6 +240,10 @@ LEDGER_TOOL="/root/helixmain/infra/append-ledger.py"
 append_ledger() {
   local id="$1" mutation="$2" note="$3"
   local card_dir="${HELIX_DIR}/${id}"
+  # The note reaches python THROUGH a remote shell, so it must survive that
+  # shell's word-splitting. Without %q a note like "card created (v1)" makes the
+  # host's bash choke on the paren and the append fails silently.
+  local q_note; q_note="$(printf '%q' "$note")"
   if ! ssh "$VPS" "test -f '${LEDGER_TOOL}'"; then
     echo "    WARNING: ${LEDGER_TOOL} not on host — skipping ledger append"
     echo "             (sync helixmain to the host first: see REPOS.md)"
@@ -247,7 +251,7 @@ append_ledger() {
   fi
   ssh "$VPS" python3 "${LEDGER_TOOL}" "${card_dir}" \
       --company-id "${id}" --mutation "${mutation}" \
-      --author onboarding --note "${note}" \
+      --author onboarding --note "${q_note}" \
     || echo "    WARNING: ledger append failed for ${id} (the card change is still saved)"
 }
 
