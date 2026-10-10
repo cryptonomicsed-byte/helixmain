@@ -107,12 +107,12 @@ export function AiTab() {
             <input style={inputStyle} type="number" min={0} placeholder="uncapped"
               value={budget} onChange={(e) => setBudget(e.target.value)} />
           </div>
-          <button className="btn btn-primary" disabled={busy}
+          <button className="btn btn-primary" disabled={busy || budget.trim() === ''}
             onClick={() => save(
-              { budgetCredits: budget.trim() === '' || Number(budget) <= 0 ? null : Number(budget) },
-              budget.trim() === '' || Number(budget) <= 0 ? 'Budget cap removed.' : `Budget cap set to ${budget} credits/month.`,
+              { budgetCredits: Number(budget) <= 0 ? null : Number(budget) },
+              Number(budget) <= 0 ? 'Budget cap removed.' : `Budget cap set to ${budget} credits/month.`,
             )}>
-            <Icon name="check" size={14} /> {budget.trim() === '' || Number(budget) <= 0 ? 'Remove cap' : 'Save cap'}
+            <Icon name="check" size={14} /> {budget.trim() === '' ? 'Set cap' : Number(budget) <= 0 ? 'Remove cap' : 'Save cap'}
           </button>
         </div>
       </section>
