@@ -377,6 +377,20 @@ app.post("/compile", async (req, reply) => {
       outputDir: COMPILED,
       roles,
     });
+
+    // Also emit CARD.md via the deterministic compiler CLI into the company dir.
+    // This is the canonical human-readable + hash-stable representation of the card.
+    if (COMPILER_CLI) {
+      const companyDir = path.join(HELIX_COMPANIES, body.companyId);
+      await fs.mkdir(companyDir, { recursive: true });
+      const { code: cliCode, err: cliErr } = await run("node", [
+        COMPILER_CLI, "--card", cardPath, "--out", companyDir,
+      ]);
+      if (cliCode !== 0) {
+        req.log.warn({ companyId: body.companyId, err: cliErr.slice(-500) }, "CARD.md emit failed");
+      }
+    }
+
     return reply.code(200).send({ ok: true, ...result });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
