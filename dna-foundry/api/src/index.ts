@@ -143,7 +143,7 @@ import {
   getAffiliateStats,
   loadAffiliateStore,
 } from "./services/affiliate";
-import { createHmac } from "crypto";
+import { createHmac, randomUUID } from "crypto";
 import { type FastifyRequest, type FastifyReply } from "fastify";
 import { lookupKey, type KeyRecord } from "./services/apiKeys";
 import { isOnboardedCompany } from "./services/companies";
@@ -444,28 +444,44 @@ app.get("/cards/:id", { preHandler: requireAuth }, async (req, reply) => {
   return JSON.parse(await fs.readFile(p, "utf8"));
 });
 
-// PATCH /cards/:id — owner edit / confirm. Merges a shallow patch, marks any
-// named provenance keys as owner-confirmed, bumps the version and appends a
-// hash-chained changelog entry. Real write, real history.
-app.patch("/cards/:id", { preHandler: [requireAuth, requireOwner] }, async (req, reply) => {
-  const id = (req.params as { id: string }).id;
-  const body = (req.body ?? {}) as {
-    patch?: Record<string, unknown>;
-    confirm?: string[];
-    author?: string;
-    summary?: string;
-  };
-  if (!body.patch || typeof body.patch !== "object")
-    return reply.code(400).send({ ok: false, error: "patch object required" });
+// ---------------------------------------------------------------------------
+// Card mutation — propose -> confirm -> apply.
+//
+// The card is the source of truth, so it is never edited directly. A change is
+// recorded as a PROPOSAL first, then a separate confirm step applies it, bumping
+// the version and appending the hash-chained changelog entry. PATCH stays as the
+// propose entry point so existing callers keep working — but it returns 202 and
+// mutates nothing.
+// ---------------------------------------------------------------------------
 
-  const p = await findCard(id);
-  if (!p) return reply.code(404).send({ ok: false, error: "card not found" });
+interface CardPatchBody {
+  patch?: Record<string, unknown>;
+  confirm?: string[];
+  author?: string;
+  summary?: string;
+}
+
+function proposalsDir(cardId: string): string {
+  return path.join(HELIX_COMPANIES, cardId, "proposals");
+}
+
+/** Apply a patch: merge sections, mark owner-confirmed provenance, bump version,
+ *  write, append the changelog. Returns the changed card, or {error, code}. */
+async function applyCardPatch(
+  cardId: string,
+  body: CardPatchBody
+): Promise<{ card: Record<string, any>; fieldsChanged: string[] } | { error: string; code: number }> {
+  if (!body.patch || typeof body.patch !== "object")
+    return { error: "patch object required", code: 400 };
+
+  const p = await findCard(cardId);
+  if (!p) return { error: "card not found", code: 404 };
 
   let card: Record<string, any>;
   try {
     card = JSON.parse(await fs.readFile(p, "utf8"));
   } catch {
-    return reply.code(500).send({ ok: false, error: "card is unreadable" });
+    return { error: "card is unreadable", code: 500 };
   }
 
   const before = JSON.parse(JSON.stringify(card));
@@ -483,7 +499,7 @@ app.patch("/cards/:id", { preHandler: [requireAuth, requireOwner] }, async (req,
     }
   }
 
-  // Owner-confirmed provenance: an edit is the strongest signal we have.
+  // Owner-confirmed provenance: an owner edit is the strongest signal we have.
   const confirmed = Array.isArray(body.confirm) ? body.confirm : [];
   if (confirmed.length > 0) {
     card.field_provenance = card.field_provenance ?? {};
@@ -509,22 +525,125 @@ app.patch("/cards/:id", { preHandler: [requireAuth, requireOwner] }, async (req,
     await fs.writeFile(p, JSON.stringify(card, null, 2));
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    return reply.code(500).send({ ok: false, error: `could not write card: ${msg}` });
+    return { error: `could not write card: ${msg}`, code: 500 };
   }
 
-  const companyId = card.organizationId ?? card.org_id ?? id;
+  const companyId = card.organizationId ?? card.org_id ?? cardId;
   const changelogPath = path.join(HELIX_COMPANIES, companyId, "changelog.json");
-  appendChange(
-    changelogPath,
-    card.id ?? id,
-    companyId,
-    fieldsChanged.length > 0 ? fieldsChanged : ["*"],
-    "owner-confirmed",
-    body.author ?? "owner",
-    body.summary ?? "Card edited",
-  ).catch(() => { /* changelog failure must not lose the edit */ });
+  try {
+    await appendChange(
+      changelogPath,
+      card.id ?? cardId,
+      companyId,
+      fieldsChanged.length > 0 ? fieldsChanged : ["*"],
+      "owner-confirmed",
+      body.author ?? "owner",
+      body.summary ?? "Card edited",
+    );
+  } catch {
+    /* a changelog failure must not lose the edit */
+  }
 
-  return reply.code(200).send({ ok: true, card, fieldsChanged });
+  return { card, fieldsChanged };
+}
+
+/** Record a proposal. Writes nothing to the card. */
+async function createProposal(cardId: string, body: CardPatchBody) {
+  if (!body.patch || typeof body.patch !== "object")
+    return { error: "patch object required", code: 400 } as const;
+  if (!(await findCard(cardId))) return { error: "card not found", code: 404 } as const;
+
+  const id = "prp_" + randomUUID().slice(0, 8);
+  const proposal = {
+    id,
+    cardId,
+    patch: body.patch,
+    confirm: Array.isArray(body.confirm) ? body.confirm : [],
+    author: body.author ?? "owner",
+    summary: body.summary ?? "Card edited",
+    status: "pending" as const,
+    createdAt: new Date().toISOString(),
+    appliedAt: null as string | null,
+  };
+  const dir = proposalsDir(cardId);
+  await fs.mkdir(dir, { recursive: true });
+  await fs.writeFile(path.join(dir, `${id}.json`), JSON.stringify(proposal, null, 2));
+  return { proposal };
+}
+
+// PATCH /cards/:id — propose a change (owner). Records a proposal, returns 202;
+// it does NOT mutate the card. Confirm applies it.
+app.patch("/cards/:id", { preHandler: [requireAuth, requireOwner] }, async (req, reply) => {
+  const id = (req.params as { id: string }).id;
+  const made = await createProposal(id, (req.body ?? {}) as CardPatchBody);
+  if ("error" in made) return reply.code(made.code).send({ ok: false, error: made.error });
+  return reply.code(202).send({ ok: true, status: "pending", proposal: made.proposal });
+});
+
+// POST /cards/:id/propose — the same thing, named explicitly.
+app.post("/cards/:id/propose", { preHandler: [requireAuth, requireOwner] }, async (req, reply) => {
+  const id = (req.params as { id: string }).id;
+  const made = await createProposal(id, (req.body ?? {}) as CardPatchBody);
+  if ("error" in made) return reply.code(made.code).send({ ok: false, error: made.error });
+  return reply.code(202).send({ ok: true, status: "pending", proposal: made.proposal });
+});
+
+// POST /cards/:id/proposals/:pid/confirm — step 2: apply a pending proposal.
+app.post(
+  "/cards/:id/proposals/:pid/confirm",
+  { preHandler: [requireAuth, requireOwner] },
+  async (req, reply) => {
+    const { id, pid } = req.params as { id: string; pid: string };
+    if (!/^prp_[A-Za-z0-9]+$/.test(pid))
+      return reply.code(400).send({ ok: false, error: "bad proposal id" });
+
+    const file = path.join(proposalsDir(id), `${pid}.json`);
+    let proposal: any;
+    try {
+      proposal = JSON.parse(await fs.readFile(file, "utf8"));
+    } catch {
+      return reply.code(404).send({ ok: false, error: "proposal not found" });
+    }
+    if (proposal.status !== "pending")
+      return reply.code(409).send({ ok: false, error: `proposal is ${proposal.status}` });
+
+    const applied = await applyCardPatch(id, {
+      patch: proposal.patch,
+      confirm: proposal.confirm,
+      author: proposal.author,
+      summary: proposal.summary,
+    });
+    if ("error" in applied)
+      return reply.code(applied.code).send({ ok: false, error: applied.error });
+
+    proposal.status = "applied";
+    proposal.appliedAt = new Date().toISOString();
+    await fs.writeFile(file, JSON.stringify(proposal, null, 2)).catch(() => {});
+
+    return reply.code(200).send({
+      ok: true,
+      status: "applied",
+      proposalId: pid,
+      card: applied.card,
+      fieldsChanged: applied.fieldsChanged,
+    });
+  }
+);
+
+// GET /cards/:id/proposals — proposal history for a card (owner).
+app.get("/cards/:id/proposals", { preHandler: [requireAuth, requireOwner] }, async (req, reply) => {
+  const id = (req.params as { id: string }).id;
+  const dir = proposalsDir(id);
+  const files = await fs.readdir(dir).catch(() => [] as string[]);
+  const out: any[] = [];
+  for (const f of files.filter((n) => n.endsWith(".json"))) {
+    try {
+      out.push(JSON.parse(await fs.readFile(path.join(dir, f), "utf8")));
+    } catch {
+      /* skip unreadable */
+    }
+  }
+  return reply.code(200).send({ ok: true, proposals: out });
 });
 
 // GET /companies — list helix companies + any extracted cards in CARDS dir
