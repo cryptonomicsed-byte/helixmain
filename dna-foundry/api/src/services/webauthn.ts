@@ -37,8 +37,10 @@ export async function registrationOptions(
     userName: company,
     userDisplayName: company,
     attestationType: "none",
+    // v9 descriptor ids are BYTES here; the lib base64url-encodes them into the
+    // JSON it returns (isoBase64URL.fromBuffer), so bytes-in is the correct shape.
     excludeCredentials: existing.map((c) => ({
-      id: c.id,
+      id: Buffer.from(c.id, "base64url"),
       type: "public-key" as const,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       transports: (c.transports ?? []) as any,
