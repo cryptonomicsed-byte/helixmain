@@ -88,7 +88,6 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<'checking' | 'locked' | 'open'>('checking')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const [company, setCompany] = useState('')
   const [showKeyFallback, setShowKeyFallback] = useState(false)
   const [key, setKey] = useState('')
   const [owner, setOwner] = useState('')
@@ -96,14 +95,8 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   const enrollToken = new URLSearchParams(window.location.search).get('enroll') ?? ''
 
   useEffect(() => {
-    sessionInfo().then((s) => {
-      if (s?.ok) { setCompany(s.company); setState('open') } else { setState('locked') }
-    })
+    sessionInfo().then((s) => setState(s?.ok ? 'open' : 'locked'))
   }, [])
-
-  function clearEnrollParam() {
-    if (enrollToken) window.history.replaceState(null, '', window.location.pathname)
-  }
 
   async function run(fn: () => Promise<void>) {
     setBusy(true); setError('')
@@ -118,8 +111,8 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     }
     const { options } = await auth.loginOptions()
     const assertion = await assertPasskey(options)
-    const s = await auth.loginVerify(assertion)
-    setCompany(s.company); setState('open')
+    await auth.loginVerify(assertion)
+    setState('open')
   })
 
   const enroll = () => run(async () => {
@@ -128,8 +121,9 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     }
     const { options } = await auth.registerOptions(enrollToken)
     const attestation = await createPasskey(options)
-    const s = await auth.registerVerify(enrollToken, attestation)
-    setCompany(s.company); setState('open'); clearEnrollParam()
+    await auth.registerVerify(enrollToken, attestation)
+    window.history.replaceState(null, '', window.location.pathname)
+    setState('open')
   })
 
   const unlockWithKey = () => run(async () => {
@@ -138,7 +132,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     if (owner.trim()) setOwnerKey(owner.trim())
     const s = await sessionInfo()
     if (!s?.ok) throw new Error('key rejected')
-    setCompany(s.company); setState('open')
+    setState('open')
   })
 
   if (state === 'checking') {
