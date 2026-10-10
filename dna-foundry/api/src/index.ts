@@ -144,6 +144,9 @@ import {
   loadAffiliateStore,
 } from "./services/affiliate";
 import { createHmac } from "crypto";
+import { type FastifyRequest, type FastifyReply } from "fastify";
+import { lookupKey, type KeyRecord } from "./services/apiKeys";
+import { isOnboardedCompany } from "./services/companies";
 
 const app = Fastify({ logger: true });
 const ROOT = path.resolve(__dirname, "..", "..");
@@ -179,15 +182,73 @@ async function findCard(cardId: string): Promise<string | null> {
   return hits.length ? path.join(CARDS, hits[hits.length - 1]) : null;
 }
 
+// ---------------------------------------------------------------------------
+// Auth. Every business route is gated; the presented key IS the tenant identity,
+// so a caller-supplied companyId is never trusted on its own. /health stays open
+// (liveness probes) and returns nothing but {ok, service}.
+// ---------------------------------------------------------------------------
+
+interface AuthCarrier {
+  auth?: KeyRecord;
+}
+
+// Fields a caller might use to name a company. Values are CHECKED against the
+// authenticated company — never trusted.
+const COMPANY_HINTS = new Set([
+  "companyId", "company_id", "orgId", "org_id", "organizationId", "organization_id",
+  "cardId", "card_id", "id", "card",
+]);
+
+function namedCompanyIds(req: FastifyRequest): string[] {
+  const out: string[] = [];
+  const scan = (obj: unknown) => {
+    if (!obj || typeof obj !== "object") return;
+    for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
+      if (COMPANY_HINTS.has(k) && typeof v === "string" && v) out.push(v);
+    }
+  };
+  scan(req.params);
+  scan(req.query);
+  scan(req.body);
+  return out;
+}
+
+async function requireAuth(req: FastifyRequest, reply: FastifyReply): Promise<void> {
+  const rec = lookupKey(req.headers["x-api-key"]);
+  if (!rec) {
+    await reply.code(401).send({ ok: false, error: "missing or invalid x-api-key" });
+    return;
+  }
+  (req as AuthCarrier).auth = rec;
+  // Tenant binding: naming a DIFFERENT onboarded company is 403, never a silent
+  // cross-tenant read/write. Ids that are not onboarded companies (e.g. test cards
+  // under api/data/cards) are left to the route's own lookup.
+  for (const named of namedCompanyIds(req)) {
+    if (named !== rec.companyId && isOnboardedCompany(named)) {
+      await reply.code(403).send({ ok: false, error: "key does not belong to that company" });
+      return;
+    }
+  }
+}
+
+/** Owner level — card mutation needs the owner credential, not just a company key. */
+async function requireOwner(req: FastifyRequest, reply: FastifyReply): Promise<void> {
+  const rec = lookupKey(req.headers["x-owner-key"]);
+  const auth = (req as AuthCarrier).auth;
+  if (!rec || rec.level !== "owner" || rec.companyId !== auth?.companyId) {
+    await reply.code(403).send({ ok: false, error: "owner credential required" });
+  }
+}
+
 app.get("/health", async () => ({ ok: true, service: "dna-foundry" }));
 
 // ---------------------------------------------------------------------------
 // Runtime settings — provider / model / API keys set from the dashboard.
 // Secrets are never returned; GET exposes only presence + a short hint.
 // ---------------------------------------------------------------------------
-app.get("/settings", async () => publicSettings());
+app.get("/settings", { preHandler: requireAuth }, async () => publicSettings());
 
-app.put("/settings", async (req, reply) => {
+app.put("/settings", { preHandler: requireAuth }, async (req, reply) => {
   const body = (req.body ?? {}) as {
     provider?: string; model?: string; keys?: Record<string, string>;
   };
@@ -224,12 +285,12 @@ app.put("/settings", async (req, reply) => {
 
 const VALID_ASPECTS = ASPECTS.map((a) => a.key);
 
-app.get("/settings/:orgId", async (req) => {
+app.get("/settings/:orgId", { preHandler: requireAuth }, async (req) => {
   const { orgId } = req.params as { orgId: string };
   return publicCompanyAi(orgId);
 });
 
-app.put("/settings/:orgId", async (req, reply) => {
+app.put("/settings/:orgId", { preHandler: requireAuth }, async (req, reply) => {
   const { orgId } = req.params as { orgId: string };
   const body = (req.body ?? {}) as {
     provider?: string | null;
@@ -293,7 +354,7 @@ app.put("/settings/:orgId", async (req, reply) => {
   return publicCompanyAi(orgId);
 });
 
-app.post("/extract", async (req, reply) => {
+app.post("/extract", { preHandler: requireAuth }, async (req, reply) => {
   const body = (req.body ?? {}) as { url?: string; orgId?: string; companyId?: string };
   if (!body.url) return reply.code(400).send({ ok: false, error: "url required" });
   if (!body.orgId) return reply.code(400).send({ ok: false, error: "orgId required" });
@@ -341,7 +402,7 @@ app.post("/extract", async (req, reply) => {
   }
 });
 
-app.post("/jobs", async (req, reply) => {
+app.post("/jobs", { preHandler: requireAuth }, async (req, reply) => {
   const body = (req.body ?? {}) as { url?: string; organization_id?: string };
   if (!body.url) return reply.code(400).send({ ok: false, error: "url required" });
   const org = body.organization_id ?? "org_demo0001";
@@ -368,7 +429,7 @@ app.post("/jobs", async (req, reply) => {
   return reply.code(202).send({ ok: true, job_id: jobId });
 });
 
-app.get("/jobs/:id", async (req, reply) => {
+app.get("/jobs/:id", { preHandler: requireAuth }, async (req, reply) => {
   const { id } = req.params as { id: string };
   try {
     return JSON.parse(await fs.readFile(path.join(JOBS, `${id}.json`), "utf8"));
@@ -377,7 +438,7 @@ app.get("/jobs/:id", async (req, reply) => {
   }
 });
 
-app.get("/cards/:id", async (req, reply) => {
+app.get("/cards/:id", { preHandler: requireAuth }, async (req, reply) => {
   const p = await findCard((req.params as { id: string }).id);
   if (!p) return reply.code(404).send({ ok: false, error: "card not found" });
   return JSON.parse(await fs.readFile(p, "utf8"));
@@ -386,7 +447,7 @@ app.get("/cards/:id", async (req, reply) => {
 // PATCH /cards/:id — owner edit / confirm. Merges a shallow patch, marks any
 // named provenance keys as owner-confirmed, bumps the version and appends a
 // hash-chained changelog entry. Real write, real history.
-app.patch("/cards/:id", async (req, reply) => {
+app.patch("/cards/:id", { preHandler: [requireAuth, requireOwner] }, async (req, reply) => {
   const id = (req.params as { id: string }).id;
   const body = (req.body ?? {}) as {
     patch?: Record<string, unknown>;
@@ -467,7 +528,7 @@ app.patch("/cards/:id", async (req, reply) => {
 });
 
 // GET /companies — list helix companies + any extracted cards in CARDS dir
-app.get("/companies", async (_req, reply) => {
+app.get("/companies", { preHandler: requireAuth }, async (_req, reply) => {
   await ensureDirs();
   const results: object[] = [];
 
@@ -507,7 +568,7 @@ app.get("/companies", async (_req, reply) => {
   return reply.code(200).send(results);
 });
 
-app.post("/cards/:id/compile", async (req, reply) => {
+app.post("/cards/:id/compile", { preHandler: requireAuth }, async (req, reply) => {
   const p = await findCard((req.params as { id: string }).id);
   if (!p) return reply.code(404).send({ ok: false, error: "card not found" });
   const card = JSON.parse(await fs.readFile(p, "utf8"));
@@ -517,7 +578,7 @@ app.post("/cards/:id/compile", async (req, reply) => {
   return { ok: true, card_id: card.id, version: card.version, out_dir: out };
 });
 
-app.post("/compile", async (req, reply) => {
+app.post("/compile", { preHandler: requireAuth }, async (req, reply) => {
   const body = (req.body ?? {}) as { cardId?: string; companyId?: string; roles?: string[] };
   if (!body.cardId)    return reply.code(400).send({ ok: false, error: "cardId required" });
   if (!body.companyId) return reply.code(400).send({ ok: false, error: "companyId required" });
@@ -563,7 +624,7 @@ app.post("/compile", async (req, reply) => {
   }
 });
 
-app.get("/cards/:a/diff/:b", async (req, reply) => {
+app.get("/cards/:a/diff/:b", { preHandler: requireAuth }, async (req, reply) => {
   const { a, b } = req.params as { a: string; b: string };
   const pa = await findCard(a);
   const pb = await findCard(b);
@@ -573,7 +634,7 @@ app.get("/cards/:a/diff/:b", async (req, reply) => {
   return JSON.parse(out);
 });
 
-app.post("/greeting", async (req, reply) => {
+app.post("/greeting", { preHandler: requireAuth }, async (req, reply) => {
   const body = (req.body ?? {}) as { cardId?: string; companyId?: string };
   if (!body.cardId)    return reply.code(400).send({ ok: false, error: "cardId required" });
   if (!body.companyId) return reply.code(400).send({ ok: false, error: "companyId required" });
@@ -608,7 +669,7 @@ app.post("/greeting", async (req, reply) => {
 // ---------------------------------------------------------------------------
 
 // GET /build-status — proxy the build-status.json written by helix-rebuild.sh
-app.get("/build-status", async (_req, reply) => {
+app.get("/build-status", { preHandler: requireAuth }, async (_req, reply) => {
   const BUILD_STATUS_URL = "https://helixmain.duckdns.org/build-status.json";
   try {
     const res = await fetch(BUILD_STATUS_URL, { signal: AbortSignal.timeout(5000) });
@@ -625,10 +686,10 @@ app.get("/build-status", async (_req, reply) => {
 // ---------------------------------------------------------------------------
 
 // GET /voices — full catalog, Kokoro first then ElevenLabs
-app.get("/voices", async () => getVoiceCatalog());
+app.get("/voices", { preHandler: requireAuth }, async () => getVoiceCatalog());
 
 // POST /voices/resolve — resolve a voice_profile string against a stored card
-app.post("/voices/resolve", async (req, reply) => {
+app.post("/voices/resolve", { preHandler: requireAuth }, async (req, reply) => {
   const body = (req.body ?? {}) as { voiceProfile?: string; cardId?: string };
   if (!body.cardId) return reply.code(400).send({ ok: false, error: "cardId required" });
 
@@ -641,7 +702,7 @@ app.post("/voices/resolve", async (req, reply) => {
 });
 
 // POST /voices/sample — synthesise a short TTS preview clip
-app.post("/voices/sample", async (req, reply) => {
+app.post("/voices/sample", { preHandler: requireAuth }, async (req, reply) => {
   const body = (req.body ?? {}) as { voiceProfile?: string; text?: string };
   if (!body.voiceProfile) return reply.code(400).send({ ok: false, error: "voiceProfile required" });
   if (!body.text)         return reply.code(400).send({ ok: false, error: "text required" });
@@ -654,10 +715,10 @@ app.post("/voices/sample", async (req, reply) => {
 
 // GET /voices — async version that appends live ElevenLabs voices when key is set
 // (override the earlier sync route)
-app.get("/voices/catalog", async () => getVoiceCatalogAsync());
+app.get("/voices/catalog", { preHandler: requireAuth }, async () => getVoiceCatalogAsync());
 
 // GET /voices/elevenlabs — live ElevenLabs voice list
-app.get("/voices/elevenlabs", async (_req, reply) => {
+app.get("/voices/elevenlabs", { preHandler: requireAuth }, async (_req, reply) => {
   const apiKey = process.env.ELEVENLABS_API_KEY;
   if (!apiKey) {
     return reply.code(503).send({ ok: false, error: "ELEVENLABS_API_KEY not configured" });
@@ -676,7 +737,7 @@ app.get("/voices/elevenlabs", async (_req, reply) => {
 // ---------------------------------------------------------------------------
 
 // POST /voice/jingle — generate (or regenerate) a brand jingle for a company
-app.post("/voice/jingle", async (req, reply) => {
+app.post("/voice/jingle", { preHandler: requireAuth }, async (req, reply) => {
   const body = (req.body ?? {}) as { companyId?: string };
   if (!body.companyId) return reply.code(400).send({ ok: false, error: "companyId required" });
 
@@ -707,7 +768,7 @@ app.post("/voice/jingle", async (req, reply) => {
 });
 
 // GET /voice/jingle/:companyId — fetch stored jingle
-app.get("/voice/jingle/:companyId", async (req, reply) => {
+app.get("/voice/jingle/:companyId", { preHandler: requireAuth }, async (req, reply) => {
   const { companyId } = req.params as { companyId: string };
   const jingle = getJingle(companyId);
   if (!jingle) return reply.code(404).send({ ok: false, error: "no jingle found for company" });
@@ -719,7 +780,7 @@ app.get("/voice/jingle/:companyId", async (req, reply) => {
 // ---------------------------------------------------------------------------
 
 // POST /agent/session — stateless agent turn: compile role config + call AI
-app.post("/agent/session", async (req, reply) => {
+app.post("/agent/session", { preHandler: requireAuth }, async (req, reply) => {
   const body = (req.body ?? {}) as {
     companyId?: string;
     cardId?: string;
@@ -797,7 +858,7 @@ app.post("/agent/session", async (req, reply) => {
 });
 
 // GET /agent/config/:companyId — compile + return agent config map for all roles (debug)
-app.get("/agent/config/:companyId", async (req, reply) => {
+app.get("/agent/config/:companyId", { preHandler: requireAuth }, async (req, reply) => {
   const { companyId } = req.params as { companyId: string };
   const cardPath = await findCard(companyId);
   if (!cardPath) return reply.code(404).send({ ok: false, error: "card not found" });
@@ -834,7 +895,7 @@ app.get("/agent/config/:companyId", async (req, reply) => {
 // ---------------------------------------------------------------------------
 
 // GET /changelog/:companyId — full changelog JSON
-app.get("/changelog/:companyId", async (req, reply) => {
+app.get("/changelog/:companyId", { preHandler: requireAuth }, async (req, reply) => {
   const { companyId } = req.params as { companyId: string };
   const changelogPath = path.join(HELIX_COMPANIES, companyId, "changelog.json");
   try {
@@ -847,7 +908,7 @@ app.get("/changelog/:companyId", async (req, reply) => {
 });
 
 // GET /changelog/:companyId/verify — tamper check
-app.get("/changelog/:companyId/verify", async (req, reply) => {
+app.get("/changelog/:companyId/verify", { preHandler: requireAuth }, async (req, reply) => {
   const { companyId } = req.params as { companyId: string };
   const changelogPath = path.join(HELIX_COMPANIES, companyId, "changelog.json");
   const result = await verifyChain(changelogPath);
@@ -855,7 +916,7 @@ app.get("/changelog/:companyId/verify", async (req, reply) => {
 });
 
 // GET /changelog/:companyId/markdown — human-readable history
-app.get("/changelog/:companyId/markdown", async (req, reply) => {
+app.get("/changelog/:companyId/markdown", { preHandler: requireAuth }, async (req, reply) => {
   const { companyId } = req.params as { companyId: string };
   const changelogPath = path.join(HELIX_COMPANIES, companyId, "changelog.json");
   try {
@@ -876,7 +937,7 @@ app.get("/changelog/:companyId/markdown", async (req, reply) => {
 // ---------------------------------------------------------------------------
 
 // GET /health/:companyId — completeness score for a stored card
-app.get("/health/:companyId", async (req, reply) => {
+app.get("/health/:companyId", { preHandler: requireAuth }, async (req, reply) => {
   const { companyId } = req.params as { companyId: string };
   const p = await findCard(companyId);
   if (!p) return reply.code(404).send({ ok: false, error: "card not found" });
@@ -895,7 +956,7 @@ app.get("/health/:companyId", async (req, reply) => {
 // ---------------------------------------------------------------------------
 
 // POST /content/prd — generate a campaign PRD from a card + goal
-app.post("/content/prd", async (req, reply) => {
+app.post("/content/prd", { preHandler: requireAuth }, async (req, reply) => {
   const body = (req.body ?? {}) as { cardId?: string; goal?: string; channels?: string[]; companyId?: string };
   if (!body.cardId)   return reply.code(400).send({ ok: false, error: "cardId required" });
   if (!body.goal)     return reply.code(400).send({ ok: false, error: "goal required" });
@@ -929,7 +990,7 @@ app.post("/content/prd", async (req, reply) => {
 });
 
 // POST /content/generate — generate assets for all user stories in a PRD
-app.post("/content/generate", async (req, reply) => {
+app.post("/content/generate", { preHandler: requireAuth }, async (req, reply) => {
   const body = (req.body ?? {}) as { cardId?: string; prd?: CampaignPRD; companyId?: string };
   if (!body.cardId) return reply.code(400).send({ ok: false, error: "cardId required" });
   if (!body.prd)    return reply.code(400).send({ ok: false, error: "prd required" });
@@ -961,7 +1022,7 @@ app.post("/content/generate", async (req, reply) => {
 });
 
 // POST /content/approve/:assetId — submit an asset to SparkGatekeeper hold queue
-app.post("/content/approve/:assetId", async (req, reply) => {
+app.post("/content/approve/:assetId", { preHandler: requireAuth }, async (req, reply) => {
   const { assetId } = req.params as { assetId: string };
   const body = (req.body ?? {}) as { companyId?: string };
   if (!body.companyId) return reply.code(400).send({ ok: false, error: "companyId required" });
@@ -980,7 +1041,7 @@ app.post("/content/approve/:assetId", async (req, reply) => {
 });
 
 // GET /content/assets/:assetId — fetch a single asset by id
-app.get("/content/assets/:assetId", async (req, reply) => {
+app.get("/content/assets/:assetId", { preHandler: requireAuth }, async (req, reply) => {
   const { assetId } = req.params as { assetId: string };
   const asset = assetStore.get(assetId);
   if (!asset) return reply.code(404).send({ ok: false, error: "asset not found" });
@@ -988,7 +1049,7 @@ app.get("/content/assets/:assetId", async (req, reply) => {
 });
 
 // POST /content/schedule/:assetId — schedule an asset for future publishing
-app.post("/content/schedule/:assetId", async (req, reply) => {
+app.post("/content/schedule/:assetId", { preHandler: requireAuth }, async (req, reply) => {
   const { assetId } = req.params as { assetId: string };
   const body = (req.body ?? {}) as { companyId?: string; publishAt?: string };
   if (!body.companyId) return reply.code(400).send({ ok: false, error: "companyId required" });
@@ -1002,14 +1063,14 @@ app.post("/content/schedule/:assetId", async (req, reply) => {
 });
 
 // GET /content/schedule/:companyId — list all scheduled assets for a company
-app.get("/content/schedule/:companyId", async (req, reply) => {
+app.get("/content/schedule/:companyId", { preHandler: requireAuth }, async (req, reply) => {
   const { companyId } = req.params as { companyId: string };
   const scheduled = getScheduledAssets(companyId);
   return reply.code(200).send({ ok: true, scheduled });
 });
 
 // DELETE /content/schedule/:assetId — cancel a scheduled asset
-app.delete("/content/schedule/:assetId", async (req, reply) => {
+app.delete("/content/schedule/:assetId", { preHandler: requireAuth }, async (req, reply) => {
   const { assetId } = req.params as { assetId: string };
   const removed = cancelSchedule(assetId);
   if (!removed) return reply.code(404).send({ ok: false, error: "no schedule found for asset" });
@@ -1017,7 +1078,7 @@ app.delete("/content/schedule/:assetId", async (req, reply) => {
 });
 
 // GET /content/campaign/:campaignId/zip — export campaign assets as JSON bundle download
-app.get("/content/campaign/:campaignId/zip", async (req, reply) => {
+app.get("/content/campaign/:campaignId/zip", { preHandler: requireAuth }, async (req, reply) => {
   const { campaignId } = req.params as { campaignId: string };
   const prd = prdStore.get(campaignId);
   if (!prd) return reply.code(404).send({ ok: false, error: "campaign not found" });
@@ -1039,7 +1100,7 @@ app.get("/content/campaign/:campaignId/zip", async (req, reply) => {
 // ---------------------------------------------------------------------------
 
 // POST /sales/hunt — Apollo.io lead hunting for a company's target profile
-app.post("/sales/hunt", async (req, reply) => {
+app.post("/sales/hunt", { preHandler: requireAuth }, async (req, reply) => {
   const body = (req.body ?? {}) as {
     cardId?: string;
     companyId?: string;
@@ -1075,7 +1136,7 @@ app.post("/sales/hunt", async (req, reply) => {
 });
 
 // POST /sales/hunt/gps — OSM/Overpass lead hunting by GPS coordinates
-app.post("/sales/hunt/gps", async (req, reply) => {
+app.post("/sales/hunt/gps", { preHandler: requireAuth }, async (req, reply) => {
   const body = (req.body ?? {}) as {
     lat?: unknown;
     lng?: unknown;
@@ -1114,7 +1175,7 @@ app.post("/sales/hunt/gps", async (req, reply) => {
 });
 
 // POST /sales/qualify/:leadId — score + qualify a lead against the company card
-app.post("/sales/qualify/:leadId", async (req, reply) => {
+app.post("/sales/qualify/:leadId", { preHandler: requireAuth }, async (req, reply) => {
   const { leadId } = req.params as { leadId: string };
   const body = (req.body ?? {}) as { cardId?: string; companyId?: string };
   if (!body.cardId) return reply.code(400).send({ ok: false, error: "cardId required" });
@@ -1149,7 +1210,7 @@ app.post("/sales/qualify/:leadId", async (req, reply) => {
 });
 
 // POST /sales/qualify/bulk/:companyId — qualify every lead for a company in one pass
-app.post("/sales/qualify/bulk/:companyId", async (req, reply) => {
+app.post("/sales/qualify/bulk/:companyId", { preHandler: requireAuth }, async (req, reply) => {
   const { companyId } = req.params as { companyId: string };
   const body = (req.body ?? {}) as { cardId?: string };
   if (!body.cardId) return reply.code(400).send({ ok: false, error: "cardId required" });
@@ -1186,7 +1247,7 @@ app.post("/sales/qualify/bulk/:companyId", async (req, reply) => {
 });
 
 // POST /sales/outreach/:leadId — generate personalized outreach draft
-app.post("/sales/outreach/:leadId", async (req, reply) => {
+app.post("/sales/outreach/:leadId", { preHandler: requireAuth }, async (req, reply) => {
   const { leadId } = req.params as { leadId: string };
   const body = (req.body ?? {}) as { cardId?: string; companyId?: string };
   if (!body.cardId) return reply.code(400).send({ ok: false, error: "cardId required" });
@@ -1221,7 +1282,7 @@ app.post("/sales/outreach/:leadId", async (req, reply) => {
 });
 
 // POST /sales/review/:leadId — sales-manager deal health review
-app.post("/sales/review/:leadId", async (req, reply) => {
+app.post("/sales/review/:leadId", { preHandler: requireAuth }, async (req, reply) => {
   const { leadId } = req.params as { leadId: string };
   const body = (req.body ?? {}) as { cardId?: string; companyId?: string };
   if (!body.cardId) return reply.code(400).send({ ok: false, error: "cardId required" });
@@ -1256,7 +1317,7 @@ app.post("/sales/review/:leadId", async (req, reply) => {
 });
 
 // POST /sales/close/:leadId — generate full closing script + proposal tiers
-app.post("/sales/close/:leadId", async (req, reply) => {
+app.post("/sales/close/:leadId", { preHandler: requireAuth }, async (req, reply) => {
   const { leadId } = req.params as { leadId: string };
   const body = (req.body ?? {}) as { cardId?: string; companyId?: string };
   if (!body.cardId) return reply.code(400).send({ ok: false, error: "cardId required" });
@@ -1291,7 +1352,7 @@ app.post("/sales/close/:leadId", async (req, reply) => {
 });
 
 // POST /sales/submit/:leadId — submit outreach draft to SparkGatekeeper hold queue
-app.post("/sales/submit/:leadId", async (req, reply) => {
+app.post("/sales/submit/:leadId", { preHandler: requireAuth }, async (req, reply) => {
   const { leadId } = req.params as { leadId: string };
   const body = (req.body ?? {}) as {
     companyId?: string;
@@ -1323,21 +1384,21 @@ app.post("/sales/submit/:leadId", async (req, reply) => {
 });
 
 // GET /sales/pipeline/:companyId — CRM pipeline summary
-app.get("/sales/pipeline/:companyId", async (req, reply) => {
+app.get("/sales/pipeline/:companyId", { preHandler: requireAuth }, async (req, reply) => {
   const { companyId } = req.params as { companyId: string };
   const summary = getPipelineSummary(companyId);
   return reply.code(200).send({ ok: true, companyId, ...summary });
 });
 
 // GET /sales/leads/:companyId — all leads for a company
-app.get("/sales/leads/:companyId", async (req, reply) => {
+app.get("/sales/leads/:companyId", { preHandler: requireAuth }, async (req, reply) => {
   const { companyId } = req.params as { companyId: string };
   const leads = getLeadsByCompany(companyId);
   return reply.code(200).send({ ok: true, leads });
 });
 
 // GET /sales/leads/:leadId/activity — activity log for a single lead
-app.get("/sales/leads/:leadId/activity", async (req, reply) => {
+app.get("/sales/leads/:leadId/activity", { preHandler: requireAuth }, async (req, reply) => {
   const { leadId } = req.params as { leadId: string };
   const lead = leadStore.get(leadId);
   if (!lead) return reply.code(404).send({ ok: false, error: "lead not found" });
@@ -1345,7 +1406,7 @@ app.get("/sales/leads/:leadId/activity", async (req, reply) => {
 });
 
 // PATCH /sales/leads/:leadId — update status and/or add a note
-app.patch("/sales/leads/:leadId", async (req, reply) => {
+app.patch("/sales/leads/:leadId", { preHandler: requireAuth }, async (req, reply) => {
   const { leadId } = req.params as { leadId: string };
   const body = (req.body ?? {}) as { status?: string; note?: string };
 
@@ -1371,7 +1432,7 @@ app.patch("/sales/leads/:leadId", async (req, reply) => {
 // ---------------------------------------------------------------------------
 
 // GET /channels/:companyId — derive channel grants from stored card
-app.get("/channels/:companyId", async (req, reply) => {
+app.get("/channels/:companyId", { preHandler: requireAuth }, async (req, reply) => {
   const { companyId } = req.params as { companyId: string };
   const p = await findCard(companyId);
   if (!p) return reply.code(404).send({ ok: false, error: "card not found" });
@@ -1386,7 +1447,7 @@ app.get("/channels/:companyId", async (req, reply) => {
 });
 
 // POST /channels/email — H-gated email send via SparkGatekeeper
-app.post("/channels/email", async (req, reply) => {
+app.post("/channels/email", { preHandler: requireAuth }, async (req, reply) => {
   const body = (req.body ?? {}) as {
     companyId?: string;
     cardId?: string;
@@ -1417,7 +1478,7 @@ app.post("/channels/email", async (req, reply) => {
 });
 
 // POST /channels/social — H-gated social post via SparkGatekeeper
-app.post("/channels/social", async (req, reply) => {
+app.post("/channels/social", { preHandler: requireAuth }, async (req, reply) => {
   const body = (req.body ?? {}) as {
     companyId?: string;
     cardId?: string;
@@ -1456,7 +1517,7 @@ app.post("/channels/social", async (req, reply) => {
 // ---------------------------------------------------------------------------
 
 // POST /images/generate — generate an image via provider cascade
-app.post("/images/generate", async (req, reply) => {
+app.post("/images/generate", { preHandler: requireAuth }, async (req, reply) => {
   const body = (req.body ?? {}) as {
     companyId?: string;
     prompt?: string;
@@ -1495,7 +1556,7 @@ app.post("/images/generate", async (req, reply) => {
 });
 
 // GET /images/:companyId — all cached images for a company
-app.get("/images/:companyId", async (req, reply) => {
+app.get("/images/:companyId", { preHandler: requireAuth }, async (req, reply) => {
   const { companyId } = req.params as { companyId: string };
   const images = getCompanyImages(companyId);
   return reply.code(200).send(images);
@@ -1506,7 +1567,7 @@ app.get("/images/:companyId", async (req, reply) => {
 // ---------------------------------------------------------------------------
 
 // POST /intel/battle — compare two BrandDNA cards head-to-head
-app.post("/intel/battle", async (req, reply) => {
+app.post("/intel/battle", { preHandler: requireAuth }, async (req, reply) => {
   const body = (req.body ?? {}) as { cardIdA?: string; cardIdB?: string; companyId?: string };
   if (!body.cardIdA) return reply.code(400).send({ ok: false, error: "cardIdA required" });
   if (!body.cardIdB) return reply.code(400).send({ ok: false, error: "cardIdB required" });
@@ -1545,7 +1606,7 @@ app.post("/intel/battle", async (req, reply) => {
 });
 
 // POST /intel/simulate — test a brand variant and get simulated audience feedback
-app.post("/intel/simulate", async (req, reply) => {
+app.post("/intel/simulate", { preHandler: requireAuth }, async (req, reply) => {
   const body = (req.body ?? {}) as {
     cardId?: string;
     variant?: BrandSimulation["variant"];
@@ -1574,7 +1635,7 @@ app.post("/intel/simulate", async (req, reply) => {
 });
 
 // POST /intel/trends — industry trend pulse for the business
-app.post("/intel/trends", async (req, reply) => {
+app.post("/intel/trends", { preHandler: requireAuth }, async (req, reply) => {
   const body = (req.body ?? {}) as { cardId?: string };
   if (!body.cardId) return reply.code(400).send({ ok: false, error: "cardId required" });
 
@@ -1596,7 +1657,7 @@ app.post("/intel/trends", async (req, reply) => {
 // ---------------------------------------------------------------------------
 
 // POST /analytics/call — log a call event
-app.post("/analytics/call", async (req, reply) => {
+app.post("/analytics/call", { preHandler: requireAuth }, async (req, reply) => {
   const body = (req.body ?? {}) as Partial<CallLog>;
   if (!body.id)        return reply.code(400).send({ ok: false, error: "id required" });
   if (!body.companyId) return reply.code(400).send({ ok: false, error: "companyId required" });
@@ -1624,7 +1685,7 @@ app.post("/analytics/call", async (req, reply) => {
 });
 
 // GET /analytics/:companyId — analytics summary for a period
-app.get("/analytics/:companyId", async (req, reply) => {
+app.get("/analytics/:companyId", { preHandler: requireAuth }, async (req, reply) => {
   const { companyId } = req.params as { companyId: string };
   const { period = "week" } = req.query as { period?: string };
 
@@ -1647,20 +1708,25 @@ app.get("/analytics/:companyId", async (req, reply) => {
 // ---------------------------------------------------------------------------
 
 // GET /metering/:companyId — credit account summary
-app.get("/metering/:companyId", async (req, reply) => {
+app.get("/metering/:companyId", { preHandler: requireAuth }, async (req, reply) => {
   const { companyId } = req.params as { companyId: string };
   return reply.code(200).send(getCreditSummary(companyId));
 });
 
 // POST /metering/init/:companyId — initialize a free-tier account
-app.post("/metering/init/:companyId", async (req, reply) => {
+app.post("/metering/init/:companyId", { preHandler: requireAuth }, async (req, reply) => {
   const { companyId } = req.params as { companyId: string };
-  const account = initAccount(companyId);
-  return reply.code(200).send(account);
+  // initAccount now refuses unknown companies (it used to mint 100 free credits
+  // for any id). Surface that as a 404, not a 500.
+  try {
+    return reply.code(200).send(initAccount(companyId));
+  } catch {
+    return reply.code(404).send({ ok: false, error: "unknown company" });
+  }
 });
 
 // GET /metering/:companyId/history — usage log with optional from/to filters
-app.get("/metering/:companyId/history", async (req, reply) => {
+app.get("/metering/:companyId/history", { preHandler: requireAuth }, async (req, reply) => {
   const { companyId } = req.params as { companyId: string };
   const { from, to } = req.query as { from?: string; to?: string };
 
@@ -1680,7 +1746,7 @@ app.get("/metering/:companyId/history", async (req, reply) => {
 });
 
 // POST /metering/topup/:companyId — admin top-up credits
-app.post("/metering/topup/:companyId", async (req, reply) => {
+app.post("/metering/topup/:companyId", { preHandler: requireAuth }, async (req, reply) => {
   const { companyId } = req.params as { companyId: string };
   const body = (req.body ?? {}) as { credits?: number; reason?: string };
 
@@ -1701,7 +1767,7 @@ app.post("/metering/topup/:companyId", async (req, reply) => {
 // ---------------------------------------------------------------------------
 
 // POST /playground/session — create a new playground session
-app.post("/playground/session", async (req, reply) => {
+app.post("/playground/session", { preHandler: requireAuth }, async (req, reply) => {
   const body = (req.body ?? {}) as { companyId?: string; cardId?: string; persona?: string };
   if (!body.companyId) return reply.code(400).send({ ok: false, error: "companyId required" });
   if (!body.cardId)    return reply.code(400).send({ ok: false, error: "cardId required" });
@@ -1716,7 +1782,7 @@ app.post("/playground/session", async (req, reply) => {
 });
 
 // POST /playground/message — send a message in an existing session
-app.post("/playground/message", async (req, reply) => {
+app.post("/playground/message", { preHandler: requireAuth }, async (req, reply) => {
   const body = (req.body ?? {}) as { sessionId?: string; message?: string; companyId?: string };
   if (!body.sessionId) return reply.code(400).send({ ok: false, error: "sessionId required" });
   if (!body.message)   return reply.code(400).send({ ok: false, error: "message required" });
@@ -1742,7 +1808,7 @@ app.post("/playground/message", async (req, reply) => {
 });
 
 // POST /playground/test — run automated test suite against a session
-app.post("/playground/test", async (req, reply) => {
+app.post("/playground/test", { preHandler: requireAuth }, async (req, reply) => {
   const body = (req.body ?? {}) as { sessionId?: string };
   if (!body.sessionId) return reply.code(400).send({ ok: false, error: "sessionId required" });
 
@@ -1757,14 +1823,14 @@ app.post("/playground/test", async (req, reply) => {
 });
 
 // DELETE /playground/session/:sessionId — clear a session without affecting live agent
-app.delete("/playground/session/:sessionId", async (req, reply) => {
+app.delete("/playground/session/:sessionId", { preHandler: requireAuth }, async (req, reply) => {
   const { sessionId } = req.params as { sessionId: string };
   clearSession(sessionId);
   return reply.code(200).send({ ok: true });
 });
 
 // GET /playground/sessions/:companyId — list all sessions for a company
-app.get("/playground/sessions/:companyId", async (req, reply) => {
+app.get("/playground/sessions/:companyId", { preHandler: requireAuth }, async (req, reply) => {
   const { companyId } = req.params as { companyId: string };
   const list = getSessions(companyId);
   return reply.code(200).send(list);
@@ -1775,7 +1841,7 @@ app.get("/playground/sessions/:companyId", async (req, reply) => {
 // ---------------------------------------------------------------------------
 
 // POST /plan/generate — generate a business plan draft from a card
-app.post("/plan/generate", async (req, reply) => {
+app.post("/plan/generate", { preHandler: requireAuth }, async (req, reply) => {
   const body = (req.body ?? {}) as { cardId?: string; companyId?: string };
   if (!body.cardId)    return reply.code(400).send({ ok: false, error: "cardId required" });
   if (!body.companyId) return reply.code(400).send({ ok: false, error: "companyId required" });
@@ -1807,7 +1873,7 @@ app.post("/plan/generate", async (req, reply) => {
 });
 
 // GET /plan/:companyId — most recent plan for a company
-app.get("/plan/:companyId", async (req, reply) => {
+app.get("/plan/:companyId", { preHandler: requireAuth }, async (req, reply) => {
   const { companyId } = req.params as { companyId: string };
   const plan = planStore.get(`latest:${companyId}`);
   if (!plan) return reply.code(404).send({ ok: false, error: "no plan found for company" });
@@ -1815,7 +1881,7 @@ app.get("/plan/:companyId", async (req, reply) => {
 });
 
 // GET /plan/:companyId/export — download plan as JSON attachment
-app.get("/plan/:companyId/export", async (req, reply) => {
+app.get("/plan/:companyId/export", { preHandler: requireAuth }, async (req, reply) => {
   const { companyId } = req.params as { companyId: string };
   const plan = planStore.get(`latest:${companyId}`);
   if (!plan) return reply.code(404).send({ ok: false, error: "no plan found for company" });
@@ -1827,7 +1893,7 @@ app.get("/plan/:companyId/export", async (req, reply) => {
 });
 
 // GET /plan/:companyId/html — HTML string for print-to-PDF
-app.get("/plan/:companyId/html", async (req, reply) => {
+app.get("/plan/:companyId/html", { preHandler: requireAuth }, async (req, reply) => {
   const { companyId } = req.params as { companyId: string };
   const plan = planStore.get(`latest:${companyId}`);
   if (!plan) return reply.code(404).send({ ok: false, error: "no plan found for company" });
@@ -1854,7 +1920,7 @@ app.get("/plan/:companyId/html", async (req, reply) => {
 // ---------------------------------------------------------------------------
 
 // POST /site/generate — generate a single-file HTML landing page from a card
-app.post("/site/generate", async (req, reply) => {
+app.post("/site/generate", { preHandler: requireAuth }, async (req, reply) => {
   const body = (req.body ?? {}) as { companyId?: string };
   if (!body.companyId) return reply.code(400).send({ ok: false, error: "companyId required" });
 
@@ -1885,7 +1951,7 @@ app.post("/site/generate", async (req, reply) => {
 });
 
 // GET /site/:companyId — serve the generated HTML landing page
-app.get("/site/:companyId", async (req, reply) => {
+app.get("/site/:companyId", { preHandler: requireAuth }, async (req, reply) => {
   const { companyId } = req.params as { companyId: string };
   const site = getWebsite(companyId);
   if (!site) return reply.code(404).send({ ok: false, error: "no site generated for company" });
@@ -1896,7 +1962,7 @@ app.get("/site/:companyId", async (req, reply) => {
 });
 
 // GET /sites — list all company IDs that have a generated site
-app.get("/sites", async (_req, reply) => {
+app.get("/sites", { preHandler: requireAuth }, async (_req, reply) => {
   return reply.code(200).send({ ok: true, companies: listSites() });
 });
 
@@ -1905,7 +1971,7 @@ app.get("/sites", async (_req, reply) => {
 // ---------------------------------------------------------------------------
 
 // POST /crm/contacts — create a new contact
-app.post("/crm/contacts", async (req, reply) => {
+app.post("/crm/contacts", { preHandler: requireAuth }, async (req, reply) => {
   const body = (req.body ?? {}) as { companyId?: string } & Record<string, unknown>;
   if (!body.companyId) return reply.code(400).send({ ok: false, error: "companyId required" });
 
@@ -1919,21 +1985,21 @@ app.post("/crm/contacts", async (req, reply) => {
 });
 
 // GET /crm/contacts/:companyId — all contacts for a company
-app.get("/crm/contacts/:companyId", async (req, reply) => {
+app.get("/crm/contacts/:companyId", { preHandler: requireAuth }, async (req, reply) => {
   const { companyId } = req.params as { companyId: string };
   const contacts = getContacts(companyId);
   return reply.code(200).send(contacts);
 });
 
 // GET /crm/contacts/:companyId/stage/:stage — contacts filtered by pipeline stage
-app.get("/crm/contacts/:companyId/stage/:stage", async (req, reply) => {
+app.get("/crm/contacts/:companyId/stage/:stage", { preHandler: requireAuth }, async (req, reply) => {
   const { companyId, stage } = req.params as { companyId: string; stage: string };
   const contacts = getContactsByStage(companyId, stage);
   return reply.code(200).send(contacts);
 });
 
 // PATCH /crm/contacts/:contactId — update stage, add note, or apply field updates
-app.patch("/crm/contacts/:contactId", async (req, reply) => {
+app.patch("/crm/contacts/:contactId", { preHandler: requireAuth }, async (req, reply) => {
   const { contactId } = req.params as { contactId: string };
   const body = (req.body ?? {}) as {
     stage?: string;
@@ -1975,7 +2041,7 @@ app.patch("/crm/contacts/:contactId", async (req, reply) => {
 });
 
 // GET /crm/summary/:companyId — CRM summary with stage counts and recent activity
-app.get("/crm/summary/:companyId", async (req, reply) => {
+app.get("/crm/summary/:companyId", { preHandler: requireAuth }, async (req, reply) => {
   const { companyId } = req.params as { companyId: string };
 
   // Load card if available so stage list comes from card.operations.pipeline_stages
@@ -1996,7 +2062,7 @@ app.get("/crm/summary/:companyId", async (req, reply) => {
 // ---------------------------------------------------------------------------
 
 // GET /analytics/:companyId — enriched with cross-store fields
-app.get("/analytics/:companyId/enriched", async (req, reply) => {
+app.get("/analytics/:companyId/enriched", { preHandler: requireAuth }, async (req, reply) => {
   const { companyId } = req.params as { companyId: string };
   const { period = "week" } = req.query as { period?: string };
 
@@ -2053,7 +2119,7 @@ app.get("/analytics/:companyId/enriched", async (req, reply) => {
 });
 
 // POST /analytics/event — log a generic event
-app.post("/analytics/event", async (req, reply) => {
+app.post("/analytics/event", { preHandler: requireAuth }, async (req, reply) => {
   const body = (req.body ?? {}) as Partial<EventEntry>;
   if (!body.companyId)  return reply.code(400).send({ ok: false, error: "companyId required" });
   if (!body.eventType)  return reply.code(400).send({ ok: false, error: "eventType required" });
@@ -2071,7 +2137,7 @@ app.post("/analytics/event", async (req, reply) => {
 });
 
 // GET /analytics/cache-stats — neural cache stats + cost log
-app.get("/analytics/cache-stats", async (_req, reply) => {
+app.get("/analytics/cache-stats", { preHandler: requireAuth }, async (_req, reply) => {
   const cacheStats = getCacheStats();
   const costSummary = costLog.getCostSummary();
   return reply.code(200).send({
@@ -2090,7 +2156,7 @@ app.get("/analytics/cache-stats", async (_req, reply) => {
 // ---------------------------------------------------------------------------
 
 // POST /content/variants — generate A/B variants for a single user story
-app.post("/content/variants", async (req, reply) => {
+app.post("/content/variants", { preHandler: requireAuth }, async (req, reply) => {
   const body = (req.body ?? {}) as {
     prdId?: string;
     storyId?: string;
@@ -2134,7 +2200,7 @@ app.post("/content/variants", async (req, reply) => {
 });
 
 // POST /content/variants/compare — compare a set of variant asset ids
-app.post("/content/variants/compare", async (req, reply) => {
+app.post("/content/variants/compare", { preHandler: requireAuth }, async (req, reply) => {
   const body = (req.body ?? {}) as { variantIds?: string[] };
   if (!Array.isArray(body.variantIds) || body.variantIds.length === 0) {
     return reply.code(400).send({ ok: false, error: "variantIds[] required" });
@@ -2148,7 +2214,7 @@ app.post("/content/variants/compare", async (req, reply) => {
 // ---------------------------------------------------------------------------
 
 // GET /portfolio/:companyId — all assets produced for a company
-app.get("/portfolio/:companyId", async (req, reply) => {
+app.get("/portfolio/:companyId", { preHandler: requireAuth }, async (req, reply) => {
   const { companyId } = req.params as { companyId: string };
   try {
     const items = buildPortfolio(companyId);
@@ -2164,7 +2230,7 @@ app.get("/portfolio/:companyId", async (req, reply) => {
 // ---------------------------------------------------------------------------
 
 // GET /billing/config — tier + pack pricing for the dashboard
-app.get("/billing/config", async (_req, reply) => {
+app.get("/billing/config", { preHandler: requireAuth }, async (_req, reply) => {
   return reply.code(200).send({ tiers: TIER_PRICES, packs: CREDIT_PACKS });
 });
 
@@ -2173,7 +2239,7 @@ app.get("/billing/config", async (_req, reply) => {
 // ---------------------------------------------------------------------------
 
 // POST /billing/checkout — create a Stripe Checkout session
-app.post("/billing/checkout", async (req, reply) => {
+app.post("/billing/checkout", { preHandler: requireAuth }, async (req, reply) => {
   const body = (req.body ?? {}) as { companyId?: string; priceId?: string };
   if (!body.companyId) return reply.code(400).send({ ok: false, error: "companyId required" });
   if (!body.priceId)   return reply.code(400).send({ ok: false, error: "priceId required" });
@@ -2224,7 +2290,7 @@ app.post("/billing/checkout", async (req, reply) => {
 });
 
 // POST /billing/webhook — Stripe webhook handler
-app.post("/billing/webhook", async (req, reply) => {
+app.post("/billing/webhook", { preHandler: requireAuth }, async (req, reply) => {
   const sig     = req.headers["stripe-signature"] as string | undefined;
   const secret  = process.env.STRIPE_WEBHOOK_SECRET;
   const rawBody = JSON.stringify(req.body);   // Fastify already parsed — re-stringify for HMAC
@@ -2293,7 +2359,7 @@ app.post("/billing/webhook", async (req, reply) => {
 });
 
 // GET /billing/portal/:companyId — Stripe customer portal
-app.get("/billing/portal/:companyId", async (req, reply) => {
+app.get("/billing/portal/:companyId", { preHandler: requireAuth }, async (req, reply) => {
   const { companyId } = req.params as { companyId: string };
   const STRIPE_KEY = process.env.STRIPE_SECRET_KEY;
   if (!STRIPE_KEY) {
@@ -2340,21 +2406,21 @@ app.get("/billing/portal/:companyId", async (req, reply) => {
 // ---------------------------------------------------------------------------
 
 // POST /affiliate/init/:companyId — generate referral code
-app.post("/affiliate/init/:companyId", async (req, reply) => {
+app.post("/affiliate/init/:companyId", { preHandler: requireAuth }, async (req, reply) => {
   const { companyId } = req.params as { companyId: string };
   const account = generateReferralCode(companyId);
   return reply.code(200).send({ ok: true, account });
 });
 
 // GET /affiliate/:companyId — affiliate stats
-app.get("/affiliate/:companyId", async (req, reply) => {
+app.get("/affiliate/:companyId", { preHandler: requireAuth }, async (req, reply) => {
   const { companyId } = req.params as { companyId: string };
   const stats = getAffiliateStats(companyId);
   return reply.code(200).send({ ok: true, ...stats });
 });
 
 // POST /affiliate/refer — record a referral
-app.post("/affiliate/refer", async (req, reply) => {
+app.post("/affiliate/refer", { preHandler: requireAuth }, async (req, reply) => {
   const body = (req.body ?? {}) as { code?: string; newCompanyId?: string };
   if (!body.code)          return reply.code(400).send({ ok: false, error: "code required" });
   if (!body.newCompanyId)  return reply.code(400).send({ ok: false, error: "newCompanyId required" });
@@ -2371,7 +2437,7 @@ app.post("/affiliate/refer", async (req, reply) => {
 // ---------------------------------------------------------------------------
 
 // GET /admin/health — system health snapshot (no auth — PIN enforced client-side)
-app.get("/admin/health", async (_req, reply) => {
+app.get("/admin/health", { preHandler: requireAuth }, async (_req, reply) => {
   const cacheStats = getCacheStats();
   return reply.code(200).send({
     api: {
@@ -2391,7 +2457,7 @@ app.get("/admin/health", async (_req, reply) => {
 });
 
 // GET /admin/sessions — all playground sessions across all companies
-app.get("/admin/sessions", async (_req, reply) => {
+app.get("/admin/sessions", { preHandler: requireAuth }, async (_req, reply) => {
   // getSessions filters by companyId — use empty string to get all
   // Instead, call it without filter by gathering from all known companies
   const companyIds = Array.from(

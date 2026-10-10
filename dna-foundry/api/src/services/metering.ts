@@ -10,6 +10,7 @@ import { randomUUID } from "crypto";
 import * as fs from "fs/promises";
 import * as path from "path";
 import { budgetCreditsFor } from "./settings";
+import { isOnboardedCompany } from "./companies";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -176,6 +177,13 @@ export function initAccount(companyId: string): CreditAccount {
   const existing = accountStore.get(companyId);
   if (existing) return existing;
 
+  // NEVER auto-create for an arbitrary id. This used to hand 100 free credits to
+  // anyone who named a company in a request body — the account store was a money
+  // printer. Only an onboarded company gets an account.
+  if (!isOnboardedCompany(companyId)) {
+    throw new Error(`no credit account for unknown company: ${companyId}`);
+  }
+
   const account: CreditAccount = {
     companyId,
     balance: FREE_STARTER_BALANCE,
@@ -187,19 +195,27 @@ export function initAccount(companyId: string): CreditAccount {
   return account;
 }
 
+/** The account for a company, created only if the company is onboarded.
+ *  Returns null otherwise — callers read that as "no credits", never as a crash. */
+function accountFor(companyId: string): CreditAccount | null {
+  const a = accountStore.get(companyId);
+  if (a) return a;
+  return isOnboardedCompany(companyId) ? initAccount(companyId) : null;
+}
+
 export function getCreditSummary(companyId: string): CreditAccount {
-  const account = getAccount(companyId);
-  if (!account) return initAccount(companyId);
-  return account;
+  return accountFor(companyId) ?? { companyId, balance: 0, tier: "free", usageLog: [] };
 }
 
 export function checkQuota(
   companyId: string,
 ): { allowed: boolean; remaining: number; resetAt: string } {
-  const account = getAccount(companyId) ?? initAccount(companyId);
-  const limits = TIER_LIMITS[account.tier];
-
+  const account = accountFor(companyId);
   const dayStart = startOfDayUtc();
+  const resetAt = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000).toISOString();
+  if (!account) return { allowed: false, remaining: 0, resetAt };
+
+  const limits = TIER_LIMITS[account.tier];
   const monthStart = startOfMonthUtc();
 
   const usedToday = usageInWindow(account.usageLog, dayStart);
@@ -211,9 +227,6 @@ export function checkQuota(
 
   const remaining = Math.min(remainingBalance, remainingDaily, remainingMonthly);
   const allowed = remaining > 0;
-
-  // Reset at: next midnight UTC
-  const resetAt = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000).toISOString();
 
   return { allowed, remaining: Math.max(0, remaining), resetAt };
 }
@@ -229,7 +242,8 @@ export async function deductCredits(
     );
   }
 
-  const account = getAccount(companyId) ?? initAccount(companyId);
+  const account = accountFor(companyId);
+  if (!account) throw new QuotaExceeded(`unknown company: ${companyId}`);
   const creditsDeducted = CREDIT_COSTS[operationType] ?? 5;
 
   if (account.balance < creditsDeducted) {
@@ -292,7 +306,8 @@ export async function topUpCredits(
   credits: number,
   reason: string,
 ): Promise<UsageEntry> {
-  const account = getAccount(companyId) ?? initAccount(companyId);
+  const account = accountFor(companyId);
+  if (!account) throw new Error(`cannot top up an unknown company: ${companyId}`);
 
   const entry: UsageEntry = {
     id: randomUUID(),
@@ -311,7 +326,8 @@ export async function topUpCredits(
 }
 
 export function upgradeTier(companyId: string, tier: CreditAccount["tier"]): void {
-  const account = getAccount(companyId) ?? initAccount(companyId);
+  const account = accountFor(companyId);
+  if (!account) throw new Error(`cannot upgrade an unknown company: ${companyId}`);
   account.tier = tier;
   saveAccountStore().catch(() => {});
 }
