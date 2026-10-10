@@ -5,21 +5,32 @@ they decide nothing and duplicate no logic.
 
 | server | file | what it is |
 |---|---|---|
-| `helix` | `helix-mcp.js` | the platform surface — voice / content / leads / site |
+| `helix` | `helix-mcp.js` | the platform surface — voice / content / leads / site / billing / analytics / crm, plus the seven `dna.*` foundry tools |
 | `spark` | `spark-gate-mcp.js` | the SparkGatekeeper gate shim — one `invoke` tool |
 
 ## helix-mcp — the platform surface
 
 The audit found the MCP surface was ~10% built: the foundry declared 7 `dna.*`
 tools and *nothing served them*, and voice/content/leads/site were not invocable
-at all. `helix-mcp` makes the platform drivable by any agent over one contract,
-so the dashboard becomes one client of the same API rather than the only door.
+at all. `helix-mcp` makes the platform drivable by any agent over one contract, so
+the dashboard becomes one client of the same API rather than the only door.
 
-Each tool is a **thin client of the local API** (`dna-foundry/api`, default
-`http://127.0.0.1:3101`). The API owns extraction, metering, approval handoff and
-generation; this server owns only the agent-facing shape and returns the API's
-answer **verbatim**. It invents nothing — an unreachable API, a `402` budget cap
-or a missing card all surface as an error with the real status.
+### Two worlds, two trust levels — do not conflate them
+
+The server exposes two groups, and they are **not** the same card world:
+
+- **API tools** — thin clients of the platform API (`dna-foundry/api`, default
+  `http://127.0.0.1:3101`), carrying a per-company key (`x-api-key`, read from the
+  company's own `api-keys.json` when not overridden). They resolve
+  `/etc/helix/companies/<slug>`. The API owns the work; this server returns its
+  answer **verbatim** and invents nothing — an unreachable API, a `402` budget cap
+  or a missing card surface as a real error with the real status.
+- **`dna.*` tools** — the foundry's own surface. They dispatch to
+  `handlers.py`, which drives the foundry swarm + compiler locally against
+  `dna-foundry/cards` and `api/data/cards`. They carry **no tenant key** and never
+  reach the API. **A foundry card is not a platform company.**
+
+### API tools
 
 | tool | endpoint | cost (credits) |
 |---|---|---|
@@ -27,6 +38,13 @@ or a missing card all surface as an error with the real status.
 | `content.generate` | `POST /content/prd` then `/content/generate` | 30 + 30 |
 | `leads.discover` | `POST /sales/hunt` *(text)* or `/sales/hunt/gps` *(lat/lng)* | 20 |
 | `site.publish` | `POST /site/generate` | 40 |
+| `billing.status` | `GET /metering/:id` + `/plan/:id` + `/metering/:id/history` | 0 (read) |
+| `analytics.query` | `GET /analytics/:id?period=` (+ `/enriched`) | 0 (read) |
+| `crm.manage` | `GET /crm/contacts/:id`, `GET /crm/summary/:id`, `POST /crm/contacts`, `PATCH /crm/contacts/:contactId` | 0 |
+
+**Cost note:** only voice / content / leads / site charge, because only those API
+routes call `deductCredits`. The read tools wrap routes that do not, so they charge
+nothing — that is the API's behaviour passed through, not a decision made here.
 
 Arguments:
 
@@ -38,15 +56,47 @@ Arguments:
   step 2 (no re-roll).
 - `leads.discover` — `companyId` (req), plus `lat`/`lng`/`radiusMeters` (OSM
   path) or `industry`/`location`/`size`/`keywords` (Apollo path).
-- `site.publish` — `companyId` (req). Returns `sitePath` (`/site/<companyId>`).
+- `site.publish` — `companyId` (req). Returns the API's real public `url`
+  (`https://helixmain.duckdns.org/b/<companyId>/`), charged only after a
+  successful build.
+- `billing.status` — `companyId` (req), optional `from`/`to`. Composes credits +
+  latest plan + usage history. A company with no plan yet answers `plan: null`
+  with `plan_http_status: 404` — a real answer, not an error.
+- `analytics.query` — `companyId` (req), `period` (`day|week|month`, default
+  week), `enriched` (bool). With `enriched`, note the API computes the **lead
+  totals system-wide** (all companies), so treat those as platform numbers.
+- `crm.manage` — `companyId` (req), `action` (`list` | `summary` | `by_stage` |
+  `create` | `update`), plus `stage` (by_stage), `contactId`/`note`/`updates`/
+  `cardId` (update), `contact` (create). Read actions spend no credits.
+  **Caveat:** `crmLite` is in-memory only, so CRM contacts do not survive an API
+  restart.
 
-Env: `HELIX_API_URL` (default `http://127.0.0.1:3101`).
+### `dna.*` tools — the foundry surface
+
+Served by dispatching to the existing `handlers.py` (never re-implemented here,
+because there is no API route for `dna.sense`):
+
+| tool | implementation |
+|---|---|
+| `dna.extract` | swarm `orchestrator.py extract --url --org --out` |
+| `dna.get` | foundry card lookup (`cards/`, `api/data/cards/`) |
+| `dna.compile` | compiler `dist/cli.js --card --out` |
+| `dna.diff` | compiler `dist/cli.js --card --diff` |
+| `dna.propose_change` | swarm `mutate.py propose` |
+| `dna.decide_proposal` | swarm `mutate.py decide` |
+| `dna.sense` | swarm `sense.py --org [--force]` |
+
+These report **no** `http_status` — no HTTP happens. A local call is marked as such
+rather than given a fabricated status code.
+
+Env: `HELIX_API_URL`, `HELIX_API_KEY` (optional override), `HELIX_CARD_ROOT`,
+`HELIX_PYTHON` (default `python3`), `HELIX_DNA_TIMEOUT_MS` (default 120000).
 
 Run / test:
 
 ```sh
 node dna-foundry/mcp/helix-mcp.js            # stdio server
-npm test --prefix dna-foundry/mcp            # 24 tests (11 helix, 13 spark)
+npm test --prefix dna-foundry/mcp            # 33 tests (20 helix, 13 spark)
 ```
 
 ## Registering it
@@ -61,21 +111,25 @@ repo root.
 
 **ZeroClaw** (`/etc/zeroclaw/config.toml`) — a server is only *defined* by
 `[[mcp.servers]]`; an agent only *connects* if its `mcp_bundles` names it.
-Omission is not a grant. Ready-to-apply snippet (NOT applied — it is a production
-config change and needs an explicit go-ahead):
+Omission is not a grant. **This is applied on the host:**
 
 ```toml
 [[mcp.servers]]
 name = "helix"
-command = "/usr/local/bin/helix-mcp"     # symlink helix-mcp.js here
+command = "/usr/local/bin/helix-mcp"
 env = { HELIX_API_URL = "http://127.0.0.1:3101" }
 
 [mcp_bundles.helix_platform]
 servers = ["helix"]
 ```
 
-Then add `mcp_bundles = ["helix_platform"]` to the `[agents.<alias>]` blocks that
-should be able to drive the platform.
+Granted to `santinos`, `demo-barber`, `test-cafe` (not to the `helix` operator
+agent — its `deny_all_tools` profile stays as-is).
+
+**Adding tools needs no config change.** The bundle names the *server*; tools are
+discovered via `tools/list`. Adding the billing/analytics/crm/dna tools required no
+edit to `.mcp.json` or `config.toml` — only a ZeroClaw restart, after which the
+trace reads `MCP server \`helix\` connected — 14 tool(s) available`.
 
 ## Reachability
 

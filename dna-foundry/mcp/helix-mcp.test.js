@@ -74,7 +74,7 @@ async function setup(replies = {}, extraEnv = {}) {
   return { rpc, calls, close, apiUrl };
 }
 
-test("tools/list exposes exactly the 7 platform tools", async () => {
+test("tools/list exposes the platform tools AND the seven dna.* foundry tools", async () => {
   const { rpc, close } = await setup();
   try {
     const { result } = await rpc("tools/list", {});
@@ -85,6 +85,13 @@ test("tools/list exposes exactly the 7 platform tools", async () => {
         "billing.status",
         "content.generate",
         "crm.manage",
+        "dna.compile",
+        "dna.decide_proposal",
+        "dna.diff",
+        "dna.extract",
+        "dna.get",
+        "dna.propose_change",
+        "dna.sense",
         "leads.discover",
         "site.publish",
         "voice.call",
@@ -445,6 +452,54 @@ test("crm.manage refuses an incomplete action without calling the API", async ()
       arguments: { companyId: "cafe", action: "update", contactId: "c1" },
     });
     assert.equal(b.result.isError, true);
+    assert.equal(calls.length, 0);
+  } finally {
+    await close();
+  }
+});
+
+// ── the dna.* foundry tools: served locally, never via the API ────────────────
+
+test("dna tools dispatch to the foundry handler, invent no http status, and never call the API", async () => {
+  const { rpc, calls, close } = await setup();
+  try {
+    const { result } = await rpc("tools/call", {
+      name: "dna.get",
+      arguments: { card_id: "dna_definitely_not_a_real_card" },
+    });
+    assert.equal(result.isError, true);
+    const payload = JSON.parse(result.content[0].text);
+    assert.equal(payload.tool, "dna.get");
+    assert.equal(payload.ok, false);
+    assert.match(payload.error, /card not found/);
+    // It is a local call: no HTTP happened, so none is reported.
+    assert.equal("http_status" in payload, false);
+    assert.equal(calls.length, 0);
+  } finally {
+    await close();
+  }
+});
+
+test("dna.get on a real foundry fixture card returns the card body", async () => {
+  const fs = require("node:fs");
+  const cardsDir = path.join(__dirname, "..", "cards");
+  const any = fs.existsSync(cardsDir)
+    ? fs.readdirSync(cardsDir).find((f) => f.endsWith(".json"))
+    : undefined;
+  if (!any) {
+    // No fixture tree (e.g. a bare checkout) — the honest skip.
+    return;
+  }
+  const cardId = any.replace(/\.json$/, "");
+  const { rpc, calls, close } = await setup();
+  try {
+    const { result } = await rpc("tools/call", {
+      name: "dna.get",
+      arguments: { card_id: cardId },
+    });
+    const payload = JSON.parse(result.content[0].text);
+    assert.equal(payload.ok, true);
+    assert.ok(payload.card && typeof payload.card === "object");
     assert.equal(calls.length, 0);
   } finally {
     await close();

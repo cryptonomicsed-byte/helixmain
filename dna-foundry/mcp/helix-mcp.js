@@ -24,10 +24,26 @@
  *   analytics.query   a company's analytics for a period (READ-ONLY — no charge)
  *   crm.manage        list/summary/by_stage/create/update CRM contacts
  *
+ *   dna.extract         run the extractor swarm against a URL -> a DNA card
+ *   dna.get             fetch a card by id
+ *   dna.compile         compile a card into prompt/policy/allowlist/rag
+ *   dna.diff            field-level diff between two card versions
+ *   dna.propose_change  propose a governed card mutation
+ *   dna.decide_proposal approve/deny a pending proposal
+ *   dna.sense           tiered re-crawl (change detection -> targeted extraction)
+ *
+ * TWO WORLDS, TWO TRUST LEVELS — do not conflate them:
+ *   The API tools (voice/content/leads/site/billing/analytics/crm) are thin clients
+ *   of the platform API and carry a per-company key; they resolve
+ *   /etc/helix/companies/<slug>. The dna.* tools run the FOUNDRY's own swarm and
+ *   compiler locally (handlers.py) against dna-foundry/cards + api/data/cards, and
+ *   carry no tenant key. A foundry card is not a platform company.
+ *
  * Cost note: only voice.call, content.generate, leads.discover and site.publish
- * spend credits, because only their API routes call deductCredits. The three
- * read tools above wrap routes that do not charge, so they charge nothing —
- * that is the API's behaviour passed through, not a decision made here.
+ * spend credits, because only their API routes call deductCredits. The read tools
+ * above wrap routes that do not charge, so they charge nothing — that is the
+ * API's behaviour passed through, not a decision made here. dna.* never reach the
+ * API, so they cost nothing either.
  *
  * Env:
  *   HELIX_API_URL   default http://127.0.0.1:3101
@@ -43,6 +59,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const { spawnSync } = require("child_process");
 
 const API_URL = (process.env.HELIX_API_URL || "http://127.0.0.1:3101").replace(/\/+$/, "");
 const KEY_ROOT = process.env.HELIX_CARD_ROOT || "/etc/helix/companies";
@@ -216,6 +233,102 @@ const TOOLS = [
       required: ["companyId"],
     },
   },
+
+  // ── the seven DNA foundry tools. Names + schemas mirror dna-foundry/mcp/tools.json
+  //    exactly; the implementation is the existing handlers.py (see dnaRun). ──────
+  {
+    name: "dna.extract",
+    description:
+      "Run the extractor swarm against a business URL (or file:// fixture) and emit a " +
+      "validated, versioned DNA card. Drives the foundry's own swarm.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        url: { type: "string", description: "Business website URL, or file:// path for fixtures" },
+        organization_id: { type: "string", description: "Organization contract id, e.g. org_demo0001" },
+      },
+      required: ["url"],
+    },
+  },
+  {
+    name: "dna.get",
+    description: "Fetch a DNA card by id from the foundry card tree.",
+    inputSchema: {
+      type: "object",
+      properties: { card_id: { type: "string", description: "Card id, e.g. dna_80a09ce4" } },
+      required: ["card_id"],
+    },
+  },
+  {
+    name: "dna.compile",
+    description:
+      "Deterministically compile a DNA card into system prompt, policy seed, tool " +
+      "allowlist, and RAG manifest.",
+    inputSchema: {
+      type: "object",
+      properties: { card_id: { type: "string", description: "Card id to compile" } },
+      required: ["card_id"],
+    },
+  },
+  {
+    name: "dna.diff",
+    description: "Field-level diff between two card versions.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        card_a: { type: "string", description: "Older card id" },
+        card_b: { type: "string", description: "Newer card id" },
+      },
+      required: ["card_a", "card_b"],
+    },
+  },
+  {
+    name: "dna.propose_change",
+    description:
+      "Propose a governed mutation to a DNA card (field, old, new, evidence, confidence). " +
+      "Low-risk factual updates mint a new version with hash chain + changelog + receipt; " +
+      "identity/voice/policy/competitor changes await approval.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        card_id: { type: "string", description: "Card id, e.g. dna_80a09ce4" },
+        field: { type: "string", description: "Dotted field path, e.g. operations.hours" },
+        old: { description: "Current value the proposer saw" },
+        new: { description: "Proposed new value" },
+        evidence: { type: "string", description: "Source for the change, e.g. google_listing" },
+        confidence: { type: "number", description: "0-1, default 0.7" },
+      },
+      required: ["card_id", "field", "old", "new"],
+    },
+  },
+  {
+    name: "dna.decide_proposal",
+    description: "Approve or deny a pending proposal. Approval mints the new card version.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        proposal_id: { type: "string" },
+        decision: { type: "string", enum: ["approve", "deny"] },
+        decided_by: { type: "string", description: "default: operator" },
+      },
+      required: ["proposal_id", "decision"],
+    },
+  },
+  {
+    name: "dna.sense",
+    description:
+      "Tiered, cost-efficient re-crawl: Tier-0 change detection, Tier-1 heuristic triage, " +
+      "Tier-2 targeted extraction emitting dna.propose_change proposals, Tier-3 full " +
+      "re-extract on redesign. Adaptive per-site cadence from the volatility sidecar.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        organization_id: { type: "string" },
+        force: { type: "boolean", description: "ignore adaptive cadence" },
+      },
+      required: ["organization_id"],
+    },
+  },
 ];
 
 /** POST a JSON body to the API and normalise the answer. Never throws on a
@@ -247,6 +360,47 @@ async function api(pathname, body, opts) {
     parsed = { raw: text.slice(0, 4000) };
   }
   return { httpStatus: res.status, body: parsed };
+}
+
+/**
+ * The seven `dna.*` tools predate the platform API. Their implementation already
+ * exists as `dna-foundry/mcp/handlers.py` — a dispatcher that drives the foundry's
+ * own swarm + compiler. Nothing served it, so those tools "existed but went
+ * nowhere". We SERVE that implementation rather than re-implement it against the
+ * API: there is no API route for dna.sense, and fabricating one would be exactly
+ * the fiction this is meant to remove.
+ *
+ * What this preserves, and you should know it:
+ *   - dna.* operate on the FOUNDRY tree (dna-foundry/cards, api/data/cards) and run
+ *     locally as the host user. The other tools are thin clients of the platform
+ *     API and carry a tenant key, resolving /etc/helix/companies/<slug>.
+ *   - So they are two different card WORLDS and two different trust levels. See README.
+ *
+ * Results are marked `local` so the caller sees no invented HTTP status.
+ */
+function dnaRun(tool, args) {
+  const python = process.env.HELIX_PYTHON || "python3";
+  const script = path.join(__dirname, "handlers.py");
+  if (!fs.existsSync(script)) {
+    return { local: true, body: { ok: false, error: `handlers.py not found at ${script}` } };
+  }
+  const r = spawnSync(python, [script, tool, JSON.stringify(args)], {
+    encoding: "utf8",
+    timeout: Number(process.env.HELIX_DNA_TIMEOUT_MS || 120000),
+    maxBuffer: 8 * 1024 * 1024,
+    cwd: __dirname,
+  });
+  const out = (r.stdout || "").trim();
+  if (!out) {
+    const why = r.error ? r.error.message : `exit ${r.status}`;
+    const tail = r.stderr ? String(r.stderr).slice(-500) : "";
+    return { local: true, body: { ok: false, error: `dna handler produced no output (${why})${tail ? `: ${tail}` : ""}` } };
+  }
+  try {
+    return { local: true, body: JSON.parse(out) };
+  } catch {
+    return { local: true, body: { ok: true, output: out.slice(-4000) } };
+  }
 }
 
 const HANDLERS = {
@@ -406,6 +560,29 @@ const HANDLERS = {
         return { httpStatus: 0, body: { ok: false, error: `unknown action: ${a.action}` } };
     }
   },
+
+  // ── DNA foundry tools: dispatch to the existing handlers.py (see dnaRun) ───
+  "dna.extract": (a) => dnaRun("dna.extract", { url: a.url, organization_id: a.organization_id }),
+  "dna.get": (a) => dnaRun("dna.get", { card_id: a.card_id }),
+  "dna.compile": (a) => dnaRun("dna.compile", { card_id: a.card_id }),
+  "dna.diff": (a) => dnaRun("dna.diff", { card_a: a.card_a, card_b: a.card_b }),
+  "dna.propose_change": (a) =>
+    dnaRun("dna.propose_change", {
+      card_id: a.card_id,
+      field: a.field,
+      old: a.old,
+      new: a.new,
+      evidence: a.evidence,
+      confidence: a.confidence,
+    }),
+  "dna.decide_proposal": (a) =>
+    dnaRun("dna.decide_proposal", {
+      proposal_id: a.proposal_id,
+      decision: a.decision,
+      decided_by: a.decided_by,
+    }),
+  "dna.sense": (a) =>
+    dnaRun("dna.sense", { organization_id: a.organization_id, force: a.force }),
 };
 
 function rpcResult(id, result) {
@@ -452,14 +629,16 @@ async function handle(msg) {
       }
 
       const out = await handler(params?.arguments || {});
-      const ok = out.httpStatus === 200 && (!out.body || out.body.ok !== false);
+      // Local tools (dna.*) never touch HTTP, so they carry no http_status and we
+      // do not invent one. Their success is the handler's own `ok`.
+      const ok = out.local
+        ? !!out.body && out.body.ok !== false
+        : out.httpStatus === 200 && (!out.body || out.body.ok !== false);
+      const payload = out.local
+        ? { tool: name, ...(out.body ?? {}) }
+        : { tool: name, http_status: out.httpStatus, ...(out.body ?? {}) };
       return rpcResult(id, {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify({ tool: name, http_status: out.httpStatus, ...(out.body ?? {}) }),
-          },
-        ],
+        content: [{ type: "text", text: JSON.stringify(payload) }],
         isError: !ok,
       });
     }
