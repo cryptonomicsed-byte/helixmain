@@ -7,12 +7,56 @@
 const BASE = '/api'
 const GK_BASE = '/gk'
 
+// API credentials. Entered by the owner at login and kept in localStorage — NOT
+// baked into the bundle, because anything shipped in a Vite build is public.
+const KEY_STORE = 'helix_api_key'
+const OWNER_STORE = 'helix_owner_key'
+
+export function getApiKey(): string {
+  return localStorage.getItem(KEY_STORE) ?? ''
+}
+export function setApiKey(k: string): void {
+  localStorage.setItem(KEY_STORE, k)
+}
+export function setOwnerKey(k: string): void {
+  localStorage.setItem(OWNER_STORE, k)
+}
+export function clearKeys(): void {
+  localStorage.removeItem(KEY_STORE)
+  localStorage.removeItem(OWNER_STORE)
+}
+
+/** Credential headers — only for the app API, never for the gatekeeper proxy. */
+function authHeaders(): Record<string, string> {
+  const k = localStorage.getItem(KEY_STORE)
+  const o = localStorage.getItem(OWNER_STORE)
+  const h: Record<string, string> = {}
+  if (k) h['x-api-key'] = k
+  if (o) h['x-owner-key'] = o
+  return h
+}
+
+/** fetch against the API with credentials attached and 401 handled once. */
+export async function authFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  const headers = { ...authHeaders(), ...((init.headers as Record<string, string>) ?? {}) }
+  const res = await fetch(`${BASE}${path}`, { ...init, headers })
+  if (res.status === 401) {
+    throw new Error(`unauthorized — missing or invalid API key (${path})`)
+  }
+  return res
+}
+
 async function request<T>(method: string, path: string, body?: unknown, base = BASE): Promise<T> {
+  const headers: Record<string, string> = base === BASE ? authHeaders() : {}
+  if (body) headers['Content-Type'] = 'application/json'
   const res = await fetch(`${base}${path}`, {
     method,
-    headers: body ? { 'Content-Type': 'application/json' } : {},
+    headers,
     body: body ? JSON.stringify(body) : undefined,
   })
+  if (res.status === 401) {
+    throw new Error(`unauthorized — missing or invalid API key (${method} ${path})`)
+  }
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText)
     throw new Error(`${method} ${path} → ${res.status}: ${text}`)

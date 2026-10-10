@@ -1,3 +1,4 @@
+import { authFetch } from '../api'
 import { useState } from 'react'
 import { useHelixStore } from '../store'
 
@@ -115,7 +116,7 @@ export function LeadHunterPage() {
     setError('')
     setLoading(true)
     try {
-      const res = await fetch('/api/sales/hunt/gps', {
+      const res = await authFetch('/sales/hunt/gps', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -144,7 +145,7 @@ export function LeadHunterPage() {
     if (!company) return
     setQualifying((q) => ({ ...q, [leadId]: true }))
     try {
-      const res = await fetch(`/api/sales/qualify/${leadId}`, {
+      const res = await authFetch(`/sales/qualify/${leadId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ companyId: company.id, cardId: company.id }),

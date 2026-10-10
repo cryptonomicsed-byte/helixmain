@@ -1,3 +1,4 @@
+import { authFetch } from '../api'
 import { useEffect, useState } from 'react'
 import { useHelixStore } from '../store'
 
@@ -65,7 +66,7 @@ export function PortfolioPage() {
     setLoading(true)
     setError(null)
 
-    fetch(`/api/portfolio/${currentCompany.id}`)
+    authFetch(`/portfolio/${currentCompany.id}`)
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`)
         return r.json() as Promise<PortfolioAsset[]>

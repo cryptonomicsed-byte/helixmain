@@ -1,3 +1,4 @@
+import { authFetch } from '../api'
 import { useEffect, useState, useCallback } from 'react'
 import { useHelixStore } from '../store'
 
@@ -166,9 +167,9 @@ export function BillingPage() {
     setError(null)
     try {
       const [mRes, cRes, aRes] = await Promise.allSettled([
-        fetch(`/api/metering/${companyId}`).then((r) => r.json()) as Promise<MeteringAccount>,
-        fetch('/api/billing/config').then((r) => r.json()) as Promise<BillingConfig>,
-        fetch(`/api/affiliate/${companyId}`).then((r) => r.json()) as Promise<AffiliateStats>,
+        authFetch(`/metering/${companyId}`).then((r) => r.json()) as Promise<MeteringAccount>,
+        authFetch('/billing/config').then((r) => r.json()) as Promise<BillingConfig>,
+        authFetch(`/affiliate/${companyId}`).then((r) => r.json()) as Promise<AffiliateStats>,
       ])
       if (mRes.status === 'fulfilled') setMetering(mRes.value)
       if (cRes.status === 'fulfilled') setConfig(cRes.value)
@@ -189,7 +190,7 @@ export function BillingPage() {
     if (!companyId) return
     setCheckoutLoading(priceId)
     try {
-      const res = await fetch('/api/billing/checkout', {
+      const res = await authFetch('/billing/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ companyId, priceId }),
@@ -212,7 +213,7 @@ export function BillingPage() {
   async function handleInitAffiliate() {
     if (!companyId) return
     try {
-      await fetch(`/api/affiliate/init/${companyId}`, { method: 'POST' })
+      await authFetch(`/affiliate/init/${companyId}`, { method: 'POST' })
       await load()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))

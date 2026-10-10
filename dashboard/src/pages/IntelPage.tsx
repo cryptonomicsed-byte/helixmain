@@ -1,3 +1,4 @@
+import { authFetch } from '../api'
 import { useState } from 'react'
 import { useHelixStore } from '../store'
 
@@ -106,7 +107,7 @@ export function IntelPage() {
     setLoading(true)
     setReport(null)
     try {
-      const res = await fetch('/api/intel/battle', {
+      const res = await authFetch('/intel/battle', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

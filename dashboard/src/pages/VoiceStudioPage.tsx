@@ -1,3 +1,4 @@
+import { authFetch } from '../api'
 import { useState, useEffect, useCallback } from 'react'
 import { useHelixStore } from '../store'
 
@@ -175,7 +176,7 @@ export function VoiceStudioPage() {
   // ---- Load voices on mount ----
   useEffect(() => {
     setVoicesLoading(true)
-    fetch('/api/voices')
+    authFetch('/voices')
       .then((r) => r.json())
       .then((data: VoiceOption[]) => setVoices(data))
       .catch(() => setVoices([]))
@@ -186,7 +187,7 @@ export function VoiceStudioPage() {
   useEffect(() => {
     if (!currentCompany) return
     setJingle(null)
-    fetch(`/api/voice/jingle/${currentCompany.id}`)
+    authFetch(`/voice/jingle/${currentCompany.id}`)
       .then((r) => {
         if (!r.ok) return null
         return r.json() as Promise<JingleResult>
@@ -204,7 +205,7 @@ export function VoiceStudioPage() {
     const text = `Hello, welcome to ${companyName}. How can I help you today?`
 
     try {
-      const res = await fetch('/api/voices/sample', {
+      const res = await authFetch('/voices/sample', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ voiceProfile: voice.id, text }),
@@ -235,7 +236,7 @@ export function VoiceStudioPage() {
     setJingleError(null)
 
     try {
-      const res = await fetch('/api/voice/jingle', {
+      const res = await authFetch('/voice/jingle', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ companyId: currentCompany.id }),

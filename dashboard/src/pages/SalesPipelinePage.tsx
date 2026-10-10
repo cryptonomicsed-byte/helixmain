@@ -1,3 +1,4 @@
+import { authFetch } from '../api'
 import { useState, useEffect, useCallback } from 'react'
 import { useHelixStore } from '../store'
 import { useIsMobile } from '../hooks'
@@ -125,7 +126,7 @@ function LeadPanel({ lead, companyId, cardId, onClose, onLeadUpdate }: PanelProp
 
   useEffect(() => {
     // Refresh activity log from server
-    fetch(`/api/sales/leads/${lead.id}/activity`)
+    authFetch(`/sales/leads/${lead.id}/activity`)
       .then((r) => r.ok ? r.json() : null)
       .then((d: { activityLog?: ActivityEntry[] } | null) => {
         if (d?.activityLog) setActivity(d.activityLog)
@@ -136,7 +137,7 @@ function LeadPanel({ lead, companyId, cardId, onClose, onLeadUpdate }: PanelProp
   async function generateOutreach() {
     setOutLoading(true)
     try {
-      const res = await fetch(`/api/sales/outreach/${lead.id}`, {
+      const res = await authFetch(`/sales/outreach/${lead.id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ companyId, cardId }),
@@ -155,7 +156,7 @@ function LeadPanel({ lead, companyId, cardId, onClose, onLeadUpdate }: PanelProp
     if (!outreach) return
     setSubmitLoading(true)
     try {
-      const res = await fetch(`/api/sales/submit/${lead.id}`, {
+      const res = await authFetch(`/sales/submit/${lead.id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ companyId, draft: outreach }),
@@ -174,7 +175,7 @@ function LeadPanel({ lead, companyId, cardId, onClose, onLeadUpdate }: PanelProp
   async function runDealReview() {
     setReviewLoading(true)
     try {
-      const res = await fetch(`/api/sales/review/${lead.id}`, {
+      const res = await authFetch(`/sales/review/${lead.id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ companyId, cardId }),
@@ -518,7 +519,7 @@ export function SalesPipelinePage() {
   const loadLeads = useCallback(async (companyId: string) => {
     setLoading(true)
     try {
-      const res = await fetch(`/api/sales/leads/${companyId}`)
+      const res = await authFetch(`/sales/leads/${companyId}`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json() as { leads: LeadRow[] }
       setLeads(data.leads ?? [])
@@ -536,7 +537,7 @@ export function SalesPipelinePage() {
 
   async function handleMove(leadId: string, status: LeadRow['status']) {
     try {
-      const res = await fetch(`/api/sales/leads/${leadId}`, {
+      const res = await authFetch(`/sales/leads/${leadId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status }),
@@ -558,7 +559,7 @@ export function SalesPipelinePage() {
   async function qualifyAll() {
     setQualifying(true)
     try {
-      const res = await fetch(`/api/sales/qualify/bulk/${currentCompany!.id}`, {
+      const res = await authFetch(`/sales/qualify/bulk/${currentCompany!.id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ cardId: currentCompany!.id }),

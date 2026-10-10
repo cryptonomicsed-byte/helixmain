@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useHelixStore } from '../store'
-import { api } from '../api'
+import { authFetch, api } from '../api'
 import { CompanyCard } from '../components/CompanyCard'
 import { Icon } from '../components/Icon'
 import type { HealthResult } from '../api'
@@ -77,7 +77,7 @@ export function DashboardPage() {
         list.forEach((c, i) => { const r = results[i]; if (r.status === 'fulfilled') map[c.id] = r.value })
         if (live) setHealthMap(map)
         try {
-          const ah = await fetch('/api/admin/health').then((r) => r.json()) as AdminHealth
+          const ah = await authFetch('/admin/health').then((r) => r.json()) as AdminHealth
           if (live) setAdminHealth(ah)
         } catch { /* non-fatal */ }
       } catch (e) {
@@ -97,8 +97,8 @@ export function DashboardPage() {
       try {
         if (currentCompany) {
           const [a, m] = await Promise.allSettled([
-            fetch(`/api/analytics/${currentCompany.id}/enriched`).then((r) => r.json()) as Promise<AnalyticsSummary>,
-            fetch(`/api/metering/${currentCompany.id}`).then((r) => r.json()) as Promise<MeteringAccount>,
+            authFetch(`/analytics/${currentCompany.id}/enriched`).then((r) => r.json()) as Promise<AnalyticsSummary>,
+            authFetch(`/metering/${currentCompany.id}`).then((r) => r.json()) as Promise<MeteringAccount>,
           ])
           if (!live) return
           if (a.status === 'fulfilled') setAnalytics(a.value)
@@ -110,8 +110,8 @@ export function DashboardPage() {
           // respond simply contributes nothing.
           const pairs = await Promise.allSettled(
             companies.flatMap((c) => [
-              fetch(`/api/analytics/${c.id}/enriched`).then((r) => r.json()) as Promise<AnalyticsSummary>,
-              fetch(`/api/metering/${c.id}`).then((r) => r.json()) as Promise<MeteringAccount>,
+              authFetch(`/analytics/${c.id}/enriched`).then((r) => r.json()) as Promise<AnalyticsSummary>,
+              authFetch(`/metering/${c.id}`).then((r) => r.json()) as Promise<MeteringAccount>,
             ]),
           )
           if (!live) return
