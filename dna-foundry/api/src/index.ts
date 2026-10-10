@@ -28,7 +28,7 @@ import {
   loadJingleStore,
 } from "./services/sonicBranding";
 import { aiGateway } from "./services/aiGateway";
-import { loadChangelog, verifyChain, changelogToMarkdown } from "./services/changelog";
+import { loadChangelog, verifyChain, changelogToMarkdown, appendChange, diffCards } from "./services/changelog";
 import { scoreCard } from "./services/cardHealth";
 import {
   generateCampaignPRD,
@@ -299,6 +299,89 @@ app.get("/cards/:id", async (req, reply) => {
   const p = await findCard((req.params as { id: string }).id);
   if (!p) return reply.code(404).send({ ok: false, error: "card not found" });
   return JSON.parse(await fs.readFile(p, "utf8"));
+});
+
+// PATCH /cards/:id — owner edit / confirm. Merges a shallow patch, marks any
+// named provenance keys as owner-confirmed, bumps the version and appends a
+// hash-chained changelog entry. Real write, real history.
+app.patch("/cards/:id", async (req, reply) => {
+  const id = (req.params as { id: string }).id;
+  const body = (req.body ?? {}) as {
+    patch?: Record<string, unknown>;
+    confirm?: string[];
+    author?: string;
+    summary?: string;
+  };
+  if (!body.patch || typeof body.patch !== "object")
+    return reply.code(400).send({ ok: false, error: "patch object required" });
+
+  const p = await findCard(id);
+  if (!p) return reply.code(404).send({ ok: false, error: "card not found" });
+
+  let card: Record<string, any>;
+  try {
+    card = JSON.parse(await fs.readFile(p, "utf8"));
+  } catch {
+    return reply.code(500).send({ ok: false, error: "card is unreadable" });
+  }
+
+  const before = JSON.parse(JSON.stringify(card));
+  const now = new Date().toISOString();
+
+  // Shallow-merge top-level sections; replace scalars/arrays outright.
+  for (const [k, v] of Object.entries(body.patch)) {
+    if (
+      v && typeof v === "object" && !Array.isArray(v) &&
+      card[k] && typeof card[k] === "object" && !Array.isArray(card[k])
+    ) {
+      card[k] = { ...card[k], ...(v as Record<string, unknown>) };
+    } else {
+      card[k] = v;
+    }
+  }
+
+  // Owner-confirmed provenance: an edit is the strongest signal we have.
+  const confirmed = Array.isArray(body.confirm) ? body.confirm : [];
+  if (confirmed.length > 0) {
+    card.field_provenance = card.field_provenance ?? {};
+    for (const key of confirmed) {
+      const prev = card.field_provenance[key] ?? {};
+      card.field_provenance[key] = {
+        ...prev,
+        sources: ["owner"],
+        confidence: 1,
+        extractorAgent: "owner",
+        extractedAt: now,
+        inferred: false,
+      };
+    }
+  }
+
+  card.version = (card.version ?? 1) + 1;
+  card.updated_at = now;
+
+  const fieldsChanged = diffCards(before, card);
+
+  try {
+    await fs.writeFile(p, JSON.stringify(card, null, 2));
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return reply.code(500).send({ ok: false, error: `could not write card: ${msg}` });
+  }
+
+  const companyId = card.organizationId ?? card.org_id ?? id;
+  const changelogPath = path.join(HELIX_COMPANIES, companyId, "changelog.json");
+  appendChange(
+    changelogPath,
+    card.id ?? id,
+    companyId,
+    fieldsChanged.length > 0 ? fieldsChanged : ["*"],
+    "owner",
+    body.author ?? "owner",
+    body.summary ?? "Card edited",
+  ).catch(() => { /* changelog failure must not lose the edit */ });
+
+  return reply.code(200).send({ ok: true, card, fieldsChanged });
 });
 
 // GET /companies — list helix companies + any extracted cards in CARDS dir

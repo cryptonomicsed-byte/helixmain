@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useParams } from 'react-router-dom'
 import { api } from '../api'
 import { Icon } from '../components/Icon'
 import type { ApprovalItem, AuditEntry } from '../api'
@@ -89,7 +90,8 @@ function expiresIn(ts?: string): string {
   return `expires in ${Math.floor(m / 60)}h ${m % 60}m`
 }
 
-export function ApprovalsPage() {
+export function ApprovalsPage({ scoped = false }: { scoped?: boolean } = {}) {
+  const { id: routeId } = useParams<{ id: string }>()
   const [pending, setPending] = useState<ApprovalItem[]>([])
   const [audit] = useState<AuditEntry[]>([])
   const [reachable, setReachable] = useState(true)
@@ -150,11 +152,14 @@ export function ApprovalsPage() {
     } finally { setEnrolling(false) }
   }
 
+  // Per-card mode: only this card's holds.
+  const shown = scoped && routeId ? pending.filter((p) => p.card_id === routeId) : pending
+
   return (
     <div style={{ maxWidth: 820, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 18 }}>
       <div className="reveal" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 12 }}>
         <div>
-          <div className="h1">Approvals</div>
+          <div className="h1">{scoped ? 'Approvals — this card' : 'Approvals'}</div>
           <div className="sub" style={{ marginTop: 4 }}>SparkGatekeeper hold queue · polls every 5s</div>
         </div>
         <span className="pill" style={{ color: reachable ? 'var(--ok)' : 'var(--bad)',
@@ -197,7 +202,7 @@ export function ApprovalsPage() {
       )}
 
       <section>
-        <div className="h2" style={{ marginBottom: 12 }}>Pending ({pending.length})</div>
+        <div className="h2" style={{ marginBottom: 12 }}>Pending ({shown.length})</div>
 
         {!reachable && (
           <div className="glass" style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--fg-3)', fontSize: '.875rem' }}>
@@ -205,7 +210,7 @@ export function ApprovalsPage() {
           </div>
         )}
 
-        {reachable && pending.length === 0 && (
+        {reachable && shown.length === 0 && (
           <div className="glass reveal" style={{ padding: '2.5rem', textAlign: 'center', display: 'flex',
             flexDirection: 'column', alignItems: 'center', gap: 8 }}>
             <span style={{ color: 'var(--ok)' }}><Icon name="check" size={28} /></span>
@@ -214,7 +219,7 @@ export function ApprovalsPage() {
           </div>
         )}
 
-        {pending.map((item, i) => {
+        {shown.map((item, i) => {
           const busy = acting.has(item.id)
           const c = item.risk_level ? RISK[item.risk_level] : 'var(--fg-3)'
           return (

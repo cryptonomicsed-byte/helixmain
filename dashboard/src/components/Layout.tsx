@@ -4,39 +4,26 @@ import type { CSSProperties } from 'react'
 import { useHelixStore } from '../store'
 import { api } from '../api'
 import { Icon } from './Icon'
-import { CompanySwitcher } from './CompanySwitcher'
 import { useIsMobile } from '../hooks'
 
 const NAV: { group: string; items: { to: string; label: string; icon: string }[] }[] = [
   { group: 'Workspace', items: [
-    { to: '/',         label: 'Dashboard', icon: 'dashboard' },
+    { to: '/',         label: 'Companies', icon: 'dashboard' },
     { to: '/onboard',  label: 'Onboard',   icon: 'onboard' },
   ]},
-  { group: 'Operate', items: [
-    { to: '/approvals',    label: 'Approvals',    icon: 'approvals' },
-    { to: '/playground',   label: 'Playground',   icon: 'flask' },
-    { to: '/voice-studio', label: 'Voice Studio', icon: 'mic' },
+  { group: 'Control', items: [
+    { to: '/approvals', label: 'Approvals', icon: 'approvals' },
+    { to: '/settings',  label: 'Settings',  icon: 'settings' },
   ]},
-  { group: 'Grow', items: [
-    { to: '/leads',     label: 'Leads',     icon: 'pin' },
-    { to: '/pipeline',  label: 'Pipeline',  icon: 'pipeline' },
-    { to: '/campaigns', label: 'Campaigns', icon: 'campaign' },
-    { to: '/schedule',  label: 'Schedule',  icon: 'calendar' },
-  ]},
-  { group: 'Assets', items: [
-    { to: '/intel',     label: 'Intel',     icon: 'intel' },
+  { group: 'Account', items: [
     { to: '/portfolio', label: 'Portfolio', icon: 'folder' },
     { to: '/billing',   label: 'Billing',   icon: 'card' },
-    { to: '/settings',  label: 'Settings',  icon: 'settings' },
   ]},
 ]
 
 const TITLES: Record<string, string> = {
-  '/': 'Dashboard', '/onboard': 'Onboard a Business', '/approvals': 'Approvals',
-  '/playground': 'Playground', '/leads': 'Lead Hunter', '/pipeline': 'Sales Pipeline',
-  '/intel': 'Intel', '/campaigns': 'Campaigns', '/schedule': 'Schedule',
-  '/voice-studio': 'Voice Studio', '/portfolio': 'Portfolio', '/billing': 'Billing',
-  '/settings': 'Settings',
+  '/': 'Companies', '/onboard': 'Onboard a Business', '/approvals': 'Approvals',
+  '/settings': 'Settings', '/portfolio': 'Portfolio', '/billing': 'Billing',
 }
 
 const RAIL_W = 68
@@ -45,7 +32,10 @@ const FULL_W = 236
 export function Layout() {
   const { buildStatus, setCompanies, setBuildStatus } = useHelixStore()
   const { pathname } = useLocation()
-  const title = pathname.startsWith('/company') ? 'Company' : (TITLES[pathname] ?? 'HelixMain')
+  // Inside a card the card's own header carries the context — no global title,
+  // no business dropdown. The card IS the page.
+  const inCard = pathname.startsWith('/card/')
+  const title = inCard ? '' : (TITLES[pathname] ?? '')
   const isMobile = useIsMobile()
 
   // Desktop: collapse the sidebar to an icon rail (persisted).
@@ -265,16 +255,17 @@ export function Layout() {
             </button>
           )}
 
-          <div className="h2" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {title}
-          </div>
+          {title && (
+            <div className="h2" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {title}
+            </div>
+          )}
           <div style={{ flex: 1, minWidth: 0 }} />
           {!isMobile && (
             <button className="btn btn-ghost" title="Notifications" style={{ padding: '.45rem' }}>
               <Icon name="bell" size={17} />
             </button>
           )}
-          <CompanySwitcher />
         </header>
 
         <main

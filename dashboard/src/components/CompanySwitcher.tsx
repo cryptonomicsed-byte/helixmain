@@ -30,7 +30,7 @@ export function CompanySwitcher() {
     const c = companies.find((x) => x.id === id) ?? null
     setCurrentCompany(c)
     setOpen(false); setQ('')
-    if (c) navigate(`/company/${c.id}`)
+    if (c) navigate(`/card/${c.id}`)
   }
 
   return (

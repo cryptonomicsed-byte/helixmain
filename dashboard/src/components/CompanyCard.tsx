@@ -63,10 +63,10 @@ export function CompanyCard({ company, health, buildOk }: Props) {
 
       {/* Actions */}
       <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap', marginTop: 'auto' }}>
-        <button className="btn btn-primary" onClick={() => go(`/company/${company.id}`)} style={{ fontSize: '.78rem', padding: '.4rem .7rem' }}>
+        <button className="btn btn-primary" onClick={() => go(`/card/${company.id}`)} style={{ fontSize: '.78rem', padding: '.4rem .7rem' }}>
           Edit Card
         </button>
-        <button className="btn" onClick={() => go(`/company/${company.id}?tab=greeting`)} style={{ fontSize: '.78rem', padding: '.4rem .7rem' }}>
+        <button className="btn" onClick={() => go(`/card/${company.id}/voice`)} style={{ fontSize: '.78rem', padding: '.4rem .7rem' }}>
           Test Agent
         </button>
         <a className="btn btn-ghost" href={`https://helixmain.duckdns.org/${company.id}`} target="_blank" rel="noreferrer"

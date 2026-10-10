@@ -136,6 +136,8 @@ export interface ApprovalItem {
   risk_level?: 'low' | 'medium' | 'high'
   created_at: string
   expires_at?: string
+  /** The card this hold belongs to — used to scope the per-card approvals tab. */
+  card_id?: string
 }
 
 /** Raw row returned by SparkGatekeeper's GET /held. */
@@ -221,7 +223,7 @@ function cardField(value: unknown, conf: number, inferred = false): CardField {
 /** The API returns a camelCase ExtractedCard (organizationId, identity.name, …);
  *  the UI's BusinessCard is a flat CardField shape. Normalise in ONE place so
  *  every page consumes the same object — otherwise the review form renders empty
- *  and navigation targets `/company/undefined`. */
+ *  and navigation targets `/card/undefined`. */
 export function normalizeCard(raw: any): BusinessCard {
   const identity = raw?.identity ?? {}
   const voice = raw?.voice ?? {}
@@ -278,6 +280,17 @@ export const api = {
   changelog: (companyId: string) =>
     get<Changelog>(`/changelog/${companyId}`),
 
+  /** Verify the hash chain of a company's changelog. */
+  verifyChangelog: (companyId: string) =>
+    get<{ valid: boolean; brokenAt?: number; error?: string }>(`/changelog/${companyId}/verify`),
+
+  /** Changelog rendered as markdown (text/plain, not JSON). */
+  changelogMarkdown: async (companyId: string): Promise<string> => {
+    const res = await fetch(`${BASE}/changelog/${companyId}/markdown`)
+    if (!res.ok) throw new Error(`GET /changelog/${companyId}/markdown → ${res.status}`)
+    return res.text()
+  },
+
   // Build status
   buildStatus: () => get<BuildStatus>('/build-status'),
 
@@ -286,6 +299,18 @@ export const api = {
 
   // Cards
   getCard: async (cardId: string) => normalizeCard(await get<any>(`/cards/${cardId}`)),
+
+  /** Raw card — everything the API returns, incl. provenance, visual identity,
+   *  offerings, strategy and customers. Used by the Card/Overview tabs. */
+  getCardRaw: (cardId: string) => get<any>(`/cards/${cardId}`),
+
+  /** Generated landing site for a company (if one has been produced). */
+  getSite: (companyId: string) => get<any>(`/site/${companyId}`),
+
+  /** Owner edit / confirm. Server merges the patch, marks named provenance
+   *  keys as owner-confirmed, bumps the version and logs a changelog entry. */
+  updateCard: (cardId: string, patch: Record<string, unknown>, confirm: string[] = [], summary?: string) =>
+    request<{ ok: boolean; card: any; fieldsChanged: string[] }>('PATCH', `/cards/${cardId}`, { patch, confirm, author: 'owner', summary }),
 
   // SparkGatekeeper (proxied at /gk → 127.0.0.1:9100)
   // The gatekeeper's real contract: GET /held, POST /held/:id/deny,
@@ -311,6 +336,7 @@ export const api = {
         risk_level: risk,
         created_at: h.proposed_at,
         expires_at: h.expires_at,
+        card_id: h.card_id,
       }
     })
     return { pending, audit: [] as AuditEntry[] }

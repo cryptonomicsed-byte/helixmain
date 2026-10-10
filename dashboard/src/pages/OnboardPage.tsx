@@ -107,7 +107,7 @@ export function OnboardPage() {
         lastUpdated: new Date().toISOString(),
       })
       setPhase('done')
-      setTimeout(() => navigate(`/company/${card.org_id}`), 1200)
+      setTimeout(() => navigate(`/card/${card.org_id}`), 1200)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
       setPhase('review')
