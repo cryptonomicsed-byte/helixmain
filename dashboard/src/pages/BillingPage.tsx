@@ -513,7 +513,7 @@ export function BillingPage() {
       <div style={{ ...card, marginBottom: '1.5rem' }}>
         <h2 style={sectionTitle}>Referral Program</h2>
         <p style={{ fontSize: '0.82rem', color: 'var(--fg-3)', marginTop: 0, marginBottom: '1.25rem' }}>
-          Earn credits when you refer others. Commission: 10% (Starter) · 15% (Pro) · 20% (Agency).
+          Earn credits when you refer others. Commission: 10% (Free) · 15% (Pro) · 20% (Agency).
         </p>
 
         {!affiliate?.account ? (

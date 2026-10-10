@@ -3,7 +3,7 @@
  *
  * Optimistic deduction: credits are deducted before the operation runs.
  * On failure, caller must call refundCredits(usageEntry.id).
- * New companies start on the free tier with 50 credits.
+ * New companies start on the free tier with 100 credits, granted once at signup.
  */
 
 import { randomUUID } from "crypto";
@@ -89,7 +89,7 @@ const TIER_LIMITS: Record<CreditAccount["tier"], { monthly: number; daily: numbe
   }
 }
 
-const FREE_STARTER_BALANCE = 100;
+const FREE_TIER_GRANT = TIER_LIMITS.free.monthly; // 100 — granted ONCE, at signup
 
 // ---------------------------------------------------------------------------
 // Disk persistence
@@ -188,7 +188,7 @@ export function initAccount(companyId: string): CreditAccount {
 
   const account: CreditAccount = {
     companyId,
-    balance: FREE_STARTER_BALANCE,
+    balance: FREE_TIER_GRANT,
     tier: "free",
     usageLog: [],
   };
@@ -336,24 +336,42 @@ export function upgradeTier(companyId: string, tier: CreditAccount["tier"]): voi
 
 // ---------------------------------------------------------------------------
 // Stripe pricing config
+//
+// ONE SOURCE OF TRUTH. These used to be two tables that disagreed: the ADVERTISED
+// one promised Starter 500 and Pro 2000 while the ENFORCED TIER_LIMITS capped
+// them at 100 and 1000. So the landing page and GET /billing/config over-promised
+// by 5x and 2x, and a Stripe top-up handed over credits the account could never
+// spend. TIER_LIMITS is the real one; the advertised table is now DERIVED from it,
+// so the two cannot drift apart again.
+//
+// The free tier is named "Free", not "Starter": "Starter" collides with the paid
+// DNA Starter offering and reads as though the $0 tier includes it. The Stripe
+// priceId keeps its historical name (it is an external identifier, and the free
+// tier is $0 so nothing checks it out).
 // ---------------------------------------------------------------------------
 
+export const TIER_PRICES: Record<string, { name: string; price: string; credits: number; priceId: string }> = {
+  free:   { name: "Free",   price: "$0/mo",   credits: TIER_LIMITS.free.monthly,   priceId: "price_starter_monthly" },
+  pro:    { name: "Pro",    price: "$49/mo",  credits: TIER_LIMITS.pro.monthly,    priceId: "price_pro_monthly" },
+  agency: { name: "Agency", price: "$199/mo", credits: TIER_LIMITS.agency.monthly, priceId: "price_agency_monthly" },
+};
+
+/** What a successful Stripe payment grants, derived from TIER_PRICES so a price
+ *  can never grant more than its tier can spend.
+ *
+ *  NOTE on refills: `invoice.payment_succeeded` fires on every renewal, which is
+ *  what refills a PAID tier monthly. The free tier has no subscription, so its
+ *  grant happens ONCE at signup and never repeats — "100 credits / month" would be
+ *  as wrong as "500". TIER_LIMITS.monthly is a spend CAP, not a refill. */
 export const PRICE_TO_CREDITS: Record<string, { credits: number; tier?: CreditAccount["tier"] }> = {
-  // Subscription tiers (monthly)
-  "price_starter_monthly":    { credits: 500,   tier: "free" },
-  "price_pro_monthly":        { credits: 2000,  tier: "pro" },
-  "price_agency_monthly":     { credits: 10000, tier: "agency" },
-  // One-time credit packs
+  [TIER_PRICES.free.priceId]:   { credits: TIER_PRICES.free.credits,   tier: "free" },
+  [TIER_PRICES.pro.priceId]:    { credits: TIER_PRICES.pro.credits,    tier: "pro" },
+  [TIER_PRICES.agency.priceId]: { credits: TIER_PRICES.agency.credits, tier: "agency" },
+  // One-time credit packs (no tier change)
   "price_pack_spark":    { credits: 150 },
   "price_pack_boost":    { credits: 550 },
   "price_pack_power":    { credits: 1200 },
   "price_pack_agency":   { credits: 4000 },
-};
-
-export const TIER_PRICES: Record<string, { name: string; price: string; credits: number; priceId: string }> = {
-  free:   { name: "Starter", price: "$0/mo",   credits: 500,   priceId: "price_starter_monthly" },
-  pro:    { name: "Pro",     price: "$49/mo",  credits: 2000,  priceId: "price_pro_monthly" },
-  agency: { name: "Agency",  price: "$199/mo", credits: 10000, priceId: "price_agency_monthly" },
 };
 
 export const CREDIT_PACKS: Array<{ name: string; price: string; credits: number; priceId: string }> = [

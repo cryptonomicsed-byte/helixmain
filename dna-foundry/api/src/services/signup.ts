@@ -12,7 +12,7 @@
  *             <slug>/seckey          the channel identity onboarding writes
  *             <slug>/passkeys.json   the credential, for passkey signup
  *             <slug>/account.json    the signup record (who, how, when)
- *             the credit account     Starter tier, free
+ *             the credit account     Free tier, granted once
  *
  *   does NOT  write a card. The card comes from the URL the owner pastes next,
  *             and a hand-authored card JSON without a real compiler hash is the
@@ -179,7 +179,7 @@ export async function provisionCompany(opts: {
   };
   await fs.promises.writeFile(accountPath(slug), JSON.stringify(account, null, 2), { mode: 0o600 });
 
-  // Starter tier. initAccount refuses unless the company exists on disk — which it
+  // Free tier. initAccount refuses unless the company exists on disk — which it
   // now does (ensureKeys just wrote the key file). A failure here must not lose the
   // signup: the account store is in-memory and reloads from disk.
   if (isProvisionedCompany(slug)) {

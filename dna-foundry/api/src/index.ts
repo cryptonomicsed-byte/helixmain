@@ -3148,7 +3148,7 @@ app.post("/auth/signup", async (req, reply) => {
 //
 // A stranger becomes a company in ONE passkey ceremony: no operator, no email,
 // no invite token. The gate that used to sit here was solving ABUSE, and abuse is
-// better solved by guardrails — a bounded Starter grant, a per-IP signup limit,
+// better solved by guardrails — a bounded free-tier grant, a per-IP signup limit,
 // and a per-account daily extraction cap (see /extract). Making a human approve
 // every signup solved the abuse problem by making the product unusable.
 //

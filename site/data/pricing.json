@@ -1,11 +1,11 @@
 {
-  "_comment": "Source of truth for the API's tier table is dna-foundry/api/src/services/metering.ts (TIER_PRICES), which GET /billing/config serves. These values are a snapshot of that table taken 2026-10-10; if the API's tiers change, change them here too — the landing will not know on its own.",
+  "_comment": "Source of truth is dna-foundry/api/src/services/metering.ts — TIER_LIMITS (enforced) with TIER_PRICES DERIVED from it. These values are a snapshot of that table taken 2026-10-10; if the API's tiers change, change them here too. NOTE: credits are the SPEND CAP. Paid tiers refill from Stripe's invoice.payment_succeeded; the FREE tier is granted once at signup and does not repeat, so its copy must not say '/month'.",
   "tiers": [
     {
       "key": "free",
-      "name": "Starter",
+      "name": "Free",
       "price": "$0/mo",
-      "credits": 500,
+      "credits": 100,
       "featured": false,
       "cta": "Start free",
       "features": [
@@ -13,23 +13,23 @@
         "Card-grounded voice agent",
         "Public directory listing",
         "Owner dashboard + approvals",
-        "500 credits / month"
+        "100 credits to start — about 20 card extractions"
       ]
     },
     {
       "key": "pro",
       "name": "Pro",
       "price": "$49/mo",
-      "credits": 2000,
+      "credits": 1000,
       "featured": true,
       "cta": "Choose Pro",
       "features": [
-        "Everything in Starter",
+        "Everything in Free",
         "Your own published site",
-        "QR + NFC talk codes",
+        "QR talk codes",
         "Campaign + content generation",
         "Lead hunting",
-        "2,000 credits / month"
+        "1,000 credits / month"
       ]
     },
     {
@@ -41,9 +41,9 @@
       "cta": "Choose Agency",
       "features": [
         "Everything in Pro",
-        "Multiple businesses under one roof",
-        "Portfolio + cross-business analytics",
-        "Priority onboarding",
+        "A far larger monthly allowance",
+        "A higher daily ceiling (500 credits/day)",
+        "Discounted credit packs",
         "10,000 credits / month"
       ]
     }
