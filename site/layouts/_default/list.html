@@ -1,0 +1,32 @@
+{{ define "main" }}
+{{ $title := .Title }}
+{{ if eq .Section "b" }}{{ $title = "Business pages" }}{{ end }}
+<style>
+  .idx-header { margin-bottom: 1.5rem; }
+  .idx-header p { color: var(--muted); font-size: 0.9rem; }
+  .idx-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem; }
+  .idx-card {
+    display: block; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 1.1rem; color: var(--text); transition: border-color 0.15s;
+  }
+  .idx-card:hover { border-color: var(--accent); text-decoration: none; }
+  .idx-card h3 { color: #fff; font-size: 0.95rem; margin-bottom: 0.3rem; }
+  .idx-card .tagline { font-size: 0.82rem; color: var(--muted); }
+</style>
+
+<div class="idx-header">
+  <h1>{{ $title }}</h1>
+  <p>{{ len .Pages }} {{ if eq (len .Pages) 1 }}business{{ else }}businesses{{ end }}</p>
+</div>
+
+<div class="idx-grid">
+  {{ range .Pages }}
+  {{ $cid := .Params.company_id }}
+  {{ $c := index $.Site.Data.companies $cid }}
+  <a class="idx-card" href="{{ .Permalink }}">
+    <h3>{{ .Title }}</h3>
+    {{ with $c }}{{ with .tagline }}<p class="tagline">{{ . }}</p>{{ end }}{{ end }}
+  </a>
+  {{ end }}
+</div>
+{{ end }}

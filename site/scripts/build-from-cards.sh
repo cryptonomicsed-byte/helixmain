@@ -164,5 +164,8 @@ done
 
 echo "==> Running hugo"
 cd "$SITE_DIR"
-hugo --minify
+# --cleanDestinationDir prunes public/ files that no longer exist under static/.
+# Without it Hugo is incremental: a QR for a company whose identity file was
+# removed keeps getting served from public/ (and then rsync'd to the web root).
+hugo --minify --cleanDestinationDir
 echo "==> Done — output in site/public/"
