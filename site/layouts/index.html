@@ -10,6 +10,17 @@
     {{ $live = $live | append (dict "id" $id "c" $c) }}
   {{ end }}
 {{ end }}
+{{/* Content-hash every asset so a redeploy can never be masked by a cache.
+     This project has already been bitten once by a stale bundle (a correct PIN
+     that the browser refused because it was running an older build), so the
+     landing does not rely on a short TTL to stay fresh. Hashing the file BYTES
+     means the token only changes when the file does — which matters because
+     infra/site-publish.sh re-runs hugo on every customer publish, and a
+     build-timestamp token would needlessly invalidate these on each one. */}}
+{{ $cssV := readFile "static/landing.css" | crypto.MD5 }}
+{{ $jsV := readFile "static/landing.js" | crypto.MD5 }}
+{{ $gsapV := readFile "static/vendor/gsap.min.js" | crypto.MD5 }}
+{{ $stV := readFile "static/vendor/ScrollTrigger.min.js" | crypto.MD5 }}
 <!doctype html>
 <html lang="en">
 <head>
@@ -23,7 +34,7 @@
 <meta property="og:url" content="{{ .Permalink }}">
 <meta name="theme-color" content="#0a0e1a">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%236366f1'/%3E%3Cpath d='M10 9v14M22 9v14M10 16h12' stroke='%23fff' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="/landing.css">
+<link rel="stylesheet" href="/landing.css?v={{ $cssV }}">
 </head>
 <body>
 
@@ -345,8 +356,8 @@ hash: sha256:9abb3682…
   </div>
 </footer>
 
-<script src="/vendor/gsap.min.js" defer></script>
-<script src="/vendor/ScrollTrigger.min.js" defer></script>
-<script src="/landing.js" defer></script>
+<script src="/vendor/gsap.min.js?v={{ $gsapV }}" defer></script>
+<script src="/vendor/ScrollTrigger.min.js?v={{ $stV }}" defer></script>
+<script src="/landing.js?v={{ $jsV }}" defer></script>
 </body>
 </html>
