@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "helix": {
+      "command": "node",
+      "args": ["dna-foundry/mcp/helix-mcp.js"],
+      "env": {
+        "HELIX_API_URL": "http://127.0.0.1:3101"
+      }
+    },
+    "spark": {
+      "command": "node",
+      "args": ["dna-foundry/mcp/spark-gate-mcp.js"]
+    }
+  }
+}
