@@ -184,6 +184,7 @@ import {
   pendingSlugs,
   provisionCompany,
   findByGoogleSub,
+  readAccount,
 } from "./services/signup";
 
 const app = Fastify({ logger: true });
@@ -748,41 +749,47 @@ app.get("/cards/:id/proposals", { preHandler: [requireAuth, requireOwner] }, asy
 });
 
 // GET /companies — list helix companies + any extracted cards in CARDS dir
-app.get("/companies", { preHandler: requireAuth }, async (_req, reply) => {
+app.get("/companies", { preHandler: requireAuth }, async (req, reply) => {
   await ensureDirs();
+
+  // TENANT ISOLATION — this used to return EVERY company on the box to any caller
+  // holding a valid key: the entire client list, by name, to any stranger who
+  // signed up. It was also why a fresh signup's dashboard logged a wall of 403s —
+  // the company switcher enumerated all of them and then could not read any.
+  //
+  // You see YOUR company. Seeing others is a deliberate grant (multi-company
+  // membership), never the default. There is no card or account for anyone else
+  // in this response to leak.
+  const mine = (req as AuthCarrier).auth?.companyId ?? "";
+  if (!mine) return reply.code(403).send({ ok: false, error: "no company for this credential" });
+
   const results: object[] = [];
 
-  // 1. Live onboarded companies from /etc/helix/companies/
-  const helixDirs = await fs.readdir(HELIX_COMPANIES).catch(() => [] as string[]);
-  for (const id of helixDirs) {
-    const cardPath = path.join(HELIX_COMPANIES, id, "card.json");
-    try {
-      const card = JSON.parse(await fs.readFile(cardPath, "utf8"));
+  // Onboarded: the card exists.
+  try {
+    const card = JSON.parse(await fs.readFile(path.join(HELIX_COMPANIES, mine, "card.json"), "utf8"));
+    results.push({
+      id: mine,
+      name: card.identity?.name ?? mine,
+      cardVersion: card.version ?? 1,
+      lastUpdated: card.created_at ?? "",
+      source: "helix",
+    });
+  } catch {
+    // Provisioned but not yet onboarded: the account exists, the card does not.
+    // Returned deliberately, so a brand-new signup sees itself in the dashboard
+    // instead of an empty list.
+    const acct = readAccount(mine);
+    if (acct) {
       results.push({
-        id,
-        name:        card.identity?.name ?? id,
-        cardVersion: card.version ?? 1,
-        lastUpdated: card.created_at ?? "",
-        source:      "helix",
+        id: mine,
+        name: acct.business ?? mine,
+        cardVersion: 0,
+        lastUpdated: acct.createdAt ?? "",
+        source: "signup",
+        hasCard: false,
       });
-    } catch { /* skip unreadable entries */ }
-  }
-
-  // 2. Extracted/test cards in api/data/cards/
-  const files = await fs.readdir(CARDS).catch(() => [] as string[]);
-  const byId: Record<string, string> = {};
-  for (const f of files.filter((f) => f.endsWith(".json"))) {
-    const base = f.replace(/\.json$/, "").split("_v")[0];
-    if (!byId[base] || f > byId[base]) byId[base] = f;
-  }
-  for (const [, filename] of Object.entries(byId)) {
-    try {
-      const card = JSON.parse(await fs.readFile(path.join(CARDS, filename), "utf8"));
-      const id = card.org_id ?? card.id;
-      if (!results.find((r: any) => r.id === id)) {
-        results.push({ id, name: card.identity?.name ?? id, cardVersion: card.version ?? 1, lastUpdated: card.created_at ?? "", source: "extracted" });
-      }
-    } catch { /* skip */ }
+    }
   }
 
   return reply.code(200).send(results);
