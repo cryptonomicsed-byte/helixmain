@@ -2,13 +2,14 @@
   "name": "@helixmain/spark-gate-mcp",
   "version": "0.1.0",
   "private": true,
-  "description": "SparkGatekeeper MCP shim — one tool (spark__invoke) forwarding ActionRequests to the hold queue at POST /invoke.",
+  "description": "HelixMain MCP servers — spark-gate-mcp (the SparkGatekeeper gate shim) and helix-mcp (the platform surface: voice/content/leads/site).",
   "type": "commonjs",
   "bin": {
-    "spark-gate-mcp": "./spark-gate-mcp.js"
+    "spark-gate-mcp": "./spark-gate-mcp.js",
+    "helix-mcp": "./helix-mcp.js"
   },
   "scripts": {
-    "test": "node --test spark-gate-mcp.test.js"
+    "test": "node --test spark-gate-mcp.test.js helix-mcp.test.js"
   },
   "license": "MIT"
 }
