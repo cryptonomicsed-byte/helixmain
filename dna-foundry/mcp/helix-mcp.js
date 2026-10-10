@@ -749,8 +749,12 @@ async function handle(msg) {
         ? !!out.body && out.body.ok !== false
         : out.httpStatus >= 200 && out.httpStatus < 300 && (!out.body || out.body.ok !== false);
       const payload = out.local
-        ? { tool: name, ...(out.body ?? {}) }
-        : { tool: name, http_status: out.httpStatus, ...(out.body ?? {}) };
+        ? (Array.isArray(out.body)
+            ? { tool: name, result: out.body }
+            : { tool: name, ...(out.body ?? {}) })
+        : (Array.isArray(out.body)
+            ? { tool: name, http_status: out.httpStatus, result: out.body }
+            : { tool: name, http_status: out.httpStatus, ...(out.body ?? {}) });
       return rpcResult(id, {
         content: [{ type: "text", text: JSON.stringify(payload) }],
         isError: !ok,

@@ -493,6 +493,42 @@ test("crm.manage maps each action to its real endpoint", async () => {
   }
 });
 
+test("a list-shaped API answer keeps its array shape (no numeric-key flattening)", async () => {
+  const { rpc, close } = await setup({
+    "/crm/contacts/demo-barber": { status: 200, body: [{ id: "c1" }, { id: "c2" }] },
+  });
+  try {
+    const r = await rpc("tools/call", {
+      name: "crm.manage",
+      arguments: { companyId: "demo-barber", action: "list" },
+    });
+    assert.equal(r.result.isError, false);
+    const payload = JSON.parse(r.result.content[0].text);
+    // Spreading an array into the payload produced {"0":…,"1":…} and made an
+    // empty result indistinguishable from no result. It stays an array.
+    assert.deepEqual(payload.result, [{ id: "c1" }, { id: "c2" }]);
+    assert.equal(payload["0"], undefined);
+  } finally {
+    await close();
+  }
+});
+
+test("an empty list answer is an empty array, not a bare ok", async () => {
+  const { rpc, close } = await setup({
+    "/crm/contacts/demo-barber": { status: 200, body: [] },
+  });
+  try {
+    const r = await rpc("tools/call", {
+      name: "crm.manage",
+      arguments: { companyId: "demo-barber", action: "list" },
+    });
+    const payload = JSON.parse(r.result.content[0].text);
+    assert.deepEqual(payload.result, []);
+  } finally {
+    await close();
+  }
+});
+
 test("crm.manage confirm/deny apply a proposal and carry the owner credential", async () => {
   const { rpc, calls, close } = await setup(
     {
