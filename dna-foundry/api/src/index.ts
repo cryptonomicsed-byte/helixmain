@@ -246,7 +246,7 @@ async function requireAuth(req: FastifyRequest, reply: FastifyReply): Promise<vo
   // Machine callers present a per-company key; the browser presents a session
   // cookie minted by a passkey login. Either way the SERVER decides the tenant —
   // a caller-supplied companyId is never trusted on its own.
-  let rec: KeyRecord | undefined = lookupKey(req.headers["x-api-key"]);
+  let rec: KeyRecord | null = lookupKey(req.headers["x-api-key"]);
   if (!rec) {
     const sess = readSession(parseCookies(req.headers.cookie)[SESSION_COOKIE]);
     if (sess) rec = { companyId: sess.company, level: sess.role === "owner" ? "owner" : "company" };

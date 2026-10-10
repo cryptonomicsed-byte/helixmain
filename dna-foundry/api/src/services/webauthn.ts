@@ -7,7 +7,9 @@
  * "options" and "verify" would otherwise kill the ceremony, and an in-process map
  * is one more thing to leak.
  *
- * Uses @simplewebauthn/server v9 (the same family the browser side already uses).
+ * Targets @simplewebauthn/server v9 (the same major as the browser side). v9 notes
+ * that bite: `userID` is a STRING, descriptors carry an explicit `type`, and
+ * `credentialID` / `credentialPublicKey` come back — and are expected — as bytes.
  */
 import {
   generateRegistrationOptions,
@@ -31,12 +33,13 @@ export async function registrationOptions(
   const opts = await generateRegistrationOptions({
     rpName: RP_NAME,
     rpID: RP_ID,
-    userID: Buffer.from(company, "utf8"),
+    userID: company, // v9 takes the handle as a string
     userName: company,
     userDisplayName: company,
     attestationType: "none",
     excludeCredentials: existing.map((c) => ({
       id: c.id,
+      type: "public-key" as const,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       transports: (c.transports ?? []) as any,
     })),
@@ -74,7 +77,8 @@ export async function verifyRegistration(
   }
   const info = result.registrationInfo;
   return {
-    id: info.credentialID,
+    // v9 returns the credential id as raw bytes; store it base64url like the browser.
+    id: Buffer.from(info.credentialID).toString("base64url"),
     publicKey: Buffer.from(info.credentialPublicKey).toString("base64url"),
     counter: info.counter,
     // transports aren't reliably reported in the attestation; the browser supplies
@@ -111,7 +115,8 @@ export async function verifyAuthentication(
     expectedRPID: RP_ID,
     requireUserVerification: true,
     authenticator: {
-      credentialID: cred.id,
+      // v9 wants the id and public key as bytes here.
+      credentialID: Buffer.from(cred.id, "base64url"),
       credentialPublicKey: Buffer.from(cred.publicKey, "base64url"),
       counter: cred.counter,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
