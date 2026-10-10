@@ -24,13 +24,11 @@ site/data/
 site/static/
 site/content/b/
 
-# Per-run compiled card output. The load-bearing demo cards under
-# dna-foundry/compiled/ (notably dna_c1640d90_v4/openshell-policy.yaml, which
-# ws5-boot.sh and deploy/zeroclaw/ws5-job3-apply.sh READ) stay tracked on
-# purpose — do not blanket-ignore dna-foundry/compiled/.
-dna-foundry/compiled/org_*/
-dna-foundry/compiled/test_*/
-dna-foundry/compiled/e2e-*/
+# Per-run compiled card output. Everything under compiled/ is generated; the
+# demo cards that ARE tracked stay tracked — ignore rules never apply to tracked
+# files. (Notably dna_c1640d90_v4/openshell-policy.yaml, which ws5-boot.sh and
+# deploy/zeroclaw/ws5-job3-apply.sh READ.) Add a new fixture with `git add -f`.
+dna-foundry/compiled/*
 
 # Cards the API extracts at /extract — runtime output, not source. The single
 # committed demo fixture in this dir stays tracked (tracked files are unaffected
