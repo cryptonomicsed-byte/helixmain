@@ -23,16 +23,42 @@
  *
  * Env:
  *   HELIX_API_URL   default http://127.0.0.1:3101
+ *   HELIX_API_KEY   optional override credential. When unset, the server reads
+ *                   the target company's own company-level key from
+ *                   <HELIX_CARD_ROOT>/<companyId>/api-keys.json — the presented
+ *                   key IS the tenant identity, so we never hard-code one.
  *
  * Transport: stdio MCP, newline-delimited JSON-RPC 2.0.
  */
 
 "use strict";
 
+const fs = require("fs");
+const path = require("path");
+
 const API_URL = (process.env.HELIX_API_URL || "http://127.0.0.1:3101").replace(/\/+$/, "");
+const KEY_ROOT = process.env.HELIX_CARD_ROOT || "/etc/helix/companies";
+const ENV_KEY = process.env.HELIX_API_KEY || "";
 const SERVER_NAME = "helix-mcp";
 const SERVER_VERSION = "0.1.0";
 const PROTOCOL_VERSION = "2024-11-05";
+
+/** Resolve the credential to present for a call against `companyId`.
+ *
+ *  All business routes are authenticated (hardening #1). The company-level key
+ *  lives in the same 0600 store the API issues from, so a machine caller reads
+ *  the tenant's own key rather than carrying a copy. HELIX_API_KEY overrides. */
+function keyFor(companyId) {
+  if (ENV_KEY) return ENV_KEY;
+  if (!companyId) return null;
+  try {
+    const rec = JSON.parse(
+      fs.readFileSync(path.join(KEY_ROOT, String(companyId), "api-keys.json"), "utf8"));
+    return typeof rec.company === "string" && rec.company ? rec.company : null;
+  } catch {
+    return null; // no key on disk — the API will answer 401, which is honest
+  }
+}
 
 const ROLES = ["front-desk", "sales", "content", "owner-manager"];
 
@@ -107,9 +133,11 @@ const TOOLS = [
   {
     name: "site.publish",
     description:
-      "Generate the company's landing site from its DNA card and return where it is " +
-      "served. The site is built deterministically from the card — the card stays the " +
-      "source of truth. Costs credits to generate.",
+      "Publish the company's landing page to the public site and return its real " +
+      "URL (https://helixmain.duckdns.org/b/{companyId}/). The page is built " +
+      "deterministically from the card — the card stays the source of truth — and " +
+      "deployed to the web root. Credits are charged only after a successful " +
+      "publish, so a failed build costs nothing.",
     inputSchema: {
       type: "object",
       properties: {
@@ -125,11 +153,14 @@ const TOOLS = [
  *  not a transport failure. Only an unreachable API is an error. */
 async function api(pathname, body) {
   const url = API_URL + pathname;
+  const headers = { "content-type": "application/json" };
+  const key = keyFor(body && body.companyId);
+  if (key) headers["x-api-key"] = key;
   let res;
   try {
     res = await fetch(url, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers,
       body: JSON.stringify(body ?? {}),
     });
   } catch (e) {
@@ -210,11 +241,9 @@ const HANDLERS = {
   },
 
   "site.publish": async (a) => {
-    const r = await api("/site/generate", { companyId: a.companyId });
-    if (r.body && typeof r.body === "object" && r.body.ok) {
-      r.body = { ...r.body, sitePath: `/site/${a.companyId}` };
-    }
-    return r;
+    // The API now publishes via the Hugo pipeline and returns the real public
+    // URL in `url`; we surface it verbatim rather than inventing a path.
+    return api("/site/generate", { companyId: a.companyId });
   },
 };
 

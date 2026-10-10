@@ -95,6 +95,7 @@ import { buildPortfolio } from "./services/portfolio";
 import {
   initAccount,
   getCreditSummary,
+  checkQuota,
   deductCredits,
   refundCredits,
   topUpCredits,
@@ -2044,45 +2045,118 @@ app.get("/plan/:companyId/html", { preHandler: requireAuth }, async (req, reply)
 });
 
 // ---------------------------------------------------------------------------
-// Site generator routes
+// Site routes (hardening #3)
+//
+// Two deliberately distinct flows:
+//   PUBLISH  POST /site/generate — rebuild from cards via Hugo + rsync to the
+//            web root, return the REAL public URL. Credits charged ONLY after
+//            a successful build+deploy.
+//   PREVIEW  POST /site/preview  — LLM single-file HTML held in memory for
+//            review. Never public, never charged. (Formerly /site/generate.)
 // ---------------------------------------------------------------------------
 
-// POST /site/generate — generate a single-file HTML landing page from a card
+const PUBLIC_SITE_BASE =
+  process.env.HELIX_PUBLIC_SITE || "https://helixmain.duckdns.org";
+const PUBLISH_SCRIPT =
+  process.env.HELIX_PUBLISH_SCRIPT || "/root/helixmain/infra/site-publish.sh";
+
+function runPublish(companyId: string, timeoutMs = 180_000) {
+  return new Promise<{ code: number; out: string; err: string }>((resolve) => {
+    const p = spawn("/bin/bash", [PUBLISH_SCRIPT, companyId], {
+      cwd: ROOT,
+      env: { ...process.env, HELIX_CARD_ROOT: HELIX_COMPANIES },
+    });
+    let out = "", err = "";
+    const timer = setTimeout(() => {
+      try { p.kill("SIGKILL"); } catch {}
+      err += "\n[site-publish timed out]";
+    }, timeoutMs);
+    p.stdout.on("data", (d) => (out += d));
+    p.stderr.on("data", (d) => (err += d));
+    p.on("close", (code) => { clearTimeout(timer); resolve({ code: code ?? 1, out, err }); });
+    p.on("error", (e) => { clearTimeout(timer); resolve({ code: 1, out, err: err + String(e) }); });
+  });
+}
+
+// POST /site/generate — publish the company's page to the public site.
 app.post("/site/generate", { preHandler: requireAuth }, async (req, reply) => {
   const body = (req.body ?? {}) as { companyId?: string };
   if (!body.companyId) return reply.code(400).send({ ok: false, error: "companyId required" });
-
   const companyId = body.companyId;
-  let usageEntry: UsageEntry | null = null;
+
+  const cardPath = await findCard(companyId);
+  if (!cardPath) return reply.code(404).send({ ok: false, error: "card not found" });
+
+  // Refuse before doing the work; charge only AFTER success (below).
+  const quota = checkQuota(companyId);
+  if (!quota.allowed) {
+    return reply.code(402).send({
+      ok: false,
+      error: `Quota exceeded for company ${companyId}. Remaining: ${quota.remaining}. Resets at: ${quota.resetAt}`,
+    });
+  }
+
+  const started = Date.now();
+  const build = await runPublish(companyId);
+  if (build.code !== 0) {
+    return reply.code(502).send({
+      ok: false,
+      published: false,
+      error: `site build failed (exit ${build.code})`,
+      stderr: build.err.slice(-2000),
+    });
+  }
+
+  // Published. NOW charge — credits follow a real, publicly reachable page.
+  let usage: UsageEntry;
   try {
-    usageEntry = await deductCredits(companyId, "site_generate");
+    usage = await deductCredits(companyId, "site_generate");
   } catch (e) {
-    if (e instanceof QuotaExceeded) return reply.code(402).send({ error: (e as Error).message });
+    if (e instanceof QuotaExceeded) return reply.code(402).send({ ok: false, error: (e as Error).message });
     throw e;
   }
 
-  const cardPath = await findCard(companyId);
-  if (!cardPath) {
-    if (usageEntry) await refundCredits(usageEntry.id).catch(() => {});
-    return reply.code(404).send({ ok: false, error: "card not found" });
-  }
+  const url = `${PUBLIC_SITE_BASE}/b/${companyId}/`;
+  return reply.code(200).send({
+    ok: true,
+    published: true,
+    companyId,
+    url,
+    buildMs: Date.now() - started,
+    creditsCharged: usage.creditsDeducted,
+    generatedAt: new Date().toISOString(),
+  });
+});
+
+// POST /site/preview — LLM single-file HTML preview (never public, never charged).
+app.post("/site/preview", { preHandler: requireAuth }, async (req, reply) => {
+  const body = (req.body ?? {}) as { companyId?: string };
+  if (!body.companyId) return reply.code(400).send({ ok: false, error: "companyId required" });
+
+  const cardPath = await findCard(body.companyId);
+  if (!cardPath) return reply.code(404).send({ ok: false, error: "card not found" });
 
   try {
-    const card   = JSON.parse(await fs.readFile(cardPath, "utf8"));
-    const result = await generateWebsite(card, companyId);
-    return reply.code(200).send({ ok: true, companyId, generatedAt: result.generatedAt });
+    const card = JSON.parse(await fs.readFile(cardPath, "utf8"));
+    const result = await generateWebsite(card, body.companyId);
+    return reply.code(200).send({
+      ok: true,
+      preview: true,
+      companyId: body.companyId,
+      previewUrl: `/api/site/${body.companyId}`,
+      generatedAt: result.generatedAt,
+    });
   } catch (e) {
-    if (usageEntry) await refundCredits(usageEntry.id).catch(() => {});
     const msg = e instanceof Error ? e.message : String(e);
     return reply.code(500).send({ ok: false, error: msg });
   }
 });
 
-// GET /site/:companyId — serve the generated HTML landing page
+// GET /site/:companyId — serve the PREVIEW HTML (not the public site).
 app.get("/site/:companyId", { preHandler: requireAuth }, async (req, reply) => {
   const { companyId } = req.params as { companyId: string };
   const site = getWebsite(companyId);
-  if (!site) return reply.code(404).send({ ok: false, error: "no site generated for company" });
+  if (!site) return reply.code(404).send({ ok: false, error: "no preview generated for company" });
   return reply
     .code(200)
     .header("Content-Type", "text/html; charset=utf-8")

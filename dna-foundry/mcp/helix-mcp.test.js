@@ -15,7 +15,7 @@ const { spawn } = require("node:child_process");
 const path = require("node:path");
 
 /** Boot a stub API + the real MCP server wired at it. Returns a driver. */
-async function setup(replies = {}) {
+async function setup(replies = {}, extraEnv = {}) {
   const calls = [];
   const api = http.createServer((req, res) => {
     let body = "";
@@ -27,7 +27,7 @@ async function setup(replies = {}) {
       } catch {
         /* leave null */
       }
-      calls.push({ path: req.url, body: parsed });
+      calls.push({ path: req.url, body: parsed, headers: req.headers });
       const r = replies[req.url] ?? { status: 200, body: { ok: true } };
       res.writeHead(r.status, { "content-type": "application/json" });
       res.end(JSON.stringify(r.body));
@@ -37,7 +37,7 @@ async function setup(replies = {}) {
   const apiUrl = `http://127.0.0.1:${api.address().port}`;
 
   const proc = spawn(process.execPath, [path.join(__dirname, "helix-mcp.js")], {
-    env: { ...process.env, HELIX_API_URL: apiUrl },
+    env: { ...process.env, HELIX_API_URL: apiUrl, ...extraEnv },
     stdio: ["pipe", "pipe", "pipe"],
   });
   const pending = [];
@@ -101,7 +101,7 @@ test("voice.call posts the message to /agent/session and returns the reply", asy
       arguments: { companyId: "demo-barber", message: "When do you open?" },
     });
     assert.equal(result.isError, false);
-    assert.deepEqual(calls, [
+    assert.deepEqual(calls.map((c) => ({ path: c.path, body: c.body })), [
       { path: "/agent/session", body: { companyId: "demo-barber", message: "When do you open?" } },
     ]);
     assert.match(result.content[0].text, /We open at 9\./);
@@ -183,9 +183,12 @@ test("leads.discover routes by lat/lng: GPS path when present, Apollo path other
   }
 });
 
-test("site.publish generates the site and returns where it is served", async () => {
+test("site.publish publishes and returns the real public URL", async () => {
   const { rpc, calls, close } = await setup({
-    "/site/generate": { status: 200, body: { ok: true, companyId: "cafe", generatedAt: "t" } },
+    "/site/generate": {
+      status: 200,
+      body: { ok: true, published: true, companyId: "cafe", url: "https://helixmain.duckdns.org/b/cafe/", creditsCharged: 40 },
+    },
   });
   try {
     const { result } = await rpc("tools/call", {
@@ -193,10 +196,53 @@ test("site.publish generates the site and returns where it is served", async () 
       arguments: { companyId: "cafe" },
     });
     assert.equal(result.isError, false);
-    assert.deepEqual(calls, [{ path: "/site/generate", body: { companyId: "cafe" } }]);
-    assert.match(result.content[0].text, /"sitePath":"\/site\/cafe"/);
+    assert.deepEqual(calls.map((c) => ({ path: c.path, body: c.body })), [
+      { path: "/site/generate", body: { companyId: "cafe" } },
+    ]);
+    // the API's real URL is surfaced verbatim — not a fabricated path
+    assert.match(result.content[0].text, /https:\/\/helixmain\.duckdns\.org\/b\/cafe\//);
   } finally {
     await close();
+  }
+});
+
+test("the machine caller presents the tenant key (HELIX_API_KEY override)", async () => {
+  const { rpc, calls, close } = await setup(
+    { "/agent/session": { status: 200, body: { ok: true, reply: "hi" } } },
+    { HELIX_API_KEY: "hk_testkey_from_env" },
+  );
+  try {
+    await rpc("tools/call", {
+      name: "voice.call",
+      arguments: { companyId: "demo-barber", message: "hello" },
+    });
+    // routes are authenticated (#1): without this the API answers 401
+    assert.equal(calls[0].headers["x-api-key"], "hk_testkey_from_env");
+  } finally {
+    await close();
+  }
+});
+
+test("with no env override the key is read from the company's own 0600 store", async () => {
+  const os = require("node:os");
+  const fsn = require("node:fs");
+  const root = fsn.mkdtempSync(path.join(os.tmpdir(), "helix-keys-"));
+  fsn.mkdirSync(path.join(root, "cafe"), { recursive: true });
+  fsn.writeFileSync(
+    path.join(root, "cafe", "api-keys.json"),
+    JSON.stringify({ company: "hk_from_disk", owner: "hk_owner_x" }),
+  );
+
+  const { rpc, calls, close } = await setup(
+    { "/site/generate": { status: 200, body: { ok: true, url: "u" } } },
+    { HELIX_CARD_ROOT: root, HELIX_API_KEY: "" },
+  );
+  try {
+    await rpc("tools/call", { name: "site.publish", arguments: { companyId: "cafe" } });
+    assert.equal(calls[0].headers["x-api-key"], "hk_from_disk");
+  } finally {
+    await close();
+    fsn.rmSync(root, { recursive: true, force: true });
   }
 });
 
