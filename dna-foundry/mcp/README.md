@@ -84,9 +84,13 @@ reachable (i.e. on the VPS host). To drive it from elsewhere, expose the API ove
 the tailnet (the same pattern as `paperclip-tailnet.socket`) and set
 `HELIX_API_URL` to that address.
 
-## One caveat worth knowing
+## Metering note
 
-The `free` tier is `monthly 100 / daily 20`. Several single operations cost more
-than the daily cap — `site_generate` is 40, `campaign_prd` + `campaign_assets` is
-60, `sales_qualify_bulk` is 25 — so a free-tier company is **permanently** blocked
-from them, not merely rate-limited. Worth a look before it surprises a client.
+The daily cap is a *soft* rate limit: `checkQuota` allows an operation whenever
+any credit remains today — it does **not** compare the operation's cost to what
+is left. A single op therefore always ran once; what `free`'s old `daily: 20`
+actually prevented was *finishing a multi-op workflow in one day* (a campaign is
+PRD 30 + assets 30 = 60). `free` is now `monthly 100 / daily 75` so a whole
+workflow fits in a day, and a load-time invariant refuses to boot if any tier's
+daily cap drops below the priciest workflow. The monthly cap is the real budget.
+(The earlier "permanently blocked" claim was wrong — corrected here.)

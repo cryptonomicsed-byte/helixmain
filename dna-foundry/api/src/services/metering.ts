@@ -61,28 +61,28 @@ const CREDIT_COSTS: Record<string, number> = {
 // USD cost-per-credit (rough: $0.01 / credit)
 const USD_PER_CREDIT = 0.01;
 
-// The daily cap is a RATE limit, so it must never sit below the cost of the most
-// expensive single workflow — otherwise a tier is *permanently* blocked from that
-// operation, no matter how long it waits, instead of merely rate-limited. Free's
-// old daily:20 was below site_generate:40 and campaign_prd+campaign_assets:60, so
-// a free company could never generate a site or run a campaign. The MONTHLY cap is
-// the real budget; the daily cap only spreads it out. Most expensive single
-// workflow today: a campaign (30+30 = 60).
+// The daily cap is a SOFT rate limit: checkQuota() allows an operation whenever
+// ANY credit remains today (remaining > 0) — it does NOT compare the operation's
+// cost to what is left. So a single operation only needs some headroom, but a
+// workflow spanning several operations needs the daily cap to EXCEED the
+// workflow's total cost or it cannot finish in one day. The MONTHLY cap is the
+// real budget. Free's old daily:20 let a funded company do one site_generate (40)
+// but could not complete a campaign (PRD 30 + assets 30 = 60) without waiting for
+// the next day. free 20->75, pro 100->150 so a whole workflow fits in a day.
 const TIER_LIMITS: Record<CreditAccount["tier"], { monthly: number; daily: number }> = {
   free:   { monthly: 100,   daily: 75  },
   pro:    { monthly: 1000,  daily: 150 },
   agency: { monthly: 10000, daily: 500 },
 };
 
-// Enforced at load so a future cost change can never silently reintroduce the
-// "tier permanently blocked from an operation it can afford" bug.
+// Enforced at load so a cost edit can never silently make a whole workflow
+// impossible to finish in one day.
 {
-  const priciest = Math.max(...Object.values(CREDIT_COSTS));
-  const single = Math.max(priciest, 60); // a campaign is two ops: PRD + assets
+  const priciestWorkflow = Math.max(60, ...Object.values(CREDIT_COSTS)); // campaign = PRD + assets
   for (const [tier, lim] of Object.entries(TIER_LIMITS)) {
-    if (lim.daily < single) {
+    if (lim.daily < priciestWorkflow) {
       throw new Error(
-        `tier '${tier}' daily cap ${lim.daily} is below the most expensive single workflow ${single} — that tier would be permanently blocked from it`
+        `tier '${tier}' daily cap ${lim.daily} is below the priciest workflow ${priciestWorkflow} — that workflow could not complete in one day`
       );
     }
   }
