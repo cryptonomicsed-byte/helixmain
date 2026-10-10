@@ -26,6 +26,37 @@ export function clearKeys(): void {
   localStorage.removeItem(OWNER_STORE)
 }
 
+// ---------------------------------------------------------------------------
+// Session auth — ONE credential.
+//
+// A passkey login sets an HttpOnly session cookie; every call carries it via
+// credentials: 'same-origin'. The server maps the session to the company, so the
+// per-company API key is never typed into a browser. The key path above remains
+// only as break-glass.
+// ---------------------------------------------------------------------------
+
+export interface SessionInfo { ok: boolean; company: string; role: 'owner' | 'company' }
+
+export const auth = {
+  me: () => request<SessionInfo>('GET', '/auth/me'),
+  loginOptions: () => request<{ ok: boolean; options: any }>('POST', '/auth/login/options', {}),
+  loginVerify: (response: unknown) => request<SessionInfo>('POST', '/auth/login/verify', { response }),
+  registerOptions: (token: string) =>
+    request<{ ok: boolean; company: string; options: any }>('POST', '/auth/register/options', { token }),
+  registerVerify: (token: string, response: unknown) =>
+    request<SessionInfo>('POST', '/auth/register/verify', { token, response }),
+  logout: () => request<{ ok: boolean }>('POST', '/auth/logout', {}),
+}
+
+/** Non-throwing session probe — used on load to decide locked vs open. */
+export async function sessionInfo(): Promise<SessionInfo | null> {
+  try {
+    return await auth.me()
+  } catch {
+    return null
+  }
+}
+
 /** Credential headers — only for the app API, never for the gatekeeper proxy. */
 function authHeaders(): Record<string, string> {
   const k = localStorage.getItem(KEY_STORE)
@@ -39,7 +70,7 @@ function authHeaders(): Record<string, string> {
 /** fetch against the API with credentials attached and 401 handled once. */
 export async function authFetch(path: string, init: RequestInit = {}): Promise<Response> {
   const headers = { ...authHeaders(), ...((init.headers as Record<string, string>) ?? {}) }
-  const res = await fetch(`${BASE}${path}`, { ...init, headers })
+  const res = await fetch(`${BASE}${path}`, { credentials: 'same-origin', ...init, headers })
   if (res.status === 401) {
     throw new Error(`unauthorized — missing or invalid API key (${path})`)
   }
@@ -51,6 +82,7 @@ async function request<T>(method: string, path: string, body?: unknown, base = B
   if (body) headers['Content-Type'] = 'application/json'
   const res = await fetch(`${base}${path}`, {
     method,
+    credentials: 'same-origin', // carry the session cookie (the passkey login)
     headers,
     body: body ? JSON.stringify(body) : undefined,
   })

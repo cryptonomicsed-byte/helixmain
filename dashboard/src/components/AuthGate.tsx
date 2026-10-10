@@ -1,136 +1,229 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Icon } from './Icon'
-import { getApiKey, setApiKey, setOwnerKey } from '../api'
+import { auth, sessionInfo, getApiKey, setApiKey, setOwnerKey } from '../api'
 
-const SESSION_KEY = 'helix_auth'
-const SESSION_MARK = 'ok'
-
-/**
- * The PIN must come from the build environment. It is deliberately NOT given a
- * hardcoded fallback: a fallback committed to git is not auth, it is a
- * documented key. If VITE_DASHBOARD_PIN is unset the dashboard refuses to
- * unlock rather than silently accepting a known value.
+/*
+ * One credential. The owner unlocks with a passkey — no PIN, no pasted API key.
+ * A successful ceremony sets an HttpOnly session cookie; the API maps that to the
+ * company, so the per-company key never touches the browser.
  *
- * The PIN is only the UI gate. It is a speed bump, not the security boundary —
- * anything in a Vite bundle is readable. The API is what actually enforces
- * access, via the key entered below and kept in localStorage (never bundled).
+ * Enrollment is bootstrapped by a one-time link (infra/issue-enroll-token.py):
+ *   https://helixmain.duckdns.org/dashboard/?enroll=<token>
+ *
+ * A discreet "use a key" path is kept as break-glass so a WebAuthn hiccup on some
+ * device can never lock the owner out of their own dashboard.
  */
-const CONFIGURED_PIN = (import.meta.env.VITE_DASHBOARD_PIN as string | undefined)?.trim() ?? ''
-const MISCONFIGURED = CONFIGURED_PIN.length === 0
 
-function checkSession(): boolean {
-  return sessionStorage.getItem(SESSION_KEY) === SESSION_MARK && getApiKey().length > 0
+/* ── WebAuthn helpers (same shape the Gatekeeper's ApprovalsPage uses) ────── */
+function b64urlToBuf(s: string): ArrayBuffer {
+  const pad = s.length % 4 === 0 ? '' : '='.repeat(4 - (s.length % 4))
+  const bin = atob(s.replace(/-/g, '+').replace(/_/g, '/') + pad)
+  const buf = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i)
+  return buf.buffer
+}
+function bufToB64url(buf: ArrayBuffer): string {
+  const b = new Uint8Array(buf); let s = ''
+  for (let i = 0; i < b.length; i++) s += String.fromCharCode(b[i])
+  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+async function createPasskey(options: any): Promise<unknown> {
+  const pk = options.publicKey ?? options
+  const cred = await navigator.credentials.create({ publicKey: {
+    challenge: b64urlToBuf(pk.challenge),
+    rp: pk.rp,
+    user: { ...pk.user, id: b64urlToBuf(pk.user.id) },
+    pubKeyCredParams: pk.pubKeyCredParams,
+    timeout: pk.timeout,
+    attestation: pk.attestation ?? 'none',
+    excludeCredentials: (pk.excludeCredentials ?? []).map((c: any) => ({ ...c, id: b64urlToBuf(c.id) })),
+    authenticatorSelection: pk.authenticatorSelection
+      ?? { userVerification: 'required', residentKey: 'required' },
+  }}) as PublicKeyCredential
+  const r: any = cred.response
+  return {
+    id: cred.id, rawId: bufToB64url(cred.rawId), type: cred.type,
+    response: {
+      attestationObject: bufToB64url(r.attestationObject),
+      clientDataJSON: bufToB64url(r.clientDataJSON),
+      transports: r.getTransports?.() ?? [],
+    },
+    extensions: (cred as any).getClientExtensionResults?.() ?? {},
+  }
+}
+
+async function assertPasskey(options: any): Promise<unknown> {
+  const pk = options.publicKey ?? options
+  const allow = (pk.allowCredentials ?? []).map((c: any) => ({
+    type: c.type ?? 'public-key', id: b64urlToBuf(c.id), transports: c.transports,
+  }))
+  const cred = await navigator.credentials.get({ publicKey: {
+    challenge: b64urlToBuf(pk.challenge),
+    rpId: pk.rpId,
+    allowCredentials: allow,
+    userVerification: pk.userVerification ?? 'required',
+    ...(pk.timeout ? { timeout: pk.timeout } : {}),
+  }}) as PublicKeyCredential
+  const r: any = cred.response
+  return {
+    id: cred.id, rawId: bufToB64url(cred.rawId), type: cred.type,
+    response: {
+      authenticatorData: bufToB64url(r.authenticatorData),
+      clientDataJSON: bufToB64url(r.clientDataJSON),
+      signature: bufToB64url(r.signature),
+      userHandle: r.userHandle ? bufToB64url(r.userHandle) : null,
+    },
+    extensions: (cred as any).getClientExtensionResults?.() ?? {},
+  }
+}
+
+function passkeysSupported(): boolean {
+  return typeof window !== 'undefined'
+    && window.isSecureContext
+    && typeof (window as any).PublicKeyCredential !== 'undefined'
 }
 
 export function AuthGate({ children }: { children: React.ReactNode }) {
-  const [authed, setAuthed] = useState(checkSession)
-  const [pin, setPin] = useState('')
+  const [state, setState] = useState<'checking' | 'locked' | 'open'>('checking')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [company, setCompany] = useState('')
+  const [showKeyFallback, setShowKeyFallback] = useState(false)
   const [key, setKey] = useState('')
   const [owner, setOwner] = useState('')
-  const [error, setError] = useState('')
 
-  if (authed) return <>{children}</>
+  const enrollToken = new URLSearchParams(window.location.search).get('enroll') ?? ''
 
-  function submit(e: React.FormEvent) {
-    e.preventDefault()
-    if (MISCONFIGURED) return
-    // Trim before comparing: the PIN file is 20 chars + a trailing newline, so a
-    // value copy-pasted from `cat` arrives with whitespace and would otherwise
-    // read as "Incorrect PIN".
-    if (pin.trim() !== CONFIGURED_PIN) {
-      setError('Incorrect PIN')
-      setPin('')
-      return
-    }
-    if (!key.trim()) {
-      setError('API key required')
-      return
-    }
-    setApiKey(key.trim())
-    if (owner.trim()) setOwnerKey(owner.trim())
-    sessionStorage.setItem(SESSION_KEY, SESSION_MARK)
-    setAuthed(true)
-    setError('')
+  useEffect(() => {
+    sessionInfo().then((s) => {
+      if (s?.ok) { setCompany(s.company); setState('open') } else { setState('locked') }
+    })
+  }, [])
+
+  function clearEnrollParam() {
+    if (enrollToken) window.history.replaceState(null, '', window.location.pathname)
   }
 
-  const field = (bad: boolean): React.CSSProperties => ({
-    background: 'rgba(0,0,0,.28)',
-    border: `1px solid ${bad ? 'rgba(248,113,113,.6)' : 'var(--line-2)'}`,
-    color: 'var(--fg)',
-    borderRadius: 11,
-    padding: '.7rem 1rem',
-    fontSize: '.9rem',
-    outline: 'none',
-    width: '100%',
-    transition: 'border-color 160ms',
+  async function run(fn: () => Promise<void>) {
+    setBusy(true); setError('')
+    try { await fn() } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally { setBusy(false) }
+  }
+
+  const unlock = () => run(async () => {
+    if (!passkeysSupported()) {
+      throw new Error('This browser can’t use passkeys here — needs https and a modern browser.')
+    }
+    const { options } = await auth.loginOptions()
+    const assertion = await assertPasskey(options)
+    const s = await auth.loginVerify(assertion)
+    setCompany(s.company); setState('open')
   })
+
+  const enroll = () => run(async () => {
+    if (!passkeysSupported()) {
+      throw new Error('This browser can’t create a passkey here — needs https and a modern browser.')
+    }
+    const { options } = await auth.registerOptions(enrollToken)
+    const attestation = await createPasskey(options)
+    const s = await auth.registerVerify(enrollToken, attestation)
+    setCompany(s.company); setState('open'); clearEnrollParam()
+  })
+
+  const unlockWithKey = () => run(async () => {
+    if (!key.trim()) throw new Error('API key required')
+    setApiKey(key.trim())
+    if (owner.trim()) setOwnerKey(owner.trim())
+    const s = await sessionInfo()
+    if (!s?.ok) throw new Error('key rejected')
+    setCompany(s.company); setState('open')
+  })
+
+  if (state === 'checking') {
+    return <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', color: 'var(--fg-3)' }}>…</div>
+  }
+  if (state === 'open') return <>{children}</>
+
+  const field: React.CSSProperties = {
+    background: 'rgba(0,0,0,.28)', border: '1px solid var(--line-2)', color: 'var(--fg)',
+    borderRadius: 11, padding: '.7rem 1rem', fontSize: '.9rem', outline: 'none', width: '100%',
+  }
 
   return (
     <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', position: 'relative' }}>
       <div className="aurora" />
-      <form onSubmit={submit} className="glass reveal"
-        style={{ position: 'relative', zIndex: 1, padding: '2.5rem 2.75rem', display: 'flex', flexDirection: 'column',
-                 gap: '1.15rem', width: 400, boxShadow: 'var(--shadow-lg)' }}>
+      <div className="glass reveal" style={{ position: 'relative', zIndex: 1, padding: '2.5rem 2.75rem',
+        display: 'flex', flexDirection: 'column', gap: '1.15rem', width: 400, boxShadow: 'var(--shadow-lg)' }}>
+
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '.55rem' }}>
           <div style={{ width: 46, height: 46, borderRadius: 13, display: 'grid', placeItems: 'center',
-                        background: 'linear-gradient(140deg, var(--brand), var(--violet))', boxShadow: 'var(--glow)', color: 'var(--bg)' }}>
+            background: 'linear-gradient(140deg, var(--brand), var(--violet))', boxShadow: 'var(--glow)', color: 'var(--bg)' }}>
             <Icon name="bolt" size={24} />
           </div>
           <div style={{ fontWeight: 750, fontSize: '1.15rem', letterSpacing: '-.02em' }}>
             Helix<span className="grad-text">Main</span>
           </div>
           <div className="sub" style={{ fontSize: '.8rem' }}>
-            {MISCONFIGURED ? 'Dashboard not configured' : 'Owner Dashboard — unlock to continue'}
+            {enrollToken ? 'Set up this device' : 'Owner Dashboard'}
           </div>
         </div>
 
-        {MISCONFIGURED ? (
-          <div style={{
-            background: 'rgba(248,113,113,.10)', border: '1px solid rgba(248,113,113,.35)',
-            borderRadius: 11, padding: '.85rem 1rem', fontSize: '.82rem', color: 'var(--fg-2)', lineHeight: 1.5,
-          }}>
-            <strong style={{ color: 'var(--bad)' }}>VITE_DASHBOARD_PIN is not set.</strong><br />
-            This build has no PIN, so unlocking is disabled by design — a committed
-            fallback would be a known key. Rebuild with the env var set:
-            <div className="mono" style={{ marginTop: '.5rem', fontSize: '.74rem', color: 'var(--fg-3)' }}>
-              VITE_DASHBOARD_PIN=… npm run build
-            </div>
-          </div>
-        ) : (
-          <>
-            <input
-              autoFocus
-              type="password"
-              placeholder="PIN"
-              value={pin}
-              onChange={(e) => { setPin(e.target.value); setError('') }}
-              style={{ ...field(!!error), textAlign: 'center', letterSpacing: '.2em' }}
-            />
-            <input
-              type="password"
-              placeholder="API key (hk_…)"
-              value={key}
-              onChange={(e) => { setKey(e.target.value); setError('') }}
-              style={{ ...field(!!error), fontFamily: 'var(--mono, monospace)', fontSize: '.82rem' }}
-            />
-            <input
-              type="password"
-              placeholder="Owner key (hk_…) — optional, needed to edit the card"
-              value={owner}
-              onChange={(e) => setOwner(e.target.value)}
-              style={{ ...field(false), fontFamily: 'var(--mono, monospace)', fontSize: '.82rem' }}
-            />
-            {error && <div style={{ color: 'var(--bad)', fontSize: '.8rem', textAlign: 'center', marginTop: -6 }}>{error}</div>}
-            <button type="submit" className="btn btn-primary" style={{ justifyContent: 'center', padding: '.65rem', fontSize: '.9rem' }}>
-              Unlock <Icon name="arrow" size={15} />
-            </button>
-            <div className="sub" style={{ fontSize: '.72rem', textAlign: 'center', lineHeight: 1.5 }}>
-              Keys live at <span className="mono">/etc/helix/companies/&lt;id&gt;/api-keys.json</span> on the server.
-              They are kept in this browser only — never in the build.
-            </div>
-          </>
+        {error && (
+          <div style={{ background: 'rgba(248,113,113,.10)', border: '1px solid rgba(248,113,113,.35)',
+            borderRadius: 11, padding: '.7rem .9rem', fontSize: '.8rem', color: 'var(--fg-2)' }}>{error}</div>
         )}
-      </form>
+
+        {enrollToken ? (
+          <>
+            <div className="sub" style={{ fontSize: '.78rem', textAlign: 'center', lineHeight: 1.5 }}>
+              Enrolling a passkey for your dashboard. You’ll be asked for your fingerprint,
+              face, or device PIN — that becomes your only login.
+            </div>
+            <button className="btn btn-primary" disabled={busy} onClick={enroll}
+              style={{ justifyContent: 'center', padding: '.7rem', fontSize: '.92rem' }}>
+              {busy ? 'Waiting…' : 'Create passkey'} <Icon name="bolt" size={15} />
+            </button>
+          </>
+        ) : (
+          <button className="btn btn-primary" disabled={busy} onClick={unlock}
+            style={{ justifyContent: 'center', padding: '.7rem', fontSize: '.92rem' }}>
+            {busy ? 'Waiting…' : 'Unlock with passkey'} <Icon name="arrow" size={15} />
+          </button>
+        )}
+
+        {!passkeysSupported() && (
+          <div className="sub" style={{ fontSize: '.72rem', textAlign: 'center', lineHeight: 1.5 }}>
+            Passkeys need https and a modern browser. Open this page over
+            <span className="mono"> https://helixmain.duckdns.org/dashboard/</span>.
+          </div>
+        )}
+
+        {/* Break-glass. Not the path anyone should need, but never a lockout. */}
+        {!enrollToken && (
+          showKeyFallback ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '.5rem', borderTop: '1px solid var(--line-2)', paddingTop: '.9rem' }}>
+              <input type="password" placeholder="API key (hk_…)" value={key}
+                onChange={(e) => { setKey(e.target.value); setError('') }} style={field} />
+              <input type="password" placeholder="Owner key — only to edit the card" value={owner}
+                onChange={(e) => setOwner(e.target.value)}
+                style={{ ...field, fontFamily: 'var(--mono, monospace)', fontSize: '.82rem' }} />
+              <button className="btn" disabled={busy} onClick={unlockWithKey}
+                style={{ justifyContent: 'center', padding: '.55rem', fontSize: '.85rem' }}>Unlock with key</button>
+            </div>
+          ) : (
+            <button onClick={() => setShowKeyFallback(true)}
+              style={{ background: 'none', border: 'none', color: 'var(--fg-3)', fontSize: '.72rem', cursor: 'pointer' }}>
+              Can’t use a passkey? Use an API key instead
+            </button>
+          )
+        )}
+
+        <div className="sub" style={{ fontSize: '.7rem', textAlign: 'center', lineHeight: 1.5 }}>
+          No passkey on this device yet? Ask the operator for a one-time enrollment link.
+        </div>
+      </div>
     </div>
   )
 }

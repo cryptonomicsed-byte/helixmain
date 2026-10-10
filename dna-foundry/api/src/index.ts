@@ -147,6 +147,34 @@ import {
 import { createHmac, randomUUID } from "crypto";
 import { type FastifyRequest, type FastifyReply } from "fastify";
 import { lookupKey, type KeyRecord } from "./services/apiKeys";
+import {
+  SESSION_COOKIE,
+  CHALLENGE_COOKIE,
+  SESSION_TTL_MS,
+  CHALLENGE_TTL_MS,
+  mintSession,
+  readSession,
+  signJson,
+  verifyJson,
+  parseCookies,
+  setCookie,
+  clearCookie,
+} from "./services/session";
+import {
+  addCredential,
+  consumeEnrollToken,
+  credsFor,
+  findCompanyByCredentialId,
+  issueEnrollToken,
+  resolveEnrollToken,
+  updateCounter,
+} from "./services/passkeys";
+import {
+  registrationOptions,
+  verifyRegistration,
+  authenticationOptions,
+  verifyAuthentication,
+} from "./services/webauthn";
 import { isOnboardedCompany } from "./services/companies";
 
 const app = Fastify({ logger: true });
@@ -215,9 +243,16 @@ function namedCompanyIds(req: FastifyRequest): string[] {
 }
 
 async function requireAuth(req: FastifyRequest, reply: FastifyReply): Promise<void> {
-  const rec = lookupKey(req.headers["x-api-key"]);
+  // Machine callers present a per-company key; the browser presents a session
+  // cookie minted by a passkey login. Either way the SERVER decides the tenant —
+  // a caller-supplied companyId is never trusted on its own.
+  let rec: KeyRecord | undefined = lookupKey(req.headers["x-api-key"]);
   if (!rec) {
-    await reply.code(401).send({ ok: false, error: "missing or invalid x-api-key" });
+    const sess = readSession(parseCookies(req.headers.cookie)[SESSION_COOKIE]);
+    if (sess) rec = { companyId: sess.company, level: sess.role === "owner" ? "owner" : "company" };
+  }
+  if (!rec) {
+    await reply.code(401).send({ ok: false, error: "missing or invalid credentials" });
     return;
   }
   (req as AuthCarrier).auth = rec;
@@ -236,7 +271,11 @@ async function requireAuth(req: FastifyRequest, reply: FastifyReply): Promise<vo
 async function requireOwner(req: FastifyRequest, reply: FastifyReply): Promise<void> {
   const rec = lookupKey(req.headers["x-owner-key"]);
   const auth = (req as AuthCarrier).auth;
-  if (!rec || rec.level !== "owner" || rec.companyId !== auth?.companyId) {
+  // An owner-level SESSION (a passkey login) is itself the owner credential —
+  // that is the point of the session. The key path still needs the owner key.
+  const viaKey = !!rec && rec.level === "owner" && rec.companyId === auth?.companyId;
+  const viaSession = auth?.level === "owner";
+  if (!viaKey && !viaSession) {
     await reply.code(403).send({ ok: false, error: "owner credential required" });
   }
 }
@@ -2690,6 +2729,144 @@ app.get("/admin/sessions", { preHandler: requireAuth }, async (_req, reply) => {
   }
 
   return reply.code(200).send({ ok: true, sessions: allSessions, total: allSessions.length });
+});
+
+// ---------------------------------------------------------------------------
+// Auth — ONE credential. The owner logs in with a passkey (or a one-time
+// enrollment link) and the server maps that to their company. The per-company
+// API key stays server-side; it is never typed into a browser.
+//
+// NOTE: these routes are DELIBERATELY unauthenticated — they ARE the login. Any
+// future route-gating sweep must EXCLUDE the `/auth/` prefix or it will lock the
+// dashboard out of itself.
+// ---------------------------------------------------------------------------
+
+function readChallenge(
+  req: FastifyRequest,
+): { challenge?: string; company?: string; kind?: string } | null {
+  const raw = parseCookies(req.headers.cookie)[CHALLENGE_COOKIE];
+  return verifyJson<{ exp: number; challenge?: string; company?: string; kind?: string }>(raw);
+}
+
+// Step 1 of enrollment: an operator-issued token buys the registration options.
+app.post("/auth/register/options", async (req, reply) => {
+  const body = (req.body ?? {}) as { token?: string };
+  const company = resolveEnrollToken(body.token ?? "");
+  if (!company) {
+    return reply.code(403).send({ ok: false, error: "invalid or expired enrollment token" });
+  }
+  const options = await registrationOptions(company, credsFor(company));
+  reply.header(
+    "Set-Cookie",
+    setCookie(
+      CHALLENGE_COOKIE,
+      signJson({
+        challenge: String(options.challenge),
+        company,
+        kind: "reg",
+        exp: Date.now() + CHALLENGE_TTL_MS,
+      }),
+      300,
+    ),
+  );
+  return { ok: true, company, options };
+});
+
+// Step 2 of enrollment: store the passkey, burn the token, start a session.
+app.post("/auth/register/verify", async (req, reply) => {
+  const body = (req.body ?? {}) as { token?: string; response?: unknown };
+  const company = resolveEnrollToken(body.token ?? "");
+  if (!company) {
+    return reply.code(403).send({ ok: false, error: "invalid or expired enrollment token" });
+  }
+  const chal = readChallenge(req);
+  if (!chal || chal.kind !== "reg" || chal.company !== company || !chal.challenge) {
+    return reply.code(400).send({ ok: false, error: "no pending registration for this browser" });
+  }
+  let outcome;
+  try {
+    outcome = await verifyRegistration(body.response, chal.challenge);
+  } catch (e) {
+    return reply.code(400).send({ ok: false, error: e instanceof Error ? e.message : "registration failed" });
+  }
+  addCredential(company, {
+    id: outcome.id,
+    publicKey: outcome.publicKey,
+    counter: outcome.counter,
+    transports: outcome.transports,
+    createdAt: new Date().toISOString(),
+  });
+  consumeEnrollToken(company);
+  reply.header("Set-Cookie", [
+    setCookie(SESSION_COOKIE, mintSession(company, "owner"), Math.floor(SESSION_TTL_MS / 1000)),
+    clearCookie(CHALLENGE_COOKIE),
+  ]);
+  return { ok: true, company, role: "owner" };
+});
+
+// Login step 1: usernameless — the authenticator offers its resident credential.
+app.post("/auth/login/options", async (_req, reply) => {
+  const options = await authenticationOptions();
+  reply.header(
+    "Set-Cookie",
+    setCookie(
+      CHALLENGE_COOKIE,
+      signJson({ challenge: String(options.challenge), kind: "auth", exp: Date.now() + CHALLENGE_TTL_MS }),
+      300,
+    ),
+  );
+  return { ok: true, options };
+});
+
+// Login step 2: verify against the stored credential, start a session.
+app.post("/auth/login/verify", async (req, reply) => {
+  const body = (req.body ?? {}) as { response?: { id?: string; rawId?: string } };
+  const id = body.response?.id ?? body.response?.rawId;
+  if (!id) return reply.code(400).send({ ok: false, error: "credential id required" });
+  const found = findCompanyByCredentialId(id);
+  if (!found) {
+    return reply.code(404).send({ ok: false, error: "unknown passkey — enroll this device first" });
+  }
+  const chal = readChallenge(req);
+  if (!chal || chal.kind !== "auth" || !chal.challenge) {
+    return reply.code(400).send({ ok: false, error: "no pending login for this browser" });
+  }
+  let outcome;
+  try {
+    outcome = await verifyAuthentication(body.response, chal.challenge, found.cred);
+  } catch (e) {
+    return reply.code(401).send({ ok: false, error: e instanceof Error ? e.message : "authentication failed" });
+  }
+  updateCounter(found.company, id, outcome.newCounter);
+  reply.header("Set-Cookie", [
+    setCookie(SESSION_COOKIE, mintSession(found.company, "owner"), Math.floor(SESSION_TTL_MS / 1000)),
+    clearCookie(CHALLENGE_COOKIE),
+  ]);
+  return { ok: true, company: found.company, role: "owner" };
+});
+
+app.get("/auth/me", async (req, reply) => {
+  const sess = readSession(parseCookies(req.headers.cookie)[SESSION_COOKIE]);
+  if (!sess) return reply.code(401).send({ ok: false });
+  return { ok: true, company: sess.company, role: sess.role };
+});
+
+app.post("/auth/logout", async (_req, reply) => {
+  reply.header("Set-Cookie", clearCookie(SESSION_COOKIE));
+  return { ok: true };
+});
+
+// Mint a fresh one-time enrollment link. Owner-gated: issuing a token is the same
+// authority as holding a session, so it is not a way back in without one.
+app.post("/auth/enroll/token", { preHandler: [requireAuth, requireOwner] }, async (req, reply) => {
+  const body = (req.body ?? {}) as { companyId?: string; ttlHours?: number };
+  const company = body.companyId ?? (req as AuthCarrier).auth?.companyId;
+  if (!company || !isOnboardedCompany(company)) {
+    return reply.code(404).send({ ok: false, error: "unknown company" });
+  }
+  const ttlHours = Math.min(Math.max(body.ttlHours ?? 24, 1), 168);
+  const token = issueEnrollToken(company, ttlHours * 3600_000);
+  return { ok: true, company, enrollUrl: `/dashboard/?enroll=${token}`, expiresInHours: ttlHours };
 });
 
 async function main() {
