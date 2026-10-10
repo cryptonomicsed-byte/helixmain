@@ -130,7 +130,9 @@ body {
 .reveal { animation: reveal 480ms var(--ease) both; }
 .reveal-1{animation-delay:40ms}.reveal-2{animation-delay:90ms}.reveal-3{animation-delay:140ms}
 .reveal-4{animation-delay:190ms}.reveal-5{animation-delay:240ms}.reveal-6{animation-delay:290ms}
-@keyframes reveal { from { opacity:0; transform: translateY(10px); } }
+/* opacity-only on purpose: a transform here makes <main> the containing block
+   for position:fixed descendants (slide-over panels, modals), breaking them */
+@keyframes reveal { from { opacity:0; } }
 
 /* ── scrollbars ──────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 10px; height: 10px; }

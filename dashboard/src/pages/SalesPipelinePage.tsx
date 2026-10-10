@@ -192,7 +192,9 @@ function LeadPanel({ lead, companyId, cardId, onClose, onLeadUpdate }: PanelProp
   return (
     <div style={{
       position: 'fixed', top: 0, right: 0, bottom: 0, width: isMobile ? '100%' : 420,
-      background: 'var(--surface)', borderLeft: '1px solid var(--line-2)',
+      background: 'linear-gradient(180deg, rgba(19,23,42,.985), rgba(11,13,22,.985))',
+      backdropFilter: 'blur(18px)',
+      borderLeft: '1px solid var(--line-2)',
       zIndex: 100, display: 'flex', flexDirection: 'column',
       boxShadow: '-4px 0 24px #00000066',
     }}>
