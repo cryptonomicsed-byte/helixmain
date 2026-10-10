@@ -178,6 +178,35 @@ export function emitCardMd(card: any, changelog: string[]): string {
       L.push(machineV("identity_value", 1, { key, text: val }));
     }
   }
+  // Extra identity scalars the schema permits (identity is additionalProperties:
+  // true — extractor supplies review_url, type, etc.). Emitted generically so the
+  // parser's key-addressed identity_value reader round-trips them instead of
+  // silently dropping them (a dropped field = a card that cannot verify).
+  const FIXED_ID_KEYS = new Set([
+    "name", "elevator_pitch", "mission", "founded", "values", "tagline",
+    "location", "address", "phone", "email", "timezone", "website", "source_url",
+    "socials",
+  ]);
+  const labelFor = (k: string) =>
+    k.split("_").map((w) => (w ? w.charAt(0).toUpperCase() + w.slice(1) : w)).join(" ");
+  for (const key of Object.keys(id).sort()) {
+    if (FIXED_ID_KEYS.has(key)) continue;
+    const val = id[key];
+    if ((typeof val !== "string" && typeof val !== "number") || val === "") continue;
+    L.push(bl("**" + labelFor(key) + ":** " + val));
+    L.push(machineV("identity_value", 1, { key, text: val }));
+  }
+  // Socials — platform -> handle map; one anchor per platform so the parser
+  // rebuilds identity.socials exactly (extractor + agentCompiler both read it).
+  const socialMap = id.socials;
+  if (socialMap && typeof socialMap === "object" && !Array.isArray(socialMap)) {
+    for (const platform of Object.keys(socialMap).sort()) {
+      const handle = (socialMap as Record<string, any>)[platform];
+      if (!handle) continue;
+      L.push(bl("**" + labelFor(platform) + ":** " + handle));
+      L.push(machineV("social", 1, { platform, handle }));
+    }
+  }
   L.push("");
 
   // 2. Voice
@@ -228,6 +257,23 @@ export function emitCardMd(card: any, changelog: string[]): string {
   } else {
     L.push(ownerPrompt("the offer list lives here — name, price or null, confidence."));
   }
+  // Specials live in their own subsection so the Offer prose fallback (which
+  // only ever sees offering bullets) can never mistake them for offerings.
+  const specials = card.specials || [];
+  if (specials.length) {
+    L.push("");
+    L.push("### Specials");
+    for (const s of specials) {
+      const bits: string[] = [];
+      if (s.description) bits.push(s.description);
+      if (s.price !== undefined) bits.push("price: " + (s.price === null ? "null" : String(s.price)));
+      if (s.valid_from) bits.push("from: " + s.valid_from);
+      if (s.valid_to) bits.push("to: " + s.valid_to);
+      L.push(bl("**" + (s.name || s.title || "Special") + "**" +
+        (bits.length ? " " + MID + " " + bits.join(" " + MID + " ") : "")));
+      L.push(machineV("special", 1, s));
+    }
+  }
   L.push("");
 
   // 5. Operations
@@ -261,6 +307,17 @@ export function emitCardMd(card: any, changelog: string[]): string {
     }
   } else {
     L.push(ownerPrompt("refunds, cancellations, allergens, house rules — the agent hands off what isn't written here."));
+  }
+  // policy_donts — the guardrail compiler's hard "never" list. Own subsection so
+  // they can never be parsed back as policies (they carry no topic).
+  const policyDonts = card.policy_donts || [];
+  if (policyDonts.length) {
+    L.push("");
+    L.push("### Don'ts");
+    for (const d of policyDonts) {
+      L.push(bl("**Never:** " + d));
+      L.push(machineV("policy_dont", 1, { text: d }));
+    }
   }
   L.push("");
 

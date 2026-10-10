@@ -26,6 +26,7 @@ export interface ParsedCardMd {
 /** Current known anchor versions per section type. */
 const ANCHOR_VERSIONS: Record<string, number> = {
   offering: 1, policy: 1, knowledge: 1, voice_dont: 1, hour: 1, channel: 1, identity_value: 1,
+  social: 1, special: 1, policy_dont: 1,
 };
 
 interface SectionAnchor { version: number; data: any; implicit: boolean; }
@@ -248,6 +249,24 @@ function bullets(lines: string[]): string[] {
 }
 
 /**
+ * Drop a ### subsection (its header line through the next ## or ### header) from
+ * a parent section's lines. Used so a 3-state prose fallback never sees bullets
+ * that belong to a nested subsection (Specials under Offer, Don'ts under Policy).
+ * Machine anchors for those subsections are still read from the full line list.
+ */
+function withoutSubsection(lines: string[], header: string): string[] {
+  const out: string[] = [];
+  let skipping = false;
+  for (const l of lines) {
+    const h = l.match(/^(#{2,3})\s+(.*?)\s*$/);
+    if (h && h[2] === header) { skipping = true; continue; }
+    if (skipping && h) skipping = false;
+    if (!skipping) out.push(l);
+  }
+  return out;
+}
+
+/**
  * Machine anchors: `<!-- machine:<tag> {...} -->` lines emitted by the
  * emitter. When present they are authoritative for that entry (exact
  * round-trip of arbitrary keys); hand-written cards without anchors fall
@@ -451,6 +470,13 @@ export function parseCardMd(
     // tagline lives in the H1 blockquote, not an Identity bullet — always from prose
     const qm = rest.match(/^# .+\n\n> (.+)\n/m);
     if (qm && !id.tagline) id.tagline = qm[1];
+    // Socials — one machine:social@1 anchor per platform → back into the map.
+    const socialAnchors = parseSectionAnchors(sec["Identity"] || [], "social");
+    if (socialAnchors.length) {
+      const socialMap: Record<string, string> = {};
+      for (const a of socialAnchors) if (a.data.platform) socialMap[a.data.platform] = a.data.handle ?? "";
+      if (Object.keys(socialMap).length) id.socials = socialMap;
+    }
     if (Object.keys(id).length) card.identity = id;
   }
 
@@ -477,12 +503,18 @@ export function parseCardMd(
   }
 
   // 4. Offer — 3-state (errors collected; checked collectively after section 8)
+  //   Specials live in a nested ### subsection; strip it so the offering prose
+  //   fallback can't read a special as an offering.
   const offerResult = parse3StateSection(
-    sec["Offer"] || [], "offering", "offerings",
+    withoutSubsection(sec["Offer"] || [], "Specials"), "offering", "offerings",
     lines => bullets(lines).map(parseOffer).filter(Boolean),
     opts?.prevProvenance,
   );
   if (offerResult.items.length) card.offerings = offerResult.items;
+  {
+    const specialAnchors = parseSectionAnchors(sec["Offer"] || [], "special");
+    if (specialAnchors.length) card.specials = specialAnchors.map((a) => a.data);
+  }
 
   // 5. Operations — hours and channels use 3-state anchor pattern
   const hourResult = parse3StateSection(
@@ -510,12 +542,16 @@ export function parseCardMd(
     if (Object.keys(o).length) card.operations = o;
   }
 
-  // 6. Policy — 3-state
+  // 6. Policy — 3-state (Don'ts subsection stripped from the prose fallback)
   const policyResult = parse3StateSection(
-    sec["Policy"] || [], "policy", "policies",
+    withoutSubsection(sec["Policy"] || [], "Don'ts"), "policy", "policies",
     parsePolicyProse, opts?.prevProvenance,
   );
   if (policyResult.items.length) card.policies = policyResult.items;
+  {
+    const dontAnchors = parseSectionAnchors(sec["Policy"] || [], "policy_dont");
+    if (dontAnchors.length) card.policy_donts = dontAnchors.map((a) => a.data.text);
+  }
 
   // 7. Handoff
   {

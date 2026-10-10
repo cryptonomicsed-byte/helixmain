@@ -5,11 +5,18 @@
 # Commands:
 #   create  --id <slug> --name "..." --type <restaurant|service|retail>
 #           --location "..." --phone "..." --hours "..." --pitch "..."
-#           [--offerings "Item1, Item2"] [--policies "refunds: text | allergens: text"]
-#   update  --id <slug> [same optional fields]
+#           [--offerings "Item1, Item2"] [--policies "topic: rule | topic: rule"]
+#           [--review-url "https://..."] [--socials "instagram:handle|facebook:handle"]
+#           [--specials "name:description:price:valid_from:valid_to|..."]
+#           [--sla "within 24 hours"] [--policy-donts "never do X|never do Y"]
+#   update  --id <slug> [same optional fields; a field not passed keeps its value]
 #   reload  --id <slug>
 #   status  [--id <slug>]
 #   qr      --id <slug>
+#
+# The card JSON is the source of truth: create/update author it via
+# infra/build-card.py, then the DNA compiler (dna-foundry/compiler) derives
+# CARD.md and every artifact. There is no second compiler.
 set -euo pipefail
 
 VPS="hostinger"
@@ -17,7 +24,7 @@ HELIX_DIR="/etc/helix/companies"
 RELAY="wss://omokoda.duckdns.org:3443"
 CALLER_BASE="https://omokoda.duckdns.org/caller/"
 SPARK_BASE="https://omokoda.duckdns.org/spark/"
-COMPILER="/opt/helixmain/dna-foundry/compiler"
+COMPILER="/root/helixmain/dna-foundry/compiler"
 
 # LLM key: never hardcode. Provide via env (or a 0600 file) before running.
 #   export DEEPSEEK_KEY=sk-...   # or set LLM_API_KEY instead
@@ -39,7 +46,7 @@ require_id() {
 }
 
 parse_args() {
-  OPT_ID=""; OPT_NAME=""; OPT_TYPE="service"; OPT_LOCATION=""
+  OPT_ID=""; OPT_NAME=""; OPT_TYPE="service"; OPT_TYPE_GIVEN=0; OPT_LOCATION=""
   OPT_PHONE=""; OPT_HOURS=""; OPT_PITCH=""; OPT_OFFERINGS=""; OPT_POLICIES=""
   OPT_REVIEW_URL=""
   OPT_SOCIALS="" OPT_SPECIALS="" OPT_SLA="" OPT_POLICY_DONTS=""
@@ -47,7 +54,7 @@ parse_args() {
     case "$1" in
       --id)           OPT_ID="$2";           shift 2 ;;
       --name)         OPT_NAME="$2";         shift 2 ;;
-      --type)         OPT_TYPE="$2";         shift 2 ;;
+      --type)         OPT_TYPE="$2";         OPT_TYPE_GIVEN=1; shift 2 ;;
       --location)     OPT_LOCATION="$2";     shift 2 ;;
       --phone)        OPT_PHONE="$2";        shift 2 ;;
       --hours)        OPT_HOURS="$2";        shift 2 ;;
@@ -114,327 +121,69 @@ print(sk.hex(), pk.hex())
 PYEOF
 }
 
-# Build offerings block for CARD.md
-render_offerings() {
-  local offerings="$1"
-  if [[ -z "$offerings" ]]; then
-    echo "- **Service** · kind: service · orderable: yes · price: null · confidence: 0.6"
-    echo "<!-- machine:offering@1 {\"name\":\"Service\",\"kind\":\"service\",\"price\":null,\"orderable\":true,\"confidence\":0.6} -->"
-    return
-  fi
-  IFS=',' read -ra items <<< "$offerings"
-  for item in "${items[@]}"; do
-    item="${item#"${item%%[![:space:]]*}"}"  # ltrim
-    item="${item%"${item##*[![:space:]]}"}"  # rtrim
-    [[ -z "$item" ]] && continue
-    kind="service"
-    echo "- **${item}** · kind: ${kind} · orderable: yes · price: null · confidence: 0.6"
-    # escape quotes for JSON
-    json_item="${item//\"/\\\"}"
-    echo "<!-- machine:offering@1 {\"name\":\"${json_item}\",\"kind\":\"${kind}\",\"price\":null,\"orderable\":true,\"confidence\":0.6} -->"
-  done
-}
+# ── Card authoring + compilation ──────────────────────────────────────────────
+# The card JSON is the source of truth. build_card_json authors it — the one job
+# onboarding owns. compile_card hands that card to the ONE compiler
+# (dna-foundry/compiler), which derives CARD.md and every artifact from it.
+# Nothing here reimplements the compiler; nothing here fabricates a hash.
 
-# Build specials block for CARD.md
-# Input format: "name:description:price:valid_from:valid_to|..."
-render_specials() {
-  local specials="$1"
-  [[ -z "$specials" ]] && return
-  IFS='|' read -ra items <<< "$specials"
-  for item in "${items[@]}"; do
-    # item format: "name:description:price:valid_from:valid_to"
-    IFS=':' read -r sname sdesc sprice sfrom sto <<< "$item"
-    sname="${sname#"${sname%%[![:space:]]*}"}"
-    sdesc="${sdesc#"${sdesc%%[![:space:]]*}"}"
-    printf '- **Special:** %s — %s\n' "$sname" "$sdesc"
-    printf '<!-- machine:special@1 {"name":"%s","description":"%s","price":%s,"valid_from":"%s","valid_to":"%s"} -->\n' \
-      "$sname" "$sdesc" "${sprice:-null}" "${sfrom:-null}" "${sto:-null}"
-  done
-}
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BUILD_CARD="${SCRIPT_DIR}/infra/build-card.py"
 
-# Build socials block for CARD.md
-# Input format: "instagram:handle|facebook:handle|x:handle"
-render_socials() {
-  local socials="$1"
-  [[ -z "$socials" ]] && return
-  IFS='|' read -ra items <<< "$socials"
-  for item in "${items[@]}"; do
-    IFS=':' read -r platform handle <<< "$item"
-    platform="${platform#"${platform%%[![:space:]]*}"}"
-    handle="${handle#"${handle%%[![:space:]]*}"}"
-    printf '- **%s:** %s\n' "$platform" "$handle"
-    printf '<!-- machine:social@1 {"platform":"%s","handle":"%s"} -->\n' "$platform" "$handle"
-  done
-}
-
-# Build policy donts block for CARD.md
-# Input format: "never do this|never do that"
-render_policy_donts() {
-  local donts="$1"
-  [[ -z "$donts" ]] && return
-  IFS='|' read -ra items <<< "$donts"
-  for dont in "${items[@]}"; do
-    dont="${dont#"${dont%%[![:space:]]*}"}"
-    printf '- **Never:** %s\n' "$dont"
-    printf '<!-- machine:policy_dont@1 {"text":"%s"} -->\n' "$dont"
-  done
-}
-
-# Build policy block for CARD.md
-render_policies() {
-  local policies="$1"
-  local name="$2"
-  local phone="$3"
-  # Always include a default refund policy
-  if [[ -z "$policies" ]]; then
-    echo "- **refunds:** Not satisfied? Call ${phone} and ask to speak with the manager — we'll make it right."
-    echo "<!-- machine:policy@1 {\"topic\":\"refunds\",\"rule\":\"Not satisfied? Call ${phone} and ask to speak with the manager.\"} -->"
-    return
-  fi
-  IFS='|' read -ra pols <<< "$policies"
-  for pol in "${pols[@]}"; do
-    pol="${pol#"${pol%%[![:space:]]*}"}"
-    pol="${pol%"${pol##*[![:space:]]}"}"
-    [[ -z "$pol" ]] && continue
-    topic="${pol%%:*}"
-    rule="${pol#*: }"
-    topic="${topic// /_}"
-    topic="${topic#"${topic%%[![:space:]]*}"}"
-    json_topic="${topic//\"/\\\"}"
-    json_rule="${rule//\"/\\\"}"
-    echo "- **${topic}:** ${rule}"
-    echo "<!-- machine:policy@1 {\"topic\":\"${json_topic}\",\"rule\":\"${json_rule}\"} -->"
-  done
-}
-
-# Generate CARD.md content
-render_card_md() {
+# Author card.json from operator input. On update, pass the existing card.json
+# path as the 16th argument; any field left empty keeps its current value.
+build_card_json() {
   local id="$1" org_id="$2" name="$3" type="$4"
   local location="$5" phone="$6" hours="$7" pitch="$8"
   local offerings="$9" policies="${10}" review_url="${11:-}"
   local socials="${12:-}" specials="${13:-}" sla="${14:-}" policy_donts="${15:-}"
-  local ts; ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-  local review_line=""
-  if [[ -n "$review_url" ]]; then
-    review_line="- **Reviews:** ${review_url}
-<!-- machine:identity_value@1 {\"key\":\"review_url\",\"text\":\"${review_url}\"} -->"
-  fi
-  local socials_block=""
-  if [[ -n "$socials" ]]; then
-    socials_block="$(render_socials "$socials")"
-  fi
-  local sla_block=""
-  if [[ -n "$sla" ]]; then
-    sla_block="- **Response SLA:** ${sla}
-<!-- machine:response_sla@1 {\"text\":\"${sla}\"} -->"
-  fi
-  local policy_donts_block=""
-  if [[ -n "$policy_donts" ]]; then
-    policy_donts_block="$(render_policy_donts "$policy_donts")"
-  fi
+  local existing_file="${16:-}"
+  local card_dir="${HELIX_DIR}/${id}"
 
-  cat << CARDEOF
----
-format: business-card/0.2
-id: ${id}
-version: 1
-organization_id: ${org_id}
-status: draft
-updated: ${ts}
----
+  [[ -f "$BUILD_CARD" ]] || die "card builder not found: $BUILD_CARD"
 
-# ${name}
+  local args=(
+    --id "$id" --org "$org_id" --name "$name" --type "$type"
+    --location "$location" --phone "$phone" --hours "$hours" --pitch "$pitch"
+    --offerings "$offerings" --policies "$policies" --review-url "$review_url"
+    --socials "$socials" --specials "$specials" --sla "$sla"
+    --policy-donts "$policy_donts"
+  )
+  [[ -n "$existing_file" ]] && args+=(--existing-file "$existing_file")
 
-> ${pitch}
-
-## Identity
-- **Name:** ${name}
-<!-- machine:identity_value@1 {"key":"name","text":"${name}"} -->
-- **Pitch:** ${pitch}
-<!-- machine:identity_value@1 {"key":"elevator_pitch","text":"${pitch}"} -->
-- **Type:** ${type}
-<!-- machine:identity_value@1 {"key":"type","text":"${type}"} -->
-- **Address:** ${location}
-<!-- machine:identity_value@1 {"key":"location","text":"${location}"} -->
-- **Phone:** ${phone}
-<!-- machine:identity_value@1 {"key":"phone","text":"${phone}"} -->
-${review_line}
-${socials_block}
-
-## Voice
-- **Tone:** warm, helpful, professional
-- **Personality:** Friendly and knowledgeable representative for ${name}.
-- **Don't:** Use cold, corporate or impersonal language.
-<!-- machine:voice_dont@1 {"text":"Use cold, corporate or impersonal language."} -->
-- **Don't:** Rush callers or make them feel unwelcome.
-<!-- machine:voice_dont@1 {"text":"Rush callers or make them feel unwelcome."} -->
-
-## Offer
-$(render_offerings "$offerings")
-$(render_specials "$specials")
-
-## Operations
-- **Hours:** ${hours}
-<!-- machine:hour@1 {"text":"${hours}"} -->
-- **Channel:** phone
-<!-- machine:channel@1 {"name":"phone"} -->
-${sla_block}
-
-## Policy
-$(render_policies "$policies" "$name" "$phone")
-${policy_donts_block}
-
-## Knowledge
-General information about ${name} located at ${location}.
-<!-- machine:knowledge@1 {"text":"General information about ${name} located at ${location}."} -->
-CARDEOF
+  python3 "$BUILD_CARD" "${args[@]}" \
+    | ssh "$VPS" "cat > '${card_dir}/card.json'" \
+    || die "failed to write ${card_dir}/card.json"
 }
 
-# Generate card.json on VPS directly from CARD.md fields (no compiler needed)
+# Compile the authored card with the canonical compiler, verify the emitted
+# CARD.md (hash + acting_hash), then copy the compiler's REAL hashes into
+# card.json so JSON consumers (spark-gate's acting_hash pin, agentCompiler's
+# hash snip) never see a fabricated zero again.
 compile_card() {
   local id="$1"
   local card_dir="${HELIX_DIR}/${id}"
-  ssh "$VPS" python3 - "$card_dir" << 'PYEOF'
-import sys, json, hashlib, re, datetime
 
+  echo "--> Compiling ${id}..."
+  ssh "$VPS" "set -e
+    cd '${COMPILER}'
+    [ -d node_modules ] || { echo 'ERROR: no node_modules in ${COMPILER} — run npm ci there' >&2; exit 1; }
+    node dist/cli.js --card '${card_dir}/card.json' --out '${card_dir}'
+    node dist/cli.js --verify-md --md '${card_dir}/CARD.md'
+  " || die "compile or verify failed for ${id}"
+
+  ssh "$VPS" python3 - "'${card_dir}'" << 'PYEOF' || die "could not fold hashes into card.json for ${id}"
+import json, re, sys
 card_dir = sys.argv[1]
 md = open(f"{card_dir}/CARD.md").read()
-
-def extract(pattern, default=""):
-    m = re.search(pattern, md, re.MULTILINE)
-    return m.group(1) if m else default
-
-def extract_all(pattern):
-    return re.findall(pattern, md)
-
-def extract_json_all(pattern):
-    results = []
-    for m in re.finditer(pattern, md):
-        try: results.append(json.loads(m.group(1)))
-        except: pass
-    return results
-
-# Frontmatter
-fm_id       = extract(r'^id:\s*(.+)$', 'dna_unknown')
-fm_org      = extract(r'^organization_id:\s*(.+)$', 'org_unknown')
-fm_version  = int(extract(r'^version:\s*(\d+)$', '1'))
-fm_status   = extract(r'^status:\s*(.+)$', 'draft')
-now         = datetime.datetime.utcnow().isoformat() + "Z"
-
-# Identity values
-identity = {}
-for item in extract_json_all(r'machine:identity_value@1 ({[^}]+})'):
-    identity[item.get("key","")] = item.get("text","")
-
-# Offerings
-offerings = extract_json_all(r'machine:offering@1 ({[^}]+})')
-
-# Voice donts
-donts = [x.get("text","") for x in extract_json_all(r'machine:voice_dont@1 ({[^}]+})')]
-
-# Hours
-hours = [x.get("text","") for x in extract_json_all(r'machine:hour@1 ({[^}]+})')]
-
-# Channels
-channels = [x.get("name","") for x in extract_json_all(r'machine:channel@1 ({[^}]+})')]
-
-# Specials
-specials = extract_json_all(r'machine:special@1 ({[^}]+})')
-
-# Socials
-socials = {}
-for item in extract_json_all(r'machine:social@1 ({[^}]+})'):
-    socials[item.get("platform","")] = item.get("handle","")
-
-# Response SLA
-sla_items = extract_json_all(r'machine:response_sla@1 ({[^}]+})')
-response_sla = sla_items[0].get("text","") if sla_items else ""
-
-# Policy donts
-policy_donts = [x.get("text","") for x in extract_json_all(r'machine:policy_dont@1 ({[^}]+})')]
-
-# Pipeline stages (default)
-pipeline_stages = ["new", "contacted", "qualified", "converted", "lost"]
-
-# Policies
-policies = extract_json_all(r'machine:policy@1 ({[^}]+})')
-
-# Knowledge
-knowledge = [x.get("text","") for x in extract_json_all(r'machine:knowledge@1 ({[^}]+})')]
-
-# Build card dict (no hash computation needed for agent-voice)
-card = {
-    "id": fm_id,
-    "version": fm_version,
-    "hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
-    "acting_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
-    "organization_id": fm_org,
-    "status": fm_status,
-    "created_at": now,
-    "identity": {**identity, "socials": socials},
-    "voice": {
-        "tone": "warm, helpful, professional",
-        "personality": f"Friendly representative for {identity.get('name', 'the business')}.",
-        "donts": donts,
-    },
-    "offerings": offerings,
-    "specials": specials,
-    "operations": {
-        "hours": hours[0] if hours else "",
-        "channels": [{"type": c, "handle": "", "verified": False} for c in channels],
-        "pipeline_stages": pipeline_stages,
-        "response_sla": response_sla,
-    },
-    "policies": policies,
-    "policy_donts": policy_donts,
-    "knowledge": knowledge,
-}
-
-out = f"{card_dir}/card.json"
-with open(out, "w") as f:
-    json.dump(card, f, indent=2)
-print(f"compiled: {out} ({len(offerings)} offerings)")
-
-# Derive policy-seed.json from card policies
-HIGH_TOPICS = {"refund", "cancel", "return", "chargeback", "complaint", "dispute", "compensation"}
-seed_rules = []
-for p in policies:
-    topic = p.get("topic", "")
-    rule  = p.get("rule", "")
-    is_high = any(w in topic.lower() or w in rule.lower() for w in HIGH_TOPICS)
-    seed_rules.append({
-        "topic":             topic,
-        "rule":              rule,
-        "risk":              "high" if is_high else "low",
-        "verdict":           "approval_required" if is_high else "allow",
-        "source_confidence": 0.65,
-    })
-seed = {
-    "card_id":      fm_id,
-    "card_version": fm_version,
-    "generated_at": now,
-    "rules":        seed_rules,
-    "defaults":     {"low": "allow", "medium": "approval_required", "high": "escalate"},
-}
-seed_out = f"{card_dir}/policy-seed.json"
-with open(seed_out, "w") as f:
-    json.dump(seed, f, indent=2)
-
-# Derive tool-allowlist.json — standard set; add telephony if phone channel present
-tools = [
-    {"tool": "kb.search",              "reason": "answer from approved knowledge base"},
-    {"tool": "customer.lookup",        "reason": "read-only customer retrieval"},
-    {"tool": "order.lookup",           "reason": "read-only order retrieval"},
-    {"tool": "ticket.create",          "reason": "ticket creation is low-risk"},
-    {"tool": "ticket.update",          "reason": "ticket updates are low-risk"},
-    {"tool": "conversation.summarize", "reason": "summaries are read-only"},
-]
-if "phone" in channels:
-    tools.append({"tool": "telephony.place_call", "reason": "phone channel present"})
-allowlist = {"card_id": fm_id, "tools": tools}
-allow_out = f"{card_dir}/tool-allowlist.json"
-with open(allow_out, "w") as f:
-    json.dump(allowlist, f, indent=2)
+def fm(key):
+    m = re.search(rf"^{key}:\s*(?:sha256:)?([0-9a-f]{{64}})\s*$", md, re.M)
+    return m.group(1) if m else ""
+card = json.load(open(f"{card_dir}/card.json"))
+card["hash"] = fm("hash")
+card["acting_hash"] = fm("acting_hash")
+json.dump(card, open(f"{card_dir}/card.json", "w"), indent=2)
+print(f"    card.json: hash={card['hash'][:16]}... acting_hash={card['acting_hash'][:16]}...")
 PYEOF
 }
 
@@ -683,17 +432,14 @@ cmd_create() {
   ssh "$VPS" "echo '${SK_HEX}' > '${card_dir}/seckey' && chmod 600 '${card_dir}/seckey'"
   ssh "$VPS" "printf '%s\n%s\n%s\n' '${SK_HEX}' '${PK_HEX}' '${NPUB}' > '${card_dir}/identity'"
 
-  # 4. Generate and upload CARD.md
-  echo "--> Writing CARD.md..."
-  local card_content
-  card_content="$(render_card_md "$dna_id" "$org_id" "$OPT_NAME" "$OPT_TYPE" \
+  # 4. Author card.json (the source of truth) from operator input
+  echo "--> Writing card.json..."
+  build_card_json "$id" "$org_id" "$OPT_NAME" "$OPT_TYPE" \
     "$OPT_LOCATION" "$OPT_PHONE" "$OPT_HOURS" "$OPT_PITCH" \
     "$OPT_OFFERINGS" "$OPT_POLICIES" "$OPT_REVIEW_URL" \
-    "$OPT_SOCIALS" "$OPT_SPECIALS" "$OPT_SLA" "$OPT_POLICY_DONTS")"
-  echo "$card_content" | ssh "$VPS" "cat > '${card_dir}/CARD.md'"
+    "$OPT_SOCIALS" "$OPT_SPECIALS" "$OPT_SLA" "$OPT_POLICY_DONTS"
 
-  # 5. Compile card
-  echo "--> Compiling card..."
+  # 5. Compile the card -> CARD.md + system-prompt + policy-seed + allowlist + hugo
   compile_card "$id"
   post_compile_roles "$id"
 
@@ -769,126 +515,35 @@ cmd_update() {
 
   echo "==> Updating company: ${id}"
 
-  # Read existing CARD.md and patch fields that were provided
+  # card-first update: read the existing card.json, let build_card_json merge the
+  # provided fields over it (an empty option keeps the current value), then
+  # compile. No CARD.md grep-scraping, no re-render — the builder merges, the
+  # compiler derives, and only the compiler computes hashes.
   if [[ -n "$OPT_NAME" || -n "$OPT_LOCATION" || -n "$OPT_PHONE" || \
         -n "$OPT_HOURS" || -n "$OPT_PITCH" || -n "$OPT_OFFERINGS" || \
         -n "$OPT_POLICIES" || -n "$OPT_REVIEW_URL" || \
-        -n "$OPT_SOCIALS" || -n "$OPT_SPECIALS" || -n "$OPT_SLA" || -n "$OPT_POLICY_DONTS" ]]; then
+        -n "$OPT_SOCIALS" || -n "$OPT_SPECIALS" || -n "$OPT_SLA" || \
+        -n "$OPT_POLICY_DONTS" || "${OPT_TYPE_GIVEN:-0}" == "1" ]]; then
     echo "--> Fetching existing card..."
-    local existing_card; existing_card="$(ssh "$VPS" "cat '${card_dir}/CARD.md'")"
+    local existing_file="${HOME}/.helix/cards/${id}.json"
+    mkdir -p "$(dirname "$existing_file")"
+    ssh "$VPS" "cat '${card_dir}/card.json'" > "$existing_file" \
+      || die "could not read ${card_dir}/card.json"
 
-    # Extract existing values using grep
-    local cur_name cur_location cur_phone cur_hours cur_pitch cur_org cur_id
-    cur_name="$(echo "$existing_card" | grep '{"key":"name"' | head -1 | sed 's/.*"text":"\([^"]*\)".*/\1/')"
-    cur_location="$(echo "$existing_card" | grep '{"key":"location"' | head -1 | sed 's/.*"text":"\([^"]*\)".*/\1/')"
-    cur_phone="$(echo "$existing_card" | grep '{"key":"phone"' | head -1 | sed 's/.*"text":"\([^"]*\)".*/\1/')"
-    cur_hours="$(echo "$existing_card" | grep 'machine:hour' | head -1 | sed 's/.*"text":"\([^"]*\)".*/\1/')"
-    cur_pitch="$(echo "$existing_card" | grep '{"key":"elevator_pitch"' | head -1 | sed 's/.*"text":"\([^"]*\)".*/\1/')"
-    cur_org="$(echo "$existing_card" | grep '^organization_id:' | head -1 | awk '{print $2}')"
-    cur_id="$(echo "$existing_card" | grep '^id:' | head -1 | awk '{print $2}')"
+    local org_id
+    org_id="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("organization_id",""))' "$existing_file")"
 
-    # Extract existing offerings as comma-separated names (fallback when not overriding)
-    local cur_offerings cur_policies cur_review_url
-    local cur_socials cur_specials cur_sla cur_policy_donts
-    cur_review_url="$(echo "$existing_card" | grep '{"key":"review_url"' | head -1 | sed 's/.*"text":"\([^"]*\)".*/\1/' || true)"
-    cur_offerings="$(echo "$existing_card" | grep 'machine:offering' | \
-      sed 's/.*"name":"\([^"]*\)".*/\1/' | paste -sd ',' -)"
-    # Extract existing policies as pipe-separated "topic: rule" pairs
-    cur_policies="$(echo "$existing_card" | grep 'machine:policy' | \
-      python3 -c "
-import sys, json, re
-lines = sys.stdin.read().splitlines()
-pairs = []
-for l in lines:
-    m = re.search(r'\{.*\}', l)
-    if m:
-        try:
-            d = json.loads(m.group())
-            pairs.append(d.get('topic','') + ': ' + d.get('rule',''))
-        except: pass
-print('|'.join(pairs))
-")"
-    # Extract existing socials as "platform:handle|..." pipe-separated pairs
-    cur_socials="$(echo "$existing_card" | grep 'machine:social' | \
-      python3 -c "
-import sys, json, re
-lines = sys.stdin.read().splitlines()
-pairs = []
-for l in lines:
-    m = re.search(r'\{.*\}', l)
-    if m:
-        try:
-            d = json.loads(m.group())
-            pairs.append(d.get('platform','') + ':' + d.get('handle',''))
-        except: pass
-print('|'.join(pairs))
-" || true)"
-    # Extract existing specials as "name:description:price:valid_from:valid_to|..." pairs
-    cur_specials="$(echo "$existing_card" | grep 'machine:special' | \
-      python3 -c "
-import sys, json, re
-lines = sys.stdin.read().splitlines()
-pairs = []
-for l in lines:
-    m = re.search(r'\{.*\}', l)
-    if m:
-        try:
-            d = json.loads(m.group())
-            price = d.get('price') if d.get('price') is not None else ''
-            pairs.append(':'.join([d.get('name',''), d.get('description',''), str(price), d.get('valid_from','') or '', d.get('valid_to','') or '']))
-        except: pass
-print('|'.join(pairs))
-" || true)"
-    # Extract existing response SLA
-    cur_sla="$(echo "$existing_card" | grep 'machine:response_sla' | head -1 | \
-      python3 -c "
-import sys, json, re
-l = sys.stdin.read()
-m = re.search(r'\{.*\}', l)
-if m:
-    try:
-        d = json.loads(m.group())
-        print(d.get('text',''))
-    except: pass
-" || true)"
-    # Extract existing policy donts as pipe-separated list
-    cur_policy_donts="$(echo "$existing_card" | grep 'machine:policy_dont' | \
-      python3 -c "
-import sys, json, re
-lines = sys.stdin.read().splitlines()
-pairs = []
-for l in lines:
-    m = re.search(r'\{.*\}', l)
-    if m:
-        try:
-            d = json.loads(m.group())
-            pairs.append(d.get('text',''))
-        except: pass
-print('|'.join(pairs))
-" || true)"
+    # --type only when the operator supplied one: parse_args' "service" default
+    # must not silently overwrite an existing card's type.
+    local type_arg=""
+    [[ "${OPT_TYPE_GIVEN:-0}" == "1" ]] && type_arg="$OPT_TYPE"
 
-    # Apply overrides
-    [[ -n "$OPT_NAME" ]]      && cur_name="$OPT_NAME"
-    [[ -n "$OPT_LOCATION" ]]  && cur_location="$OPT_LOCATION"
-    [[ -n "$OPT_PHONE" ]]     && cur_phone="$OPT_PHONE"
-    [[ -n "$OPT_HOURS" ]]     && cur_hours="$OPT_HOURS"
-    [[ -n "$OPT_PITCH" ]]     && cur_pitch="$OPT_PITCH"
-    [[ -z "$OPT_OFFERINGS" ]]    && OPT_OFFERINGS="$cur_offerings"
-    [[ -z "$OPT_POLICIES" ]]     && OPT_POLICIES="$cur_policies"
-    [[ -z "$OPT_REVIEW_URL" ]]   && OPT_REVIEW_URL="$cur_review_url"
-    [[ -z "$OPT_SOCIALS" ]]      && OPT_SOCIALS="$cur_socials"
-    [[ -z "$OPT_SPECIALS" ]]     && OPT_SPECIALS="$cur_specials"
-    [[ -z "$OPT_SLA" ]]          && OPT_SLA="$cur_sla"
-    [[ -z "$OPT_POLICY_DONTS" ]] && OPT_POLICY_DONTS="$cur_policy_donts"
-    [[ -z "$OPT_TYPE" ]]         && OPT_TYPE="service"
+    build_card_json "$id" "$org_id" "$OPT_NAME" "$type_arg" \
+      "$OPT_LOCATION" "$OPT_PHONE" "$OPT_HOURS" "$OPT_PITCH" \
+      "$OPT_OFFERINGS" "$OPT_POLICIES" "$OPT_REVIEW_URL" \
+      "$OPT_SOCIALS" "$OPT_SPECIALS" "$OPT_SLA" "$OPT_POLICY_DONTS" \
+      "$existing_file"
 
-    local new_card
-    new_card="$(render_card_md "$cur_id" "$cur_org" "$cur_name" "$OPT_TYPE" \
-      "$cur_location" "$cur_phone" "$cur_hours" "$cur_pitch" \
-      "${OPT_OFFERINGS}" "${OPT_POLICIES}" "${OPT_REVIEW_URL}" \
-      "${OPT_SOCIALS}" "${OPT_SPECIALS}" "${OPT_SLA}" "${OPT_POLICY_DONTS}")"
-    echo "$new_card" | ssh "$VPS" "cat > '${card_dir}/CARD.md'"
-    echo "--> Recompiling..."
     compile_card "$id"
   fi
 

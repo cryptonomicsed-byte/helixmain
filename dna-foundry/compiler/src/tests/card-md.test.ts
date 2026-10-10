@@ -12,8 +12,8 @@ const { canonicalJson, cardHash } = require("../business-md");
 const { emitCardMd, actingHash } = require("../card-md");
 const { parseCardMd, verifyCardMd } = require("../card-md-parse");
 
-const PY_HASH = "804e8fc7b3157cb43ee4bb6edcdc8e6b42f1e18444510b6084f497adc313d270";
-const PY_ACTING_HASH = "d4b5f9b11e8e08d4af7876fca251a0a8b7e4df8ef737c0fc8ce029acd2177116";
+const PY_HASH = "a7cb34fd3facdbecbe5acbd8fc5b5959f321ad4117ec986b1e1532f942881f49";
+const PY_ACTING_HASH = "954dcc013927581e98f5313e8fb4895c0852808204dafc129d39dbdeb6e1899f";
 
 const CARD = {
   id: "dna_test0001",
@@ -26,10 +26,13 @@ const CARD = {
     name: "Santino's Pizza",
     tagline: "Family owned and operated since 1970.",
     elevator_pitch: "Family owned and operated since 1970 — hand-tossed pies in Parlin, NJ.",
+    type: "restaurant",
     location: "499 Ernston Rd, Parlin, NJ 08859",
     phone: "(732) 721-3163",
     timezone: "America/New_York",
     website: "https://santinospizzanj.com",
+    review_url: "https://g.page/santinospizza/review",
+    socials: { instagram: "@santinospizza", facebook: "santinospizzanj" },
   },
   voice: {
     tone: ["warm", "familial"],
@@ -43,6 +46,9 @@ const CARD = {
     { name: "Classic Cheese Pizza", kind: "pizza", orderable: true, price: null, confidence: 0.8 },
     { name: "Pepperoni Pizza", kind: "pizza", orderable: true, price: null, confidence: 0.7 },
   ],
+  specials: [
+    { name: "Friday Family Deal", description: "2 large pies + salad", price: 24.99, valid_from: "2026-10-01", valid_to: "2026-12-31" },
+  ],
   operations: {
     hours: "Mon–Fri 11am–9pm",
     channels: ["phone"],
@@ -51,6 +57,7 @@ const CARD = {
     pipeline_stages: ["new", "contacted", "quoted", "booked", "lost"],
   },
   policies: [{ topic: "Refunds", rule: "ask-human" }],
+  policy_donts: ["Never quote a price for a custom order", "Never promise same-day delivery"],
   handoff: {
     open_hours: "phone (732) 721-3163",
     channel: "phone",
@@ -73,7 +80,7 @@ const CARD = {
       extractor_agent: "extractor:website",
     },
   },
-  acting_hash: "d4b5f9b11e8e08d4af7876fca251a0a8b7e4df8ef737c0fc8ce029acd2177116",
+  acting_hash: "954dcc013927581e98f5313e8fb4895c0852808204dafc129d39dbdeb6e1899f",
 };
 
 const CHANGELOG = ["**v1** (2026-10-01T00:00:00Z): initial extraction — 12 findings"];
