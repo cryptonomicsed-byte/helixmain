@@ -9,6 +9,7 @@
 #           [--review-url "https://..."] [--socials "instagram:handle|facebook:handle"]
 #           [--specials "name:description:price:valid_from:valid_to|..."]
 #           [--sla "within 24 hours"] [--policy-donts "never do X|never do Y"]
+#           [--seckey <hex>] adopt an existing identity instead of generating one
 #   update  --id <slug> [same optional fields; a field not passed keeps its value]
 #   reload  --id <slug>
 #   status  [--id <slug>]
@@ -49,7 +50,7 @@ parse_args() {
   OPT_ID=""; OPT_NAME=""; OPT_TYPE="service"; OPT_TYPE_GIVEN=0; OPT_LOCATION=""
   OPT_PHONE=""; OPT_HOURS=""; OPT_PITCH=""; OPT_OFFERINGS=""; OPT_POLICIES=""
   OPT_REVIEW_URL=""
-  OPT_SOCIALS="" OPT_SPECIALS="" OPT_SLA="" OPT_POLICY_DONTS=""
+  OPT_SOCIALS="" OPT_SPECIALS="" OPT_SLA="" OPT_POLICY_DONTS="" OPT_SECKEY=""
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --id)           OPT_ID="$2";           shift 2 ;;
@@ -66,6 +67,7 @@ parse_args() {
       --specials)     OPT_SPECIALS="$2";     shift 2 ;;
       --sla)          OPT_SLA="$2";          shift 2 ;;
       --policy-donts) OPT_POLICY_DONTS="$2"; shift 2 ;;
+      --seckey)       OPT_SECKEY="$2";       shift 2 ;;
       *) die "Unknown option: $1" ;;
     esac
   done
@@ -118,6 +120,22 @@ sk = secrets.token_bytes(32)
 pk_int = minipae.pubkey_from_secret(int.from_bytes(sk, 'big'))
 pk = pk_int if isinstance(pk_int, bytes) else pk_int.to_bytes(32, 'big')
 print(sk.hex(), pk.hex())
+PYEOF
+}
+
+# Derive the public key hex from an existing secret key. Lets onboarding adopt
+# an identity a company already has (e.g. its ZeroClaw channel key) instead of
+# minting a second npub for the same business.
+derive_pubkey() {
+  local sk_hex="$1"
+  ssh "$VPS" python3 - "$sk_hex" << 'PYEOF'
+import sys
+sys.path.insert(0, '/opt/minipae'); sys.path.insert(0, '/opt/agent-phone')
+import minipae
+sk = bytes.fromhex(sys.argv[1])
+pk_int = minipae.pubkey_from_secret(int.from_bytes(sk, 'big'))
+pk = pk_int if isinstance(pk_int, bytes) else pk_int.to_bytes(32, 'big')
+print(pk.hex())
 PYEOF
 }
 
@@ -468,9 +486,17 @@ cmd_create() {
   # 1. Create directory on VPS
   ssh "$VPS" "mkdir -p '${card_dir}' '/var/lib/helix/${id}'"
 
-  # 2. Generate keypair
-  echo "--> Generating keypair..."
-  read -r SK_HEX PK_HEX <<< "$(gen_keypair)"
+  # 2. Generate — or adopt — the company identity. One npub per business: if the
+  # operator passes --seckey, use that key (e.g. the ZeroClaw channel key the
+  # agent already speaks with) rather than minting a second identity.
+  if [[ -n "$OPT_SECKEY" ]]; then
+    echo "--> Adopting supplied identity..."
+    SK_HEX="$OPT_SECKEY"
+    PK_HEX="$(derive_pubkey "$SK_HEX")"
+  else
+    echo "--> Generating keypair..."
+    read -r SK_HEX PK_HEX <<< "$(gen_keypair)"
+  fi
   NPUB="$(derive_npub "$PK_HEX")"
   echo "    npub: $NPUB"
 
