@@ -16,24 +16,24 @@
  * fabricates a result: if the API is down, the tool reports it as an error.
  *
  * Tools:
- *   voice.call        one turn of a company's card-grounded voice agent
- *   content.generate  campaign PRD -> channel assets for a company
- *   leads.discover    hunt leads (Apollo text filters, or OSM/Overpass by GPS)
- *   site.publish      generate the company's landing site from its card
- *   billing.status    credits/plan/usage + tier&pack prices; action=checkout creates
+ *   voice_call        one turn of a company's card-grounded voice agent
+ *   content_generate  campaign PRD -> channel assets for a company
+ *   leads_discover    hunt leads (Apollo text filters, or OSM/Overpass by GPS)
+ *   site_publish      generate the company's landing site from its card
+ *   billing_status    credits/plan/usage + tier&pack prices; action=checkout creates
  *                     a real Stripe session (the only write; still mints no credits)
- *   analytics.query   a company's analytics for a period (READ-ONLY — no charge)
- *   crm.manage        list/summary/by_stage/proposals (reads) plus propose->confirm
+ *   analytics_query   a company's analytics for a period (READ-ONLY — no charge)
+ *   crm_manage        list/summary/by_stage/proposals (reads) plus propose->confirm
  *                     for contacts — create/update only RECORD a proposal, nothing
  *                     is written until an owner confirms
  *
- *   dna.extract         run the extractor swarm against a URL -> a DNA card
- *   dna.get             fetch a card by id
- *   dna.compile         compile a card into prompt/policy/allowlist/rag
- *   dna.diff            field-level diff between two card versions
- *   dna.propose_change  propose a governed card mutation
- *   dna.decide_proposal approve/deny a pending proposal
- *   dna.sense           tiered re-crawl (change detection -> targeted extraction)
+ *   dna_extract         run the extractor swarm against a URL -> a DNA card
+ *   dna_get             fetch a card by id
+ *   dna_compile         compile a card into prompt/policy/allowlist/rag
+ *   dna_diff            field-level diff between two card versions
+ *   dna_propose_change  propose a governed card mutation
+ *   dna_decide_proposal approve/deny a pending proposal
+ *   dna_sense           tiered re-crawl (change detection -> targeted extraction)
  *
  * TWO WORLDS, TWO TRUST LEVELS — do not conflate them:
  *   The API tools (voice/content/leads/site/billing/analytics/crm) are thin clients
@@ -42,7 +42,7 @@
  *   compiler locally (handlers.py) against dna-foundry/cards + api/data/cards, and
  *   carry no tenant key. A foundry card is not a platform company.
  *
- * Cost note: only voice.call, content.generate, leads.discover and site.publish
+ * Cost note: only voice_call, content_generate, leads_discover and site_publish
  * spend credits, because only their API routes call deductCredits. The read tools
  * above wrap routes that do not charge, so they charge nothing — that is the
  * API's behaviour passed through, not a decision made here. dna.* never reach the
@@ -50,9 +50,9 @@
  * after a real payment; no tool here can mint them, and the API's top-up route is
  * deliberately not exposed.
  *
- * Write note: the only tools that change platform state are site.publish (a real
- * build), billing.status action=checkout (a Stripe session), and crm.manage's
- * propose->confirm pair. crm.manage create/update are PROPOSALS — they record an
+ * Write note: the only tools that change platform state are site_publish (a real
+ * build), billing_status action=checkout (a Stripe session), and crm_manage's
+ * propose->confirm pair. crm_manage create/update are PROPOSALS — they record an
  * intent and return 202; an owner credential applies it via confirm/deny.
  *
  * Env:
@@ -61,7 +61,7 @@
  *                   the target company's own company-level key from
  *                   <HELIX_CARD_ROOT>/<companyId>/api-keys.json — the presented
  *                   key IS the tenant identity, so we never hard-code one.
- *   HELIX_OWNER_KEY optional override for owner-gated routes (crm.manage confirm/
+ *   HELIX_OWNER_KEY optional override for owner-gated routes (crm_manage confirm/
  *                   deny). When unset, the owner key is read from the same file.
  *
  * Transport: stdio MCP, newline-delimited JSON-RPC 2.0.
@@ -115,7 +115,7 @@ const ROLES = ["front-desk", "sales", "content", "owner-manager"];
 
 const TOOLS = [
   {
-    name: "voice.call",
+    name: "voice_call",
     description:
       "Run one turn of a company's card-grounded voice agent: send what the caller " +
       "said, get the agent's reply. The agent is compiled from the company's DNA card " +
@@ -137,7 +137,7 @@ const TOOLS = [
     },
   },
   {
-    name: "content.generate",
+    name: "content_generate",
     description:
       "Generate a marketing campaign for a company, grounded in its card. Supply " +
       "either a ready `prd`, or a `goal` plus non-empty `channels[]` (the tool builds " +
@@ -160,7 +160,7 @@ const TOOLS = [
     },
   },
   {
-    name: "leads.discover",
+    name: "leads_discover",
     description:
       "Hunt leads for a company. With lat/lng, uses the OSM/Overpass path (real " +
       "nearby businesses); with text filters (industry/location/keywords), uses the " +
@@ -182,7 +182,7 @@ const TOOLS = [
     },
   },
   {
-    name: "site.publish",
+    name: "site_publish",
     description:
       "Publish the company's landing page to the public site and return its real " +
       "URL (https://helixmain.duckdns.org/b/{companyId}/). The page is built " +
@@ -198,7 +198,7 @@ const TOOLS = [
     },
   },
   {
-    name: "billing.status",
+    name: "billing_status",
     description:
       "A company's billing surface. `action=status` (default) is READ-ONLY: credit " +
       "balance + tier, latest plan, usage history — it spends no credits. " +
@@ -227,7 +227,7 @@ const TOOLS = [
     },
   },
   {
-    name: "analytics.query",
+    name: "analytics_query",
     description:
       "Read a company's analytics for a period. READ-ONLY — spends no credits. With " +
       "`enriched`, adds campaign/lead roll-ups; note the API computes the enriched " +
@@ -248,7 +248,7 @@ const TOOLS = [
     },
   },
   {
-    name: "crm.manage",
+    name: "crm_manage",
     description:
       "Work a company's CRM. Reads (list/summary/by_stage) and `proposals` are free. " +
       "`create`/`update` do NOT write — they RECORD a pending proposal (202) and change " +
@@ -281,7 +281,7 @@ const TOOLS = [
   // ── the seven DNA foundry tools. Names + schemas mirror dna-foundry/mcp/tools.json
   //    exactly; the implementation is the existing handlers.py (see dnaRun). ──────
   {
-    name: "dna.extract",
+    name: "dna_extract",
     description:
       "Run the extractor swarm against a business URL (or file:// fixture) and emit a " +
       "validated, versioned DNA card. Drives the foundry's own swarm.",
@@ -295,7 +295,7 @@ const TOOLS = [
     },
   },
   {
-    name: "dna.get",
+    name: "dna_get",
     description: "Fetch a DNA card by id from the foundry card tree.",
     inputSchema: {
       type: "object",
@@ -304,7 +304,7 @@ const TOOLS = [
     },
   },
   {
-    name: "dna.compile",
+    name: "dna_compile",
     description:
       "Deterministically compile a DNA card into system prompt, policy seed, tool " +
       "allowlist, and RAG manifest.",
@@ -315,7 +315,7 @@ const TOOLS = [
     },
   },
   {
-    name: "dna.diff",
+    name: "dna_diff",
     description: "Field-level diff between two card versions.",
     inputSchema: {
       type: "object",
@@ -327,7 +327,7 @@ const TOOLS = [
     },
   },
   {
-    name: "dna.propose_change",
+    name: "dna_propose_change",
     description:
       "Propose a governed mutation to a DNA card (field, old, new, evidence, confidence). " +
       "Low-risk factual updates mint a new version with hash chain + changelog + receipt; " +
@@ -346,7 +346,7 @@ const TOOLS = [
     },
   },
   {
-    name: "dna.decide_proposal",
+    name: "dna_decide_proposal",
     description: "Approve or deny a pending proposal. Approval mints the new card version.",
     inputSchema: {
       type: "object",
@@ -359,10 +359,10 @@ const TOOLS = [
     },
   },
   {
-    name: "dna.sense",
+    name: "dna_sense",
     description:
       "Tiered, cost-efficient re-crawl: Tier-0 change detection, Tier-1 heuristic triage, " +
-      "Tier-2 targeted extraction emitting dna.propose_change proposals, Tier-3 full " +
+      "Tier-2 targeted extraction emitting dna_propose_change proposals, Tier-3 full " +
       "re-extract on redesign. Adaptive per-site cadence from the volatility sidecar.",
     inputSchema: {
       type: "object",
@@ -419,7 +419,7 @@ async function api(pathname, body, opts) {
  * exists as `dna-foundry/mcp/handlers.py` — a dispatcher that drives the foundry's
  * own swarm + compiler. Nothing served it, so those tools "existed but went
  * nowhere". We SERVE that implementation rather than re-implement it against the
- * API: there is no API route for dna.sense, and fabricating one would be exactly
+ * API: there is no API route for dna_sense, and fabricating one would be exactly
  * the fiction this is meant to remove.
  *
  * What this preserves, and you should know it:
@@ -456,7 +456,7 @@ function dnaRun(tool, args) {
 }
 
 const HANDLERS = {
-  "voice.call": (a) =>
+  "voice_call": (a) =>
     api("/agent/session", {
       companyId: a.companyId,
       cardId: a.cardId,
@@ -464,7 +464,7 @@ const HANDLERS = {
       message: a.message,
     }),
 
-  "content.generate": async (a) => {
+  "content_generate": async (a) => {
     let prd = a.prd;
     if (!prd) {
       if (!a.goal || !Array.isArray(a.channels) || a.channels.length === 0) {
@@ -472,7 +472,7 @@ const HANDLERS = {
           httpStatus: 0,
           body: {
             ok: false,
-            error: "content.generate needs either `prd`, or `goal` + a non-empty `channels[]`",
+            error: "content_generate needs either `prd`, or `goal` + a non-empty `channels[]`",
           },
         };
       }
@@ -497,7 +497,7 @@ const HANDLERS = {
     return g;
   },
 
-  "leads.discover": (a) => {
+  "leads_discover": (a) => {
     if (typeof a.lat === "number" && typeof a.lng === "number") {
       return api("/sales/hunt/gps", {
         companyId: a.companyId,
@@ -519,7 +519,7 @@ const HANDLERS = {
     });
   },
 
-  "site.publish": async (a) => {
+  "site_publish": async (a) => {
     // The API now publishes via the Hugo pipeline and returns the real public
     // URL in `url`; we surface it verbatim rather than inventing a path.
     return api("/site/generate", { companyId: a.companyId });
@@ -527,7 +527,7 @@ const HANDLERS = {
 
   // Compose the billing picture from the API's own endpoints. Each part is the
   // API's answer; nothing is derived here. None of these routes charge credits.
-  "billing.status": async (a) => {
+  "billing_status": async (a) => {
     const q = encodeURIComponent(a.companyId);
     const action = a.action || "status";
 
@@ -589,7 +589,7 @@ const HANDLERS = {
     };
   },
 
-  "analytics.query": (a) => {
+  "analytics_query": (a) => {
     const period = a.period || "week";
     if (!["day", "week", "month"].includes(period)) {
       return { httpStatus: 0, body: { ok: false, error: "period must be day|week|month" } };
@@ -601,7 +601,7 @@ const HANDLERS = {
     return api(path, null, { method: "GET", companyId: a.companyId });
   },
 
-  "crm.manage": (a) => {
+  "crm_manage": (a) => {
     const q = encodeURIComponent(a.companyId);
     switch (a.action || "list") {
       case "list":
@@ -677,12 +677,12 @@ const HANDLERS = {
   },
 
   // ── DNA foundry tools: dispatch to the existing handlers.py (see dnaRun) ───
-  "dna.extract": (a) => dnaRun("dna.extract", { url: a.url, organization_id: a.organization_id }),
-  "dna.get": (a) => dnaRun("dna.get", { card_id: a.card_id }),
-  "dna.compile": (a) => dnaRun("dna.compile", { card_id: a.card_id }),
-  "dna.diff": (a) => dnaRun("dna.diff", { card_a: a.card_a, card_b: a.card_b }),
-  "dna.propose_change": (a) =>
-    dnaRun("dna.propose_change", {
+  "dna_extract": (a) => dnaRun("dna_extract", { url: a.url, organization_id: a.organization_id }),
+  "dna_get": (a) => dnaRun("dna_get", { card_id: a.card_id }),
+  "dna_compile": (a) => dnaRun("dna_compile", { card_id: a.card_id }),
+  "dna_diff": (a) => dnaRun("dna_diff", { card_a: a.card_a, card_b: a.card_b }),
+  "dna_propose_change": (a) =>
+    dnaRun("dna_propose_change", {
       card_id: a.card_id,
       field: a.field,
       old: a.old,
@@ -690,14 +690,14 @@ const HANDLERS = {
       evidence: a.evidence,
       confidence: a.confidence,
     }),
-  "dna.decide_proposal": (a) =>
-    dnaRun("dna.decide_proposal", {
+  "dna_decide_proposal": (a) =>
+    dnaRun("dna_decide_proposal", {
       proposal_id: a.proposal_id,
       decision: a.decision,
       decided_by: a.decided_by,
     }),
-  "dna.sense": (a) =>
-    dnaRun("dna.sense", { organization_id: a.organization_id, force: a.force }),
+  "dna_sense": (a) =>
+    dnaRun("dna_sense", { organization_id: a.organization_id, force: a.force }),
 };
 
 function rpcResult(id, result) {

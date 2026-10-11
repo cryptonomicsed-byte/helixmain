@@ -29,7 +29,7 @@ swarm/                      Python — orchestration, agents, decisions
                             output) -> deterministic heuristic. The provider
                             is recorded on every decision: the audit trail.
   sense.py                  tiered maintenance loop (see crawl-cost-model.md)
-  mutate.py                 dna.propose_change + Jev-scored policy gate +
+  mutate.py                 dna_propose_change + Jev-scored policy gate +
                             hash-chained versions + changelog + receipts
 compiler/                   TypeScript — the CARD.md compiler
   src/business-md.ts        emitBusinessMd: card -> md (canonical JSON hash)
@@ -37,7 +37,7 @@ compiler/                   TypeScript — the CARD.md compiler
                             detection); byte-identical round-trip
   src/cli.js                --roundtrip --verify-md --parse-md --diff --out
 api/                        TypeScript — REST API (cards, jobs, versions)
-mcp/                        MCP tools: dna.extract/compile/sense/propose_change/
+mcp/                        MCP tools: dna_extract/compile/sense/propose_change/
                             decide_proposal + agent.identity/provenance/consent
 apps/operator/              operator UI: CARD.md tab (rendered) | Card JSON
                             tab (compiled view) | Diff v1->v2 tab (line diff)
@@ -52,7 +52,7 @@ input / output free. It sits on exactly the decisions, and only the decisions:
 - **Tier 1 triage** ("did the page materially change? classify: hours /
   offering / redesign / new_content / noise") — a choice question; its
   calibrated confidence drives auto-apply vs escalate (< 0.5 escalates).
-- **`dna.propose_change` verification** ("is this proposal supported by the
+- **`dna_propose_change` verification** ("is this proposal supported by the
   evidence?") — a score question, 0–1; below 0.4 an auto-tier proposal is
   held for approval.
 - **The policy gate** — a noul ("should this auto-apply?"); auto only on a

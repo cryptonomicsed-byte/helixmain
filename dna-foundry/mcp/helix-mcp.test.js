@@ -81,20 +81,20 @@ test("tools/list exposes the platform tools AND the seven dna.* foundry tools", 
     assert.deepEqual(
       result.tools.map((t) => t.name).sort(),
       [
-        "analytics.query",
-        "billing.status",
-        "content.generate",
-        "crm.manage",
-        "dna.compile",
-        "dna.decide_proposal",
-        "dna.diff",
-        "dna.extract",
-        "dna.get",
-        "dna.propose_change",
-        "dna.sense",
-        "leads.discover",
-        "site.publish",
-        "voice.call",
+        "analytics_query",
+        "billing_status",
+        "content_generate",
+        "crm_manage",
+        "dna_compile",
+        "dna_decide_proposal",
+        "dna_diff",
+        "dna_extract",
+        "dna_get",
+        "dna_propose_change",
+        "dna_sense",
+        "leads_discover",
+        "site_publish",
+        "voice_call",
       ]
     );
     for (const t of result.tools) {
@@ -106,13 +106,13 @@ test("tools/list exposes the platform tools AND the seven dna.* foundry tools", 
   }
 });
 
-test("voice.call posts the message to /agent/session and returns the reply", async () => {
+test("voice_call posts the message to /agent/session and returns the reply", async () => {
   const { rpc, calls, close } = await setup({
     "/agent/session": { status: 200, body: { ok: true, reply: "We open at 9." } },
   });
   try {
     const { result } = await rpc("tools/call", {
-      name: "voice.call",
+      name: "voice_call",
       arguments: { companyId: "demo-barber", message: "When do you open?" },
     });
     assert.equal(result.isError, false);
@@ -125,14 +125,14 @@ test("voice.call posts the message to /agent/session and returns the reply", asy
   }
 });
 
-test("content.generate builds a PRD then assets when given goal + channels", async () => {
+test("content_generate builds a PRD then assets when given goal + channels", async () => {
   const { rpc, calls, close } = await setup({
     "/content/prd": { status: 200, body: { ok: true, prd: { id: "prd_1", goal: "lunch" } } },
     "/content/generate": { status: 200, body: { ok: true, assets: [{ id: "a1" }] } },
   });
   try {
     const { result } = await rpc("tools/call", {
-      name: "content.generate",
+      name: "content_generate",
       arguments: { companyId: "cafe", goal: "fill lunch", channels: ["instagram", "email"] },
     });
     assert.equal(result.isError, false);
@@ -145,13 +145,13 @@ test("content.generate builds a PRD then assets when given goal + channels", asy
   }
 });
 
-test("content.generate with a ready prd skips PRD generation", async () => {
+test("content_generate with a ready prd skips PRD generation", async () => {
   const { rpc, calls, close } = await setup({
     "/content/generate": { status: 200, body: { ok: true, assets: [] } },
   });
   try {
     const { result } = await rpc("tools/call", {
-      name: "content.generate",
+      name: "content_generate",
       arguments: { companyId: "cafe", prd: { id: "prd_x" } },
     });
     assert.equal(result.isError, false);
@@ -161,11 +161,11 @@ test("content.generate with a ready prd skips PRD generation", async () => {
   }
 });
 
-test("content.generate with neither prd nor goal+channels fails without calling the API", async () => {
+test("content_generate with neither prd nor goal+channels fails without calling the API", async () => {
   const { rpc, calls, close } = await setup();
   try {
     const { result } = await rpc("tools/call", {
-      name: "content.generate",
+      name: "content_generate",
       arguments: { companyId: "cafe" },
     });
     assert.equal(result.isError, true);
@@ -176,18 +176,18 @@ test("content.generate with neither prd nor goal+channels fails without calling 
   }
 });
 
-test("leads.discover routes by lat/lng: GPS path when present, Apollo path otherwise", async () => {
+test("leads_discover routes by lat/lng: GPS path when present, Apollo path otherwise", async () => {
   const { rpc, calls, close } = await setup({
     "/sales/hunt/gps": { status: 200, body: { ok: true, leads: [{ id: "l1" }] } },
     "/sales/hunt": { status: 200, body: { ok: true, leads: [] } },
   });
   try {
     await rpc("tools/call", {
-      name: "leads.discover",
+      name: "leads_discover",
       arguments: { companyId: "cafe", lat: 40.5, lng: -74.3, industry: "barbershop" },
     });
     await rpc("tools/call", {
-      name: "leads.discover",
+      name: "leads_discover",
       arguments: { companyId: "cafe", industry: "barbershop", location: "Parlin, NJ" },
     });
     assert.deepEqual(calls.map((c) => c.path), ["/sales/hunt/gps", "/sales/hunt"]);
@@ -198,7 +198,7 @@ test("leads.discover routes by lat/lng: GPS path when present, Apollo path other
   }
 });
 
-test("site.publish publishes and returns the real public URL", async () => {
+test("site_publish publishes and returns the real public URL", async () => {
   const { rpc, calls, close } = await setup({
     "/site/generate": {
       status: 200,
@@ -207,7 +207,7 @@ test("site.publish publishes and returns the real public URL", async () => {
   });
   try {
     const { result } = await rpc("tools/call", {
-      name: "site.publish",
+      name: "site_publish",
       arguments: { companyId: "cafe" },
     });
     assert.equal(result.isError, false);
@@ -228,7 +228,7 @@ test("the machine caller presents the tenant key (HELIX_API_KEY override)", asyn
   );
   try {
     await rpc("tools/call", {
-      name: "voice.call",
+      name: "voice_call",
       arguments: { companyId: "demo-barber", message: "hello" },
     });
     // routes are authenticated (#1): without this the API answers 401
@@ -253,7 +253,7 @@ test("with no env override the key is read from the company's own 0600 store", a
     { HELIX_CARD_ROOT: root, HELIX_API_KEY: "" },
   );
   try {
-    await rpc("tools/call", { name: "site.publish", arguments: { companyId: "cafe" } });
+    await rpc("tools/call", { name: "site_publish", arguments: { companyId: "cafe" } });
     assert.equal(calls[0].headers["x-api-key"], "hk_from_disk");
   } finally {
     await close();
@@ -267,7 +267,7 @@ test("an API 402 surfaces as isError with the status, not a fabricated success",
   });
   try {
     const { result } = await rpc("tools/call", {
-      name: "site.publish",
+      name: "site_publish",
       arguments: { companyId: "cafe" },
     });
     assert.equal(result.isError, true);
@@ -282,7 +282,7 @@ test("a missing required argument fails before any API call", async () => {
   const { rpc, calls, close } = await setup();
   try {
     const { result } = await rpc("tools/call", {
-      name: "voice.call",
+      name: "voice_call",
       arguments: { companyId: "cafe" },
     });
     assert.equal(result.isError, true);
@@ -332,7 +332,7 @@ test("an unreachable API is an error, never an invented answer", async () => {
   try {
     await rpc("initialize", {});
     const { result } = await rpc("tools/call", {
-      name: "site.publish",
+      name: "site_publish",
       arguments: { companyId: "cafe" },
     });
     assert.equal(result.isError, true);
@@ -345,14 +345,14 @@ test("an unreachable API is an error, never an invented answer", async () => {
 
 // ── the read/compose tools added with the billing/analytics/crm routes ────────
 
-test("analytics.query GETs /analytics/:id with the period and carries the key", async () => {
+test("analytics_query GETs /analytics/:id with the period and carries the key", async () => {
   const { rpc, calls, close } = await setup(
     { "/analytics/demo-barber?period=week": { status: 200, body: { ok: true, calls: 12 } } },
     { HELIX_API_KEY: "hk_test" }
   );
   try {
     const { result } = await rpc("tools/call", {
-      name: "analytics.query",
+      name: "analytics_query",
       arguments: { companyId: "demo-barber" },
     });
     assert.equal(result.isError, false);
@@ -365,11 +365,11 @@ test("analytics.query GETs /analytics/:id with the period and carries the key", 
   }
 });
 
-test("analytics.query rejects a bad period before any API call", async () => {
+test("analytics_query rejects a bad period before any API call", async () => {
   const { rpc, calls, close } = await setup();
   try {
     const { result } = await rpc("tools/call", {
-      name: "analytics.query",
+      name: "analytics_query",
       arguments: { companyId: "cafe", period: "fortnight" },
     });
     assert.equal(result.isError, true);
@@ -380,7 +380,7 @@ test("analytics.query rejects a bad period before any API call", async () => {
   }
 });
 
-test("billing.status composes metering + plan + history; a missing plan is not an error", async () => {
+test("billing_status composes metering + plan + history; a missing plan is not an error", async () => {
   const { rpc, calls, close } = await setup({
     "/metering/demo-barber": { status: 200, body: { companyId: "demo-barber", balance: 60, tier: "free" } },
     "/plan/demo-barber": { status: 404, body: { ok: false, error: "no plan found for company" } },
@@ -388,7 +388,7 @@ test("billing.status composes metering + plan + history; a missing plan is not a
   });
   try {
     const { result } = await rpc("tools/call", {
-      name: "billing.status",
+      name: "billing_status",
       arguments: { companyId: "demo-barber" },
     });
     assert.equal(result.isError, false);
@@ -407,7 +407,7 @@ test("billing.status composes metering + plan + history; a missing plan is not a
   }
 });
 
-test("billing.status config/checkout/portal map to the billing routes", async () => {
+test("billing_status config/checkout/portal map to the billing routes", async () => {
   const { rpc, calls, close } = await setup({
     "/billing/config": { status: 200, body: { tiers: { free: {} }, packs: [] } },
     "/billing/checkout": { status: 200, body: { ok: true, checkoutUrl: "https://checkout.stripe.com/x" } },
@@ -415,15 +415,15 @@ test("billing.status config/checkout/portal map to the billing routes", async ()
   });
   try {
     const cfg = await rpc("tools/call", {
-      name: "billing.status",
+      name: "billing_status",
       arguments: { companyId: "demo-barber", action: "config" },
     });
     const co = await rpc("tools/call", {
-      name: "billing.status",
+      name: "billing_status",
       arguments: { companyId: "demo-barber", action: "checkout", priceId: "price_123" },
     });
     const po = await rpc("tools/call", {
-      name: "billing.status",
+      name: "billing_status",
       arguments: { companyId: "demo-barber", action: "portal" },
     });
     assert.equal(cfg.result.isError, false);
@@ -444,11 +444,11 @@ test("billing.status config/checkout/portal map to the billing routes", async ()
   }
 });
 
-test("billing.status checkout without a priceId fails without calling the API", async () => {
+test("billing_status checkout without a priceId fails without calling the API", async () => {
   const { rpc, calls, close } = await setup();
   try {
     const r = await rpc("tools/call", {
-      name: "billing.status",
+      name: "billing_status",
       arguments: { companyId: "demo-barber", action: "checkout" },
     });
     assert.equal(r.result.isError, true);
@@ -458,7 +458,7 @@ test("billing.status checkout without a priceId fails without calling the API", 
   }
 });
 
-test("crm.manage maps each action to its real endpoint", async () => {
+test("crm_manage maps each action to its real endpoint", async () => {
   const { rpc, calls, close } = await setup({
     "/crm/contacts/demo-barber": { status: 200, body: [] },
     "/crm/summary/demo-barber": { status: 200, body: { total: 0 } },
@@ -467,12 +467,12 @@ test("crm.manage maps each action to its real endpoint", async () => {
     "/crm/contacts/c1": { status: 202, body: { ok: true, status: "pending", proposal: { id: "crp_2" } } },
   });
   try {
-    await rpc("tools/call", { name: "crm.manage", arguments: { companyId: "demo-barber" } });
-    await rpc("tools/call", { name: "crm.manage", arguments: { companyId: "demo-barber", action: "summary" } });
-    await rpc("tools/call", { name: "crm.manage", arguments: { companyId: "demo-barber", action: "by_stage", stage: "won" } });
-    await rpc("tools/call", { name: "crm.manage", arguments: { companyId: "demo-barber", action: "create", contact: { name: "Ada" } } });
+    await rpc("tools/call", { name: "crm_manage", arguments: { companyId: "demo-barber" } });
+    await rpc("tools/call", { name: "crm_manage", arguments: { companyId: "demo-barber", action: "summary" } });
+    await rpc("tools/call", { name: "crm_manage", arguments: { companyId: "demo-barber", action: "by_stage", stage: "won" } });
+    await rpc("tools/call", { name: "crm_manage", arguments: { companyId: "demo-barber", action: "create", contact: { name: "Ada" } } });
     const upd = await rpc("tools/call", {
-      name: "crm.manage",
+      name: "crm_manage",
       arguments: { companyId: "demo-barber", action: "update", contactId: "c1", stage: "won" },
     });
     assert.equal(upd.result.isError, false);
@@ -502,7 +502,7 @@ test("a list-shaped API answer keeps its array shape (no numeric-key flattening)
   });
   try {
     const r = await rpc("tools/call", {
-      name: "crm.manage",
+      name: "crm_manage",
       arguments: { companyId: "demo-barber", action: "list" },
     });
     assert.equal(r.result.isError, false);
@@ -522,7 +522,7 @@ test("an empty list answer is an empty array, not a bare ok", async () => {
   });
   try {
     const r = await rpc("tools/call", {
-      name: "crm.manage",
+      name: "crm_manage",
       arguments: { companyId: "demo-barber", action: "list" },
     });
     const payload = JSON.parse(r.result.content[0].text);
@@ -532,7 +532,7 @@ test("an empty list answer is an empty array, not a bare ok", async () => {
   }
 });
 
-test("crm.manage confirm/deny apply a proposal and carry the owner credential", async () => {
+test("crm_manage confirm/deny apply a proposal and carry the owner credential", async () => {
   const { rpc, calls, close } = await setup(
     {
       "/crm/proposals/demo-barber": { status: 200, body: { ok: true, proposals: [{ id: "crp_1" }] } },
@@ -542,13 +542,13 @@ test("crm.manage confirm/deny apply a proposal and carry the owner credential", 
     { HELIX_API_KEY: "k_company", HELIX_OWNER_KEY: "k_owner" }
   );
   try {
-    await rpc("tools/call", { name: "crm.manage", arguments: { companyId: "demo-barber", action: "proposals" } });
+    await rpc("tools/call", { name: "crm_manage", arguments: { companyId: "demo-barber", action: "proposals" } });
     const c = await rpc("tools/call", {
-      name: "crm.manage",
+      name: "crm_manage",
       arguments: { companyId: "demo-barber", action: "confirm", proposalId: "crp_1" },
     });
     const d = await rpc("tools/call", {
-      name: "crm.manage",
+      name: "crm_manage",
       arguments: { companyId: "demo-barber", action: "deny", proposalId: "crp_2" },
     });
     assert.equal(c.result.isError, false);
@@ -569,21 +569,21 @@ test("crm.manage confirm/deny apply a proposal and carry the owner credential", 
   }
 });
 
-test("crm.manage refuses an incomplete action without calling the API", async () => {
+test("crm_manage refuses an incomplete action without calling the API", async () => {
   const { rpc, calls, close } = await setup();
   try {
     const a = await rpc("tools/call", {
-      name: "crm.manage",
+      name: "crm_manage",
       arguments: { companyId: "cafe", action: "by_stage" },
     });
     assert.equal(a.result.isError, true);
     const b = await rpc("tools/call", {
-      name: "crm.manage",
+      name: "crm_manage",
       arguments: { companyId: "cafe", action: "update", contactId: "c1" },
     });
     assert.equal(b.result.isError, true);
     const c = await rpc("tools/call", {
-      name: "crm.manage",
+      name: "crm_manage",
       arguments: { companyId: "cafe", action: "confirm" },
     });
     assert.equal(c.result.isError, true);
@@ -607,15 +607,15 @@ test("every write tool uses the API route's real HTTP verb", async () => {
     "/billing/checkout": { status: 200, body: { ok: true, checkoutUrl: "u" } },
   });
   try {
-    await rpc("tools/call", { name: "voice.call", arguments: { companyId: "demo-barber", message: "hi" } });
-    await rpc("tools/call", { name: "content.generate", arguments: { companyId: "demo-barber", goal: "g", channels: ["email"] } });
-    await rpc("tools/call", { name: "leads.discover", arguments: { companyId: "demo-barber", industry: "x" } });
-    await rpc("tools/call", { name: "leads.discover", arguments: { companyId: "demo-barber", lat: 1, lng: 2 } });
-    await rpc("tools/call", { name: "site.publish", arguments: { companyId: "demo-barber" } });
-    await rpc("tools/call", { name: "crm.manage", arguments: { companyId: "demo-barber", action: "create", contact: { name: "A" } } });
-    await rpc("tools/call", { name: "crm.manage", arguments: { companyId: "demo-barber", action: "update", contactId: "c1", note: "n" } });
-    await rpc("tools/call", { name: "crm.manage", arguments: { companyId: "demo-barber", action: "confirm", proposalId: "p1" } });
-    await rpc("tools/call", { name: "billing.status", arguments: { companyId: "demo-barber", action: "checkout", priceId: "price_1" } });
+    await rpc("tools/call", { name: "voice_call", arguments: { companyId: "demo-barber", message: "hi" } });
+    await rpc("tools/call", { name: "content_generate", arguments: { companyId: "demo-barber", goal: "g", channels: ["email"] } });
+    await rpc("tools/call", { name: "leads_discover", arguments: { companyId: "demo-barber", industry: "x" } });
+    await rpc("tools/call", { name: "leads_discover", arguments: { companyId: "demo-barber", lat: 1, lng: 2 } });
+    await rpc("tools/call", { name: "site_publish", arguments: { companyId: "demo-barber" } });
+    await rpc("tools/call", { name: "crm_manage", arguments: { companyId: "demo-barber", action: "create", contact: { name: "A" } } });
+    await rpc("tools/call", { name: "crm_manage", arguments: { companyId: "demo-barber", action: "update", contactId: "c1", note: "n" } });
+    await rpc("tools/call", { name: "crm_manage", arguments: { companyId: "demo-barber", action: "confirm", proposalId: "p1" } });
+    await rpc("tools/call", { name: "billing_status", arguments: { companyId: "demo-barber", action: "checkout", priceId: "price_1" } });
     assert.deepEqual(
       calls.map((c) => `${c.method} ${c.path}`),
       [
@@ -649,12 +649,12 @@ test("every read tool uses GET", async () => {
     "/crm/proposals/demo-barber": { status: 200, body: { ok: true, proposals: [] } },
   });
   try {
-    await rpc("tools/call", { name: "billing.status", arguments: { companyId: "demo-barber" } });
-    await rpc("tools/call", { name: "billing.status", arguments: { companyId: "demo-barber", action: "config" } });
-    await rpc("tools/call", { name: "billing.status", arguments: { companyId: "demo-barber", action: "portal" } });
-    await rpc("tools/call", { name: "analytics.query", arguments: { companyId: "demo-barber" } });
-    await rpc("tools/call", { name: "crm.manage", arguments: { companyId: "demo-barber", action: "summary" } });
-    await rpc("tools/call", { name: "crm.manage", arguments: { companyId: "demo-barber", action: "proposals" } });
+    await rpc("tools/call", { name: "billing_status", arguments: { companyId: "demo-barber" } });
+    await rpc("tools/call", { name: "billing_status", arguments: { companyId: "demo-barber", action: "config" } });
+    await rpc("tools/call", { name: "billing_status", arguments: { companyId: "demo-barber", action: "portal" } });
+    await rpc("tools/call", { name: "analytics_query", arguments: { companyId: "demo-barber" } });
+    await rpc("tools/call", { name: "crm_manage", arguments: { companyId: "demo-barber", action: "summary" } });
+    await rpc("tools/call", { name: "crm_manage", arguments: { companyId: "demo-barber", action: "proposals" } });
     assert.ok(
       calls.every((c) => c.method === "GET"),
       `non-GET read: ${JSON.stringify(calls.map((c) => `${c.method} ${c.path}`))}`
@@ -670,12 +670,12 @@ test("dna tools dispatch to the foundry handler, invent no http status, and neve
   const { rpc, calls, close } = await setup();
   try {
     const { result } = await rpc("tools/call", {
-      name: "dna.get",
+      name: "dna_get",
       arguments: { card_id: "dna_definitely_not_a_real_card" },
     });
     assert.equal(result.isError, true);
     const payload = JSON.parse(result.content[0].text);
-    assert.equal(payload.tool, "dna.get");
+    assert.equal(payload.tool, "dna_get");
     assert.equal(payload.ok, false);
     assert.match(payload.error, /card not found/);
     // It is a local call: no HTTP happened, so none is reported.
@@ -686,7 +686,7 @@ test("dna tools dispatch to the foundry handler, invent no http status, and neve
   }
 });
 
-test("dna.get on a real foundry fixture card returns the card body", async () => {
+test("dna_get on a real foundry fixture card returns the card body", async () => {
   const fs = require("node:fs");
   const cardsDir = path.join(__dirname, "..", "cards");
   const any = fs.existsSync(cardsDir)
@@ -700,7 +700,7 @@ test("dna.get on a real foundry fixture card returns the card body", async () =>
   const { rpc, calls, close } = await setup();
   try {
     const { result } = await rpc("tools/call", {
-      name: "dna.get",
+      name: "dna_get",
       arguments: { card_id: cardId },
     });
     const payload = JSON.parse(result.content[0].text);

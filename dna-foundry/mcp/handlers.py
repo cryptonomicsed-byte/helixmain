@@ -111,11 +111,11 @@ def tool_sense(args: dict) -> dict:
     return _swarm(cmd)
 
 
-HANDLERS = {"dna.extract": tool_extract, "dna.get": tool_get,
-            "dna.compile": tool_compile, "dna.diff": tool_diff,
-            "dna.propose_change": tool_propose_change,
-            "dna.decide_proposal": tool_decide_proposal,
-            "dna.sense": tool_sense}
+HANDLERS = {"dna_extract": tool_extract, "dna_get": tool_get,
+            "dna_compile": tool_compile, "dna_diff": tool_diff,
+            "dna_propose_change": tool_propose_change,
+            "dna_decide_proposal": tool_decide_proposal,
+            "dna_sense": tool_sense}
 
 
 def main():
