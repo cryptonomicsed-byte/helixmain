@@ -604,9 +604,9 @@ export const api = {
   campaignExport: (campaignId: string) =>
     get<any>(`/content/campaign/${campaignId}/zip`),
 
-  // Site generator
+  // Site generator — calls the LLM preview generator, not the Hugo publish path
   generateSite: (companyId: string) =>
-    post<{ ok: boolean; companyId: string; generatedAt: string }>('/site/generate', { companyId }),
+    post<{ ok: boolean; companyId: string; generatedAt: string }>('/site/preview', { companyId }),
 
   listSites: () =>
     get<{ ok: boolean; companies: string[] }>('/sites'),

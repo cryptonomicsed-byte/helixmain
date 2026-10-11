@@ -4507,8 +4507,21 @@ app.get("/call/:companyId", async (req, reply) => {
   let companyName = "Helix Agent";
   let tagline = "Talk to our AI voice agent";
 
-  // Try to load card for company branding
-  const cardPath = await findCard(companyId);
+  // Try to load card for company branding — also scan data/cards/ by organizationId
+  // for directory companies that have no card.json in HELIX_COMPANIES
+  let cardPath = await findCard(companyId);
+  if (!cardPath) {
+    const files = await fs.readdir(CARDS).catch(() => [] as string[]);
+    for (const f of files) {
+      try {
+        const raw = JSON.parse(await fs.readFile(path.join(CARDS, f), "utf8"));
+        if (raw?.organizationId === companyId || raw?.organization_id === companyId) {
+          cardPath = path.join(CARDS, f);
+          break;
+        }
+      } catch { /* skip malformed */ }
+    }
+  }
   if (cardPath) {
     try {
       const card = JSON.parse(await fs.readFile(cardPath, "utf8"));
