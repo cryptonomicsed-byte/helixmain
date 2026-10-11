@@ -77,6 +77,22 @@ export async function authFetch(path: string, init: RequestInit = {}): Promise<R
   return res
 }
 
+/** An API error that KEEPS the status and parsed body, so a caller can act on a
+ *  specific response (e.g. 409 card_exists → show a confirm) rather than parse it
+ *  back out of a message string. */
+export class ApiError extends Error {
+  status: number
+  body: any
+  constructor(method: string, path: string, status: number, raw: string) {
+    let parsed: any = null
+    try { parsed = JSON.parse(raw) } catch { /* not json */ }
+    super(parsed?.message || parsed?.error || raw || `${method} ${path}`)
+    this.name = 'ApiError'
+    this.status = status
+    this.body = parsed
+  }
+}
+
 async function request<T>(method: string, path: string, body?: unknown, base = BASE): Promise<T> {
   const headers: Record<string, string> = base === BASE ? authHeaders() : {}
   if (body) headers['Content-Type'] = 'application/json'
@@ -91,7 +107,7 @@ async function request<T>(method: string, path: string, body?: unknown, base = B
   }
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText)
-    throw new Error(`${method} ${path} → ${res.status}: ${text}`)
+    throw new ApiError(method, path, res.status, text)
   }
   return res.json() as Promise<T>
 }
@@ -370,8 +386,8 @@ export interface CompanyAiPatch {
 
 export const api = {
   // Extraction & compilation
-  extract: async (url: string) =>
-    normalizeCard(await post<any>('/extract', { url })),
+  extract: async (url: string, replace = false) =>
+    normalizeCard(await post<any>('/extract', replace ? { url, replace: true } : { url })),
 
   compile: (cardId: string, companyId: string) =>
     post<CompileResult>('/compile', { cardId, companyId }),

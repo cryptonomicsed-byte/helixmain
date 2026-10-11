@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { api } from '../api'
+import { api, ApiError } from '../api'
 import { useHelixStore } from '../store'
 import type { BusinessCard } from '../api'
 
@@ -62,6 +62,9 @@ export function OnboardPage() {
   const [phase, setPhase] = useState<Phase>('input')
   const [error, setError] = useState<string | null>(null)
   const [card, setCard] = useState<BusinessCard | null>(null)
+  // Set when the API reports (409 card_exists) that this company already has a card,
+  // so we ask before replacing it rather than silently destroying the old one.
+  const [existing, setExisting] = useState<{ name: string; version: number } | null>(null)
 
   // Local edits on top of extracted card
   const [edits, setEdits] = useState<Record<string, string>>({})
@@ -76,8 +79,7 @@ export function OnboardPage() {
     return { ...f, value: key in edits ? edits[key as string] : (f.value ?? '') }
   }
 
-  async function handleExtract(e: React.FormEvent) {
-    e.preventDefault()
+  async function runExtract(replace: boolean) {
     if (!url.trim()) return
     setError(null)
     setPhase('extracting')
@@ -86,13 +88,30 @@ export function OnboardPage() {
       // fill. The old "Org ID" input auto-generated `org_<timestamp>` and the API
       // correctly rejected it as a foreign tenant, so every extraction minted a
       // brand-new company directory (the org_* clutter).
-      const extracted = await api.extract(url.trim())
+      const extracted = await api.extract(url.trim(), replace)
       setCard(extracted)
+      setExisting(null)
       setPhase('review')
     } catch (err) {
+      // 409 = the company already has a card. Ask before replacing it; the API
+      // snapshots the old card, so "Replace" is reversible.
+      if (err instanceof ApiError && err.status === 409 && err.body?.error === 'card_exists') {
+        setExisting({
+          name: err.body?.current?.name ?? 'this company',
+          version: err.body?.current?.version ?? 1,
+        })
+        setError(null)
+        setPhase('input')
+        return
+      }
       setError(err instanceof Error ? err.message : String(err))
       setPhase('input')
     }
+  }
+
+  function handleExtract(e: React.FormEvent) {
+    e.preventDefault()
+    void runExtract(false)
   }
 
   async function handleGoLive() {
@@ -141,6 +160,43 @@ export function OnboardPage() {
                 disabled={phase === 'extracting'}
               />
             </div>
+            {existing && (
+              <div style={{
+                marginBottom: '1.25rem', padding: '0.85rem',
+                background: '#f59e0b14', border: '1px solid #f59e0b55',
+                borderRadius: 8, fontSize: '0.85rem', color: 'var(--fg)',
+              }}>
+                <div style={{ fontWeight: 600, marginBottom: '0.35rem' }}>
+                  {existing.name} already has a card (v{existing.version}).
+                </div>
+                <div style={{ color: 'var(--fg-3)', marginBottom: '0.7rem' }}>
+                  Extracting again replaces it. Your current card is snapshotted first, so this is recoverable.
+                </div>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button
+                    type="button"
+                    onClick={() => void runExtract(true)}
+                    disabled={phase === 'extracting'}
+                    style={{
+                      background: '#f59e0b', color: '#1a1205', border: 'none', borderRadius: 6,
+                      padding: '0.45rem 0.9rem', fontSize: '0.82rem', fontWeight: 700, cursor: 'pointer',
+                    }}
+                  >
+                    Replace the card
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setExisting(null)}
+                    style={{
+                      background: 'transparent', color: 'var(--fg-2)', border: '1px solid var(--line-2)',
+                      borderRadius: 6, padding: '0.45rem 0.9rem', fontSize: '0.82rem', cursor: 'pointer',
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
             {error && (
               <div style={{ color: 'var(--bad)', fontSize: '0.82rem', marginBottom: '1rem', padding: '0.6rem', background: '#ef444411', borderRadius: 6 }}>
                 {error}

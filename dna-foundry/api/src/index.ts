@@ -245,6 +245,30 @@ async function findCard(cardId: string): Promise<string | null> {
   return hits.length ? path.join(CARDS, hits[hits.length - 1]) : null;
 }
 
+/** Keep the card that is about to be REPLACED.
+ *
+ *  /extract overwrites <tenant>/card.json, and a silent overwrite is how a curated
+ *  card dies — it happened once and had to be recovered by hand from CARD.md. Every
+ *  replacement now leaves the previous file beside it as
+ *  `card.json.pre-extract-<stamp>`, bounded to the newest few so a busy company
+ *  cannot fill its own directory. */
+async function snapshotCompanyCard(companyId: string, cardPath: string): Promise<void> {
+  try {
+    const prior = await fs.readFile(cardPath, "utf8");
+    const dir = path.join(HELIX_COMPANIES, companyId);
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[-:T]/g, "");
+    await fs.writeFile(path.join(dir, `card.json.pre-extract-${stamp}`), prior, { mode: 0o600 });
+    const snaps = (await fs.readdir(dir))
+      .filter((f) => f.startsWith("card.json.pre-extract-"))
+      .sort();
+    for (const f of snaps.slice(0, Math.max(0, snaps.length - 5))) {
+      await fs.rm(path.join(dir, f)).catch(() => {});
+    }
+  } catch {
+    /* no prior card — nothing to keep */
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Auth. Every business route is gated; the presented key IS the tenant identity,
 // so a caller-supplied companyId is never trusted on its own. /health stays open
@@ -447,7 +471,7 @@ function extractionsPerDay(tier: string): number {
 }
 
 app.post("/extract", { preHandler: requireAuth }, async (req, reply) => {
-  const body = (req.body ?? {}) as { url?: string; orgId?: string; companyId?: string };
+  const body = (req.body ?? {}) as { url?: string; orgId?: string; companyId?: string; replace?: boolean };
   if (!body.url) return reply.code(400).send({ ok: false, error: "url required" });
 
   // THE TENANT IS THE AUTHENTICATED COMPANY — never a caller-supplied id. This
@@ -473,6 +497,35 @@ app.post("/extract", { preHandler: requireAuth }, async (req, reply) => {
   }
   if (!target || !isProvisionedCompany(target))
     return reply.code(403).send({ ok: false, error: "this company is not provisioned" });
+
+  // CLOBBER GUARD. This route REPLACES <tenant>/card.json wholesale, so extracting
+  // over a company that already has a card destroys whatever was curated there —
+  // silently. Refuse unless the caller says `replace: true`, and name what is at
+  // stake so the client can show a real confirmation. Checked BEFORE any credit is
+  // spent, so a refused overwrite costs nothing.
+  const existingCardPath = path.join(HELIX_COMPANIES, target, "card.json");
+  let existingCard: Record<string, unknown> | null = null;
+  try {
+    existingCard = JSON.parse(await fs.readFile(existingCardPath, "utf8"));
+  } catch {
+    existingCard = null; // no card yet — a first extraction, proceed
+  }
+  if (existingCard && !body.replace) {
+    const ident = (existingCard.identity ?? {}) as { name?: string };
+    return reply.code(409).send({
+      ok: false,
+      error: "card_exists",
+      message:
+        `This company already has a card (${ident.name ?? target}, ` +
+        `v${existingCard.version ?? 1}). Extracting again REPLACES it.`,
+      current: {
+        name: ident.name ?? target,
+        version: existingCard.version ?? 1,
+        updated: existingCard.created_at ?? existingCard.createdAt ?? null,
+      },
+      hint: 'resend with {"replace": true} to replace it — the current card is snapshotted first',
+    });
+  }
 
   // Per-account daily ceiling — see EXTRACTIONS_PER_DAY.
   const acct = getCreditSummary(target);
@@ -526,6 +579,7 @@ app.post("/extract", { preHandler: requireAuth }, async (req, reply) => {
     try {
       const companyDir = path.join(HELIX_COMPANIES, target);
       await fs.mkdir(companyDir, { recursive: true });
+      await snapshotCompanyCard(target, path.join(companyDir, "card.json"));
       await fs.writeFile(path.join(companyDir, "card.json"), JSON.stringify(card, null, 2));
     } catch (e) {
       if (usageEntry) await refundCredits(usageEntry.id).catch(() => {});
