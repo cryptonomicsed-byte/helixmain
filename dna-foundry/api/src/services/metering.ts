@@ -71,7 +71,7 @@ const USD_PER_CREDIT = 0.01;
 // but could not complete a campaign (PRD 30 + assets 30 = 60) without waiting for
 // the next day. free 20->75, pro 100->150 so a whole workflow fits in a day.
 export const TIER_LIMITS: Record<CreditAccount["tier"], { monthly: number; daily: number }> = {
-  free:   { monthly: 100,   daily: 75  },
+  free:   { monthly: 100,   daily: 100 },
   pro:    { monthly: 1000,  daily: 150 },
   agency: { monthly: 10000, daily: 500 },
 };
@@ -211,7 +211,7 @@ export function getCreditSummary(companyId: string): CreditAccount {
 
 export function checkQuota(
   companyId: string,
-): { allowed: boolean; remaining: number; resetAt: string } {
+): { allowed: boolean; remaining: number; resetAt: string; reason?: string } {
   const account = accountFor(companyId);
   const dayStart = startOfDayUtc();
   const resetAt = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000).toISOString();
@@ -228,9 +228,18 @@ export function checkQuota(
   const remainingMonthly = limits.monthly - usedThisMonth;
 
   const remaining = Math.min(remainingBalance, remainingDaily, remainingMonthly);
-  const allowed = remaining > 0;
 
-  return { allowed, remaining: Math.max(0, remaining), resetAt };
+  // Say WHICH limit bound. "Quota exceeded … Remaining: -15" told a caller nothing
+  // and read like a bug when they still had credits — which happens whenever a
+  // tier's daily cap sits BELOW its monthly budget and strands the tail of it.
+  let reason: string | undefined;
+  if (remaining <= 0) {
+    if (remainingBalance <= 0) reason = `credit balance is ${remainingBalance}`;
+    else if (remainingMonthly <= 0) reason = `monthly cap reached (${usedThisMonth}/${limits.monthly} credits this month)`;
+    else if (remainingDaily <= 0) reason = `daily cap reached (${usedToday}/${limits.daily} credits today)`;
+  }
+
+  return { allowed: remaining > 0, remaining: Math.max(0, remaining), resetAt, reason };
 }
 
 export async function deductCredits(
@@ -240,7 +249,8 @@ export async function deductCredits(
   const quota = checkQuota(companyId);
   if (!quota.allowed) {
     throw new QuotaExceeded(
-      `Quota exceeded for company ${companyId}. Remaining: ${quota.remaining}. Resets at: ${quota.resetAt}`,
+      `Quota exceeded for company ${companyId}${quota.reason ? `: ${quota.reason}` : ""}. ` +
+        `Remaining: ${quota.remaining}. Resets at: ${quota.resetAt}`,
     );
   }
 

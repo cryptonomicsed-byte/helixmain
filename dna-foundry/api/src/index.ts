@@ -233,6 +233,9 @@ function run(cmd: string, args: string[]): Promise<{ code: number; out: string; 
 }
 
 async function findCard(cardId: string): Promise<string | null> {
+  // A card id is a slug ("ok") or a dna_* id — never a path. Reject separators
+  // (and "..") so a caller cannot aim this at an arbitrary file.
+  if (!cardId || cardId.includes("/") || cardId.includes("\\") || cardId.includes("..")) return null;
   // 1. Check /etc/helix/companies/{id}/card.json first (live onboarded companies)
   const helixCard = path.join(HELIX_COMPANIES, cardId, "card.json");
   try { await fs.access(helixCard); return helixCard; } catch {}

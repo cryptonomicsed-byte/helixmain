@@ -16,6 +16,7 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import { aiGateway } from "./aiGateway";
 import { compileGuardrails } from "./guardrailCompiler";
+import { HELIX_COMPANIES } from "./companies";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -100,6 +101,22 @@ const ROOT = path.resolve(__dirname, "..", "..", "..");
 const CARDS = path.join(ROOT, "api", "data", "cards");
 
 async function findCard(cardId: string): Promise<string | null> {
+  // A card id is a slug ("ok") or a dna_* id — never a path. Reject separators
+  // (and "..") so a caller cannot aim this at an arbitrary file.
+  if (!cardId || cardId.includes("/") || cardId.includes("\\") || cardId.includes("..")) return null;
+  // 1. A LIVE company's card: /etc/helix/companies/<slug>/card.json. The dashboard
+  //    passes the company slug here (useCard().id === organizationId), so this is
+  //    the normal path for any real company. Resolving ONLY the shared cards dir
+  //    made every live playground 404 with "Card not found: <slug>" — the card
+  //    exists, just not where this looked.
+  const helixCard = path.join(HELIX_COMPANIES, cardId, "card.json");
+  try {
+    await fs.access(helixCard);
+    return helixCard;
+  } catch {
+    /* not a company slug — fall through to the card-id lookup */
+  }
+  // 2. Fall back to api/data/cards by card-id prefix (extracted/test cards).
   const files = await fs.readdir(CARDS).catch(() => [] as string[]);
   const hits = files.filter((f) => f.startsWith(cardId)).sort();
   return hits.length ? path.join(CARDS, hits[hits.length - 1]) : null;
