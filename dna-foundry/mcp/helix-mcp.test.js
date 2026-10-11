@@ -74,17 +74,19 @@ async function setup(replies = {}, extraEnv = {}) {
   return { rpc, calls, close, apiUrl };
 }
 
-test("tools/list exposes the platform tools AND the seven dna.* foundry tools", async () => {
+test("tools/list exposes the platform, foundry, and hierarchy tools", async () => {
   const { rpc, close } = await setup();
   try {
     const { result } = await rpc("tools/list", {});
     assert.deepEqual(
       result.tools.map((t) => t.name).sort(),
       [
+        "agent_delegate",
         "analytics_query",
         "billing_status",
         "content_generate",
         "crm_manage",
+        "directory_search",
         "dna_compile",
         "dna_decide_proposal",
         "dna_diff",

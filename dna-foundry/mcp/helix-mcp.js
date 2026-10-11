@@ -373,6 +373,45 @@ const TOOLS = [
       required: ["organization_id"],
     },
   },
+  // ── hierarchy tools ─────────────────────────────────────────────────────────
+  {
+    name: "agent_delegate",
+    description:
+      "Delegate a task to another agent by alias and return that agent's reply. The " +
+      "Account Agent uses this to hand business-specific work to that company's Card " +
+      "Agent, instead of reading another company's data itself. The target agent keeps " +
+      "its own scope — a Card Agent can only ever see its own card.",
+    annotations: { readOnlyHint: false },
+    inputSchema: {
+      type: "object",
+      properties: {
+        targetAgent: {
+          type: "string",
+          description: "Alias of the agent to delegate to, e.g. santinos or demo-barber",
+        },
+        task: { type: "string", description: "What to ask that agent to do" },
+      },
+      required: ["targetAgent", "task"],
+    },
+  },
+  {
+    name: "directory_search",
+    description:
+      "Search every business card in the directory (READ-ONLY). Returns matching " +
+      "businesses with the public page a visitor should be sent to. Use this for " +
+      "'find me a barbershop near me' style discovery. This tool cannot write anything.",
+    annotations: { readOnlyHint: true },
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "Free text: a trade, a place, or an offering. Empty lists all.",
+        },
+      },
+      required: ["query"],
+    },
+  },
 ];
 
 /** POST a JSON body to the API and normalise the answer. Never throws on a
@@ -453,6 +492,103 @@ function dnaRun(tool, args) {
   } catch {
     return { local: true, body: { ok: true, output: out.slice(-4000) } };
   }
+}
+
+// ── hierarchy: delegate to another agent, and read-only directory search ─────
+
+const ZEROCLAW_WS = process.env.ZEROCLAW_WS_URL || "ws://127.0.0.1:42617";
+const ZEROCLAW_TOKEN_PATH = process.env.ZEROCLAW_TOKEN || "/etc/helix/zeroclaw.token";
+const COMPANIES_DIR = process.env.HELIX_COMPANIES_DIR || "/etc/helix/companies";
+
+function zeroclawToken() {
+  try {
+    return require("fs").readFileSync(ZEROCLAW_TOKEN_PATH, "utf8").trim();
+  } catch {
+    return "";
+  }
+}
+
+/** Run one turn against ANOTHER agent and return its reply. This is the whole
+ *  point of delegation: the caller does not read the other company's card, it
+ *  asks that company's agent, which is scoped to its own business. */
+function delegateRun(targetAgent, task) {
+  return new Promise((resolve) => {
+    const finish = (body) => resolve({ local: true, body });
+    const token = zeroclawToken();
+    if (!token) return finish({ ok: false, error: `no ZeroClaw token at ${ZEROCLAW_TOKEN_PATH}` });
+    if (!targetAgent || !task) return finish({ ok: false, error: "targetAgent and task are required" });
+
+    const url =
+      `${ZEROCLAW_WS}/ws/chat?agent=${encodeURIComponent(targetAgent)}` +
+      `&token=${encodeURIComponent(token)}`;
+
+    let full = "";
+    let settled = false;
+    const done = (body) => { if (settled) return; settled = true; clearTimeout(timer); finish(body); };
+
+    let ws;
+    try {
+      ws = new WebSocket(url);
+    } catch (e) {
+      return finish({ ok: false, error: String(e) });
+    }
+    const timer = setTimeout(() => { try { ws.close(); } catch {} done({ ok: false, error: "delegate timed out" }); }, 90_000);
+
+    ws.addEventListener("open", () => ws.send(JSON.stringify({ type: "message", content: task })));
+    ws.addEventListener("message", (ev) => {
+      let f;
+      try { f = JSON.parse(String(ev.data)); } catch { return; }
+      if (f.type === "chunk" && typeof f.content === "string") full += f.content;
+      if (typeof f.full_response === "string" && f.full_response) full = f.full_response;
+      if (f.type === "error") { try { ws.close(); } catch {} done({ ok: false, error: String(f.message || "agent error") }); }
+    });
+    ws.addEventListener("error", () => done({ ok: false, error: `agent ${targetAgent} is unreachable` }));
+    ws.addEventListener("close", () => done({ ok: true, delegatedTo: targetAgent, reply: full }));
+  });
+}
+
+/** Search every company card. READ-ONLY by construction — it opens card.json
+ *  files and returns matches; it has no write path at all. */
+function directorySearch(query) {
+  const fs = require("fs");
+  const path = require("path");
+  const q = String(query || "").toLowerCase().trim();
+  let dirs = [];
+  try {
+    dirs = fs
+      .readdirSync(COMPANIES_DIR, { withFileTypes: true })
+      .filter((d) => d.isDirectory())
+      .map((d) => d.name);
+  } catch {
+    return { local: true, body: { ok: true, count: 0, matches: [] } };
+  }
+
+  const matches = [];
+  for (const id of dirs) {
+    let card;
+    try {
+      card = JSON.parse(fs.readFileSync(path.join(COMPANIES_DIR, id, "card.json"), "utf8"));
+    } catch {
+      continue;
+    }
+    const ident = card.identity || {};
+    const offerings = (card.offerings || []).map((o) => o.name || "").join(" ");
+    const hay = [ident.name, ident.type, ident.location, ident.elevator_pitch, offerings]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    if (q && !hay.includes(q)) continue;
+    matches.push({
+      company: id,
+      name: ident.name || id,
+      type: ident.type || null,
+      location: ident.location || null,
+      phone: ident.phone || null,
+      offerings: (card.offerings || []).map((o) => o.name),
+      page: `/b/${id}/`,
+    });
+  }
+  return { local: true, body: { ok: true, count: matches.length, matches: matches.slice(0, 8) } };
 }
 
 const HANDLERS = {
@@ -698,6 +834,10 @@ const HANDLERS = {
     }),
   "dna_sense": (a) =>
     dnaRun("dna_sense", { organization_id: a.organization_id, force: a.force }),
+
+  // ── hierarchy tools ─────────────────────────────────────────────────────────
+  "agent_delegate": (a) => delegateRun(a.targetAgent, a.task),
+  "directory_search": (a) => directorySearch(a.query),
 };
 
 function rpcResult(id, result) {
