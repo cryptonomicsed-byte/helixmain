@@ -157,6 +157,14 @@ export function chatStream(
           reject(new Error(String(f.message || f.code || "agent error"))),
         );
       }
+      // The FINAL frame (type "done", carrying full_response) is the end of the
+      // turn. Do NOT wait for the socket to close: ZeroClaw keeps the session
+      // socket open, so `close` may never arrive and the caller would hang until
+      // its timeout.
+      if (f.type === "done" || typeof f.full_response === "string") {
+        try { ws.close(); } catch { /* already gone */ }
+        return finish(() => resolve(full));
+      }
       try { onFrame(f); } catch { /* a throwing consumer must not kill the turn */ }
     });
 

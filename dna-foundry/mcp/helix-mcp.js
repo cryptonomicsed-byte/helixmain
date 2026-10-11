@@ -541,6 +541,12 @@ function delegateRun(targetAgent, task) {
       if (f.type === "chunk" && typeof f.content === "string") full += f.content;
       if (typeof f.full_response === "string" && f.full_response) full = f.full_response;
       if (f.type === "error") { try { ws.close(); } catch {} done({ ok: false, error: String(f.message || "agent error") }); }
+      // Resolve on the FINAL frame, not on socket close: ZeroClaw keeps the
+      // session socket open, so waiting for close hangs until the tool timeout.
+      if (f.type === "done" || typeof f.full_response === "string") {
+        try { ws.close(); } catch {}
+        done({ ok: true, delegatedTo: targetAgent, reply: full });
+      }
     });
     ws.addEventListener("error", () => done({ ok: false, error: `agent ${targetAgent} is unreachable` }));
     ws.addEventListener("close", () => done({ ok: true, delegatedTo: targetAgent, reply: full }));
