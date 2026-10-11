@@ -34,6 +34,7 @@ from typing import NoReturn
 
 CONFIG = os.environ.get("ZEROCLAW_CONFIG", "/etc/zeroclaw/config.toml")
 SETTINGS = os.environ.get("HELIX_SETTINGS_FILE", "/etc/helix/settings.json")
+COMPANIES_DIR = os.environ.get("HELIX_COMPANIES_DIR", "/etc/helix/companies")
 RESTART = os.environ.get("ZEROCLAW_RESTART", "1") == "1"
 
 # provider → (base for chat/completions, api style)
@@ -101,15 +102,16 @@ def status() -> None:
         print("generated block: (absent — agents are on a hand-written provider)")
 
 
-def render_block(provider: str, model: str, key: str) -> str:
+def render_block(provider: str, model: str, key: str, alias: str, owner: str) -> str:
     uri = OPENAI_COMPAT[provider]
     return f"""
-# ─── Chat-agent provider, rendered from /etc/helix/settings.json ─────────────
+# ─── Chat-agent provider: {owner} ─────────────
 # Written by infra/sync-agent-provider.py. Editing by hand is pointless: the next
-# Settings save overwrites it. The dashboard's Settings page is the source of
-# truth for provider/model/key, for the agents exactly as for the API.
+# Settings save overwrites it. The Settings page is the source of truth for
+# provider/model/key — the ACCOUNT page for {BLOCK_ALIAS}, a card's own settings
+# page for that card.
 
-[providers.models.openai.{BLOCK_ALIAS}]
+[providers.models.openai.{alias}]
 api_key = "{key}"
 uri = "{uri}"
 model = "{model}"
@@ -117,41 +119,104 @@ kind = "openai-compatible"
 """
 
 
+def agents_in(cfg: str) -> list[str]:
+    return re.findall(r"(?m)^\[agents\.([^\].]+)\]$", cfg)
+
+
+def company_ai(org: str) -> dict:
+    """A card's own AI settings, if it has any (matches services/settings.ts)."""
+    p = os.path.join(COMPANIES_DIR, org, "ai.json")
+    try:
+        return json.load(open(p))
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+
+def resolve_for(org: str, account: tuple[str, str, str]) -> tuple[str, str, str, str]:
+    """(provider, model, key, owner) for ONE agent.
+
+    Card override wins over the account — the same precedence the API's
+    keyForProvider()/resolveModel() use, so the chat agents and the API can never
+    disagree about which key a business is billed/authenticated with.
+    """
+    a_provider, a_model, a_key = account
+    ai = company_ai(org)
+    provider = ai.get("provider") or a_provider
+    model = ai.get("model") or (a_model if provider == a_provider else "")
+    key = (ai.get("keys") or {}).get(provider) or (a_key if provider == a_provider else "")
+    if provider == a_provider and model and key:
+        owner = "card override + account fallback" if ai else "account settings"
+    else:
+        owner = "card settings"
+    return provider, model or "", key, owner
+
+
 def apply() -> None:
     s = read_settings()
-    provider, model, key = resolve(s)
+    account = resolve(s)          # (provider, model, key) — the account default
+    a_provider, a_model, a_key = account
 
-    if provider in NOT_OPENAI_COMPAT:
-        die(f"provider '{provider}' is not OpenAI-compatible; the agent runtime "
+    if a_provider in NOT_OPENAI_COMPAT:
+        die(f"provider '{a_provider}' is not OpenAI-compatible; the agent runtime "
             f"cannot be pointed at it through this block. Pick another provider in "
-            f"Settings, or wire a native {provider} provider block by hand.")
-    if provider not in OPENAI_COMPAT:
-        die(f"unknown provider '{provider}'")
-    if not model:
-        die(f"settings.json has no model for provider '{provider}' — set one in Settings")
-    if not key:
-        die(f"no key for provider '{provider}' (not in settings.json and no "
+            f"Settings, or wire a native {a_provider} provider block by hand.")
+    if a_provider not in OPENAI_COMPAT:
+        die(f"unknown provider '{a_provider}'")
+    if not a_model:
+        die(f"settings.json has no model for provider '{a_provider}' — set one in Settings")
+    if not a_key:
+        die(f"no key for provider '{a_provider}' (not in settings.json and no "
             f"environment fallback) — the agents cannot authenticate")
 
     cfg = open(CONFIG).read()
     before = cfg
+    blocks: list[str] = []
+    plan: dict[str, str] = {}     # agent alias → provider alias it should use
 
-    # 1. the provider block: replace if present, else append
-    block = render_block(provider, model, key).strip("\n")
-    existing = re.search(
-        rf'(?m)^\[providers\.models\.openai\.{BLOCK_ALIAS}\]\n(?:.*?\n)*?(?=\n\[|\Z)', cfg)
-    if existing:
-        cfg = cfg[:existing.start()] + block + "\n" + cfg[existing.end():]
-        print(f"  provider block: replaced ({provider} / {model})")
-    else:
-        cfg = cfg.rstrip("\n") + "\n\n" + block + "\n"
-        print(f"  provider block: added ({provider} / {model})")
+    for org in agents_in(cfg):
+        provider, model, key, owner = resolve_for(org, account)
+        if provider in NOT_OPENAI_COMPAT:
+            scope = "the account" if org == a_provider else f"card '{org}'"
+            print(f"  {org:<18} SKIPPED — {scope} selects '{provider}', which is not "
+                  f"OpenAI-compatible")
+            plan[org] = f"openai.{BLOCK_ALIAS}"
+            continue
+        if provider == a_provider and model == a_model and key == a_key:
+            plan[org] = f"openai.{BLOCK_ALIAS}"
+            continue
+        # this card overrides the account — it needs its own block
+        alias = f"{BLOCK_ALIAS}_{re.sub(r'[^a-zA-Z0-9_-]', '_', org)}"
+        blocks.append(render_block(provider, model, key, alias, f"card '{org}' ({owner})"))
+        plan[org] = f"openai.{alias}"
+        print(f"  {org:<18} own block: {alias} ({provider} / {model})")
 
-    # 2. every agent points at it
-    n = len(re.findall(r'(?m)^model_provider = "[^"]*"', cfg))
-    cfg = re.sub(r'(?m)^model_provider = "[^"]*"',
-                 f'model_provider = "openai.{BLOCK_ALIAS}"', cfg)
-    print(f"  agents repointed: {n}")
+    # the account block ALWAYS exists (agents fall back to it)
+    blocks.insert(0, render_block(a_provider, a_model, a_key, BLOCK_ALIAS, "account settings"))
+    print(f"  account block: {BLOCK_ALIAS} ({a_provider} / {a_model})")
+
+    # drop our previously-generated blocks, then re-add the current set
+    cfg = re.sub(rf"(?m)^# ─── Chat-agent provider:.*?(?=^\[|\Z)", "", cfg, flags=re.S)
+    cfg = re.sub(rf"(?m)^\[providers\.models\.openai\.{BLOCK_ALIAS}[^\]]*\]\n(?:.*?\n)*?(?=\n\[|\Z)",
+                 "", cfg)
+    # remove the old auto-generated comment banner too
+    cfg = re.sub(r"(?m)^# ─── Chat-agent provider.*\n(?:#.*\n)*\n?", "", cfg)
+
+    # point each agent at the provider its own scope resolves to
+    lines = cfg.split("\n")
+    out: list[str] = []
+    current: str | None = None
+    for ln in lines:
+        m = re.match(r"^\[agents\.([^\].]+)\]$", ln)
+        if m:
+            current = m.group(1)
+        if ln.startswith("model_provider = ") and current in plan:
+            ln = f'model_provider = "{plan[current]}"'
+        out.append(ln)
+    cfg = "\n".join(out)
+
+    cfg = cfg.rstrip("\n") + "\n\n" + "\n".join(b.strip("\n") for b in blocks) + "\n"
+    print(f"  provider blocks written: {len(blocks)}")
+    print(f"  agents repointed: {len(plan)}")
 
     if cfg == before:
         print("  no change")
@@ -165,7 +230,7 @@ def apply() -> None:
         print("  (ZEROCLAW_RESTART=0 — not restarting)")
         return
     subprocess.run(["systemctl", "restart", "zeroclaw"], check=False)
-    print("  zeroclaw restarted — agents now use the Settings provider")
+    print("  zeroclaw restarted — agents now use the Settings provider(s)")
 
 
 def main(argv: list[str]) -> None:
