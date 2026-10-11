@@ -62,4 +62,210 @@
   });
 })();
 </script>
+
+<!-- Directory concierge --------------------------------------------------
+     The public front door needs someone to talk to, not just a search box:
+     a visitor who types "i need a walk-in cut near me" is describing a need,
+     not a keyword. This talks to the Directory Agent, which can only read.
+
+     The replies are rendered as text and then scanned for two things worth
+     turning into a control: a business page path and a phone number. A match
+     becomes a real link, because "here is the number" and "here is the number,
+     tap to call" are different amounts of useful on a phone. -->
+<style>
+  .cc-launch {
+    position: fixed; right: 1.25rem; bottom: 1.25rem; z-index: 40;
+    background: var(--accent); color: #08130c; border: 0; cursor: pointer;
+    font: inherit; font-weight: 600; font-size: .85rem;
+    padding: .7rem 1.1rem; border-radius: 999px;
+    box-shadow: 0 6px 20px rgba(0,0,0,.45);
+  }
+  .cc-launch:hover { filter: brightness(1.08); }
+  .cc-panel {
+    position: fixed; right: 1.25rem; bottom: 1.25rem; z-index: 41;
+    width: min(26rem, calc(100vw - 2.5rem));
+    max-height: min(34rem, calc(100vh - 2.5rem));
+    display: none; flex-direction: column;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; overflow: hidden;
+    box-shadow: 0 16px 48px rgba(0,0,0,.55);
+  }
+  .cc-panel.open { display: flex; }
+  .cc-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: .7rem .9rem; border-bottom: 1px solid var(--border);
+  }
+  .cc-head strong { color: #fff; font-size: .88rem; }
+  .cc-head span { display: block; color: var(--muted); font-size: .72rem; font-weight: 400; }
+  .cc-x { background: none; border: 0; color: var(--muted); font-size: 1.2rem; cursor: pointer; line-height: 1; }
+  .cc-x:hover { color: var(--text); }
+  .cc-log { flex: 1; overflow-y: auto; padding: .9rem; display: flex; flex-direction: column; gap: .6rem; }
+  .cc-msg { font-size: .86rem; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; }
+  .cc-msg.me { align-self: flex-end; background: #1e3a2b; color: #dff5e6; padding: .45rem .7rem; border-radius: 8px; max-width: 85%; }
+  .cc-msg.bot { color: var(--text); }
+  .cc-msg.err { color: var(--amber); }
+  .cc-msg a { color: var(--accent); }
+  .cc-typing { color: var(--muted); font-size: .8rem; }
+  .cc-form { display: flex; gap: .5rem; padding: .7rem; border-top: 1px solid var(--border); }
+  .cc-form input {
+    flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+    color: var(--text); padding: .5rem .65rem; font: inherit; font-size: .85rem;
+  }
+  .cc-form input::placeholder { color: var(--muted); }
+  .cc-form button {
+    background: var(--accent); color: #08130c; border: 0; border-radius: 6px;
+    font: inherit; font-weight: 600; font-size: .82rem; padding: .5rem .8rem; cursor: pointer;
+  }
+  .cc-form button:disabled { opacity: .5; cursor: default; }
+  .cc-call {
+    display: inline-block; margin: .25rem .35rem .1rem 0; padding: .2rem .55rem;
+    border: 1px solid var(--accent); border-radius: 999px;
+    font-size: .78rem; color: var(--accent);
+  }
+</style>
+
+<button class="cc-launch" id="cc-launch" type="button">Ask the concierge</button>
+
+<div class="cc-panel" id="cc-panel" role="dialog" aria-label="Directory concierge">
+  <div class="cc-head">
+    <div>
+      <strong>Directory concierge</strong>
+      <span>Find a local business — read-only</span>
+    </div>
+    <button class="cc-x" id="cc-x" type="button" aria-label="Close">&times;</button>
+  </div>
+  <div class="cc-log" id="cc-log"></div>
+  <form class="cc-form" id="cc-form">
+    <input id="cc-input" type="text" maxlength="500" autocomplete="off"
+           placeholder="e.g. a barbershop open on Sunday" aria-label="Your message">
+    <button id="cc-send" type="submit">Send</button>
+  </form>
+</div>
+
+<script>
+(function () {
+  var launch = document.getElementById('cc-launch');
+  var panel  = document.getElementById('cc-panel');
+  var log    = document.getElementById('cc-log');
+  var form   = document.getElementById('cc-form');
+  var input  = document.getElementById('cc-input');
+  var send   = document.getElementById('cc-send');
+  if (!launch || !panel || !form) return;
+
+  var busy = false;
+
+  launch.addEventListener('click', function () {
+    panel.classList.add('open');
+    launch.style.display = 'none';
+    input.focus();
+  });
+  document.getElementById('cc-x').addEventListener('click', function () {
+    panel.classList.remove('open');
+    launch.style.display = '';
+  });
+
+  /* Text first, controls second. A business page path and a phone number are
+     the two things in a concierge reply worth tapping, so they are the two
+     things turned into links. Everything else stays plain text — no markup
+     from the model is ever interpreted. */
+  function render(text) {
+    var el = document.createElement('div');
+    var parts = String(text).split(/(\/b\/[a-z0-9._-]+\/|\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4})/gi);
+    parts.forEach(function (p) {
+      if (/^\/b\/[a-z0-9._-]+\/$/i.test(p)) {
+        var a = document.createElement('a');
+        a.href = p; a.textContent = p; el.appendChild(a);
+      } else if (/^\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}$/.test(p)) {
+        var t = document.createElement('a');
+        t.className = 'cc-call';
+        t.href = 'tel:' + p.replace(/[^\d+]/g, '');
+        t.textContent = 'Call ' + p;
+        el.appendChild(t);
+      } else {
+        el.appendChild(document.createTextNode(p));
+      }
+    });
+    return el;
+  }
+
+  function add(role, text) {
+    var m = document.createElement('div');
+    m.className = 'cc-msg ' + role;
+    if (role === 'bot') m.appendChild(render(text));
+    else m.textContent = text;
+    log.appendChild(m);
+    log.scrollTop = log.scrollHeight;
+    return m;
+  }
+
+  form.addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var text = input.value.trim();
+    if (!text || busy) return;
+    input.value = '';
+    add('me', text);
+
+    var bot = add('bot', '');
+    var typing = document.createElement('span');
+    typing.className = 'cc-typing';
+    typing.textContent = 'looking…';
+    bot.appendChild(typing);
+
+    busy = true;
+    send.disabled = true;
+    var acc = '';
+
+    fetch('/api/directory/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: text })
+    }).then(function (res) {
+      if (!res.ok || !res.body) {
+        return res.text().then(function (t) {
+          var why = 'The concierge is unavailable right now.';
+          try { var j = JSON.parse(t); if (j && j.message) why = j.message; else if (j && j.error) why = j.error; } catch (e) {}
+          throw new Error(why);
+        });
+      }
+      var reader = res.body.getReader();
+      var dec = new TextDecoder();
+      var buf = '';
+      var drawn = false;
+      return (function pump() {
+        return reader.read().then(function (r) {
+          if (r.done) return;
+          buf += dec.decode(r.value, { stream: true });
+          var i;
+          while ((i = buf.indexOf('\n\n')) >= 0) {
+            var frame = buf.slice(0, i); buf = buf.slice(i + 2);
+            var line = frame.split('\n').filter(function (l) { return l.indexOf('data:') === 0; })[0];
+            if (!line) continue;
+            var f; try { f = JSON.parse(line.slice(5).trim()); } catch (e) { continue; }
+            if (f.type === 'chunk' && typeof f.content === 'string') {
+              acc += f.content;
+              if (!drawn) { typing.remove(); drawn = true; }
+              bot.textContent = '';
+              bot.appendChild(render(acc));
+              log.scrollTop = log.scrollHeight;
+            } else if (f.type === 'error') {
+              throw new Error(f.message || 'the concierge stopped responding');
+            }
+          }
+          return pump();
+        });
+      })();
+    }).catch(function (e) {
+      typing.remove();
+      if (!acc) {
+        bot.classList.add('err');
+        bot.textContent = e.message || 'Something went wrong.';
+      }
+    }).then(function () {
+      if (typing.parentNode) typing.remove();
+      if (!acc && !bot.textContent) bot.textContent = '(no answer)';
+      busy = false; send.disabled = false; input.focus();
+    });
+  });
+})();
+</script>
 {{ end }}

@@ -7,7 +7,7 @@
   },
   "name": "@helixmain/dna-compiler",
   "scripts": {
-    "build": "tsc -p tsconfig.json && cp src/cli.js dist/cli.js && cp -r src/tests/__snapshots__ dist/tests/__snapshots__",
+    "build": "tsc -p tsconfig.json && cp src/cli.js dist/cli.js && cp -r src/tests/__snapshots__/. dist/tests/__snapshots__/",
     "compile": "node dist/cli.js",
     "eval": "npm run build && npx promptfoo eval",
     "test": "npm run build && node --test dist/tests/*.test.js"
