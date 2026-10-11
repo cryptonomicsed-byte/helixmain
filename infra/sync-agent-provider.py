@@ -157,7 +157,7 @@ def apply() -> None:
         print("  no change")
         return
 
-    stamp = f"{datetime.datetime.utcnow():%Y%m%d%H%M%S}"
+    stamp = f"{datetime.datetime.now(datetime.timezone.utc):%Y%m%d%H%M%S}"
     shutil.copy2(CONFIG, f"{CONFIG}.bak-llmsync-{stamp}")
     open(CONFIG, "w").write(cfg)
 
