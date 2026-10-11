@@ -3291,6 +3291,63 @@ app.post("/auth/logout", async (_req, reply) => {
 // AUTHENTICATED company — `:companyId` is checked, never trusted.
 // ---------------------------------------------------------------------------
 
+/** The agent the public directory page talks to. Read-only by tool grant. */
+const DIRECTORY_AGENT = "helix-directory";
+
+/** What the model actually receives. The Account Agent is shared across
+ *  companies, so it is told which account this conversation belongs to; a card
+ *  agent already knows its own company from its card. */
+function turnMessage(agent: string, companyId: string, message: string): string {
+  return agent === ACCOUNT_AGENT
+    ? `[dashboard chat — account "${companyId}"] ${message}`
+    : message;
+}
+
+/** Run one agent turn and stream it to the client as SSE.
+ *
+ *  The response is hijacked: from here the route writes frames by hand. A turn
+ *  that produced nothing refunds its credit entry — the same rule as /extract. */
+async function streamAgentTurn(
+  reply: FastifyReply,
+  agent: string,
+  message: string,
+  usageEntry: UsageEntry | null,
+): Promise<void> {
+  reply.hijack();
+  reply.raw.writeHead(200, {
+    "content-type": "text/event-stream; charset=utf-8",
+    "cache-control": "no-cache, no-transform",
+    connection: "keep-alive",
+    "x-accel-buffering": "no",
+  });
+  const send = (obj: unknown) => {
+    try {
+      reply.raw.write(`data: ${JSON.stringify(obj)}\n\n`);
+    } catch {
+      /* client went away */
+    }
+  };
+
+  let chunks = 0;
+  try {
+    const full = await chatStream(agent, message, (f: AgentFrame) => {
+      if (f.type === "chunk") chunks++;
+      send(f);
+    });
+    send({ type: "done", full_response: full });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (chunks === 0 && usageEntry) await refundCredits(usageEntry.id).catch(() => {});
+    send({ type: "error", message: msg });
+  } finally {
+    try {
+      reply.raw.end();
+    } catch {
+      /* already closed */
+    }
+  }
+}
+
 app.post("/agent/chat/:companyId", { preHandler: requireAuth }, async (req, reply) => {
   const { companyId } = req.params as { companyId: string };
   const auth = (req as AuthCarrier).auth;
@@ -3340,45 +3397,48 @@ app.post("/agent/chat/:companyId", { preHandler: requireAuth }, async (req, repl
   }
 
   // Take the response over: everything from here is SSE we write by hand.
-  reply.hijack();
-  reply.raw.writeHead(200, {
-    "content-type": "text/event-stream; charset=utf-8",
-    "cache-control": "no-cache, no-transform",
-    connection: "keep-alive",
-    "x-accel-buffering": "no",
-  });
-  const send = (obj: unknown) => {
-    try {
-      reply.raw.write(`data: ${JSON.stringify(obj)}\n\n`);
-    } catch {
-      /* client went away */
-    }
-  };
+  await streamAgentTurn(reply, agent, turnMessage(agent, companyId, message), usageEntry);
+});
 
-  let chunks = 0;
-  try {
-    // The Account Agent is shared across companies, so tell it which account this
-    // conversation belongs to. A card agent already knows its own company.
-    const turn =
-      agent === ACCOUNT_AGENT
-        ? `[dashboard chat — account "${companyId}"] ${message}`
-        : message;
-    const full = await chatStream(agent, turn, (f: AgentFrame) => {
-      if (f.type === "chunk") chunks++;
-      send(f);
+// POST /directory/chat — the public concierge on the directory page.
+//
+// The directory is anonymous, so this cannot sit behind requireAuth. It is
+// bounded instead: a fixed per-IP hourly budget, a short message, and ONE target
+// agent (helix-directory) whose tools are read-only by grant. It spends platform
+// tokens rather than a company's credits, so that budget IS the cost control —
+// and it is genuinely per-IP only because the stream layer now forwards the real
+// address (nginx SNI router + PROXY protocol). Before that it would have been
+// one shared bucket for the entire internet.
+const DIRECTORY_CHAT_PER_IP_PER_HOUR = 20;
+const directoryHits = new Map<string, number[]>();
+
+app.post("/directory/chat", async (req, reply) => {
+  const body = (req.body ?? {}) as { message?: string };
+  const message = String(body.message ?? "").trim();
+  if (!message) return reply.code(400).send({ ok: false, error: "message required" });
+  if (message.length > 500)
+    return reply.code(400).send({ ok: false, error: "message too long (500 chars max)" });
+
+  const ip = (req.headers["x-real-ip"] as string) || req.ip || "unknown";
+  const now = Date.now();
+  const recent = (directoryHits.get(ip) ?? []).filter((t) => now - t < 3_600_000);
+  if (recent.length >= DIRECTORY_CHAT_PER_IP_PER_HOUR)
+    return reply.code(429).send({
+      ok: false,
+      error: "too many messages from this address — try again later",
     });
-    send({ type: "done", full_response: full });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    if (chunks === 0 && usageEntry) await refundCredits(usageEntry.id).catch(() => {});
-    send({ type: "error", message: msg });
-  } finally {
-    try {
-      reply.raw.end();
-    } catch {
-      /* already closed */
-    }
-  }
+  recent.push(now);
+  directoryHits.set(ip, recent);
+
+  const st = await agentStatus();
+  if (!st.ok || st.channels[`nostr.${DIRECTORY_AGENT}`] === false)
+    return reply.code(503).send({
+      ok: false,
+      error: "agent_offline",
+      message: "The directory concierge is not available right now.",
+    });
+
+  await streamAgentTurn(reply, DIRECTORY_AGENT, message, null);
 });
 
 // GET /agents — the agent registry: {id, type, company, status, capabilities}.
