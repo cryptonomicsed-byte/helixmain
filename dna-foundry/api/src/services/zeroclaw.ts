@@ -56,6 +56,13 @@ export function agentNameFor(companyId: string): string {
   return companyId;
 }
 
+/**
+ * The Account Agent — the one cross-company agent that runs an account and
+ * delegates business-specific work to a company's card agent. It is the default
+ * target of a dashboard chat; a named card routes straight to that card's agent.
+ */
+export const ACCOUNT_AGENT = "helix";
+
 export interface AgentStatus {
   ok: boolean;
   channels: Record<string, boolean>;

@@ -191,6 +191,7 @@ import {
 import {
   agentStatus,
   agentNameFor,
+  ACCOUNT_AGENT,
   chatStream,
   type AgentFrame,
 } from "./services/zeroclaw";
@@ -250,6 +251,41 @@ async function findCard(cardId: string): Promise<string | null> {
   const hits = files.filter((f) => f.startsWith(cardId)).sort();
   return hits.length ? path.join(CARDS, hits[hits.length - 1]) : null;
 }
+
+/** The tenant a RESOLVED card path belongs to, or null when it has none.
+ *
+ *  A live card lives at HELIX_COMPANIES/<slug>/card.json → tenant <slug>.
+ *  A legacy extraction under api/data/cards/ belongs to nobody: that directory
+ *  is a pile of artifacts from finished tests and pruned companies, so a
+ *  company key must never be able to reach into it. */
+function cardTenant(p: string): string | null {
+  const rel = path.relative(HELIX_COMPANIES, p);
+  if (!rel || rel.startsWith("..") || path.isAbsolute(rel)) return null;
+  const seg = rel.split(path.sep);
+  return seg.length > 1 ? seg[0] : null;
+}
+
+/** May this credential read the card at `p`?
+ *
+ *  Operator: any card (that is the one deliberate cross-company grant).
+ *  Company key: only its own — by the directory it lives in, or (for a legacy
+ *  card that has no owning directory) by the organizationId it carries.
+ *
+ *  The PATH check comes first and is authoritative: naming another live
+ *  company's card is blocked by the directory it resolves to, whatever the
+ *  card's own organizationId field claims. */
+async function mayReadCard(auth: KeyRecord | undefined, p: string): Promise<boolean> {
+  if (auth?.level === "operator") return true;
+  const t = cardTenant(p);
+  if (t) return t === auth?.companyId;
+  try {
+    const c = JSON.parse(await fs.readFile(p, "utf8")) as { organizationId?: string };
+    return !!c?.organizationId && c.organizationId === auth?.companyId;
+  } catch {
+    return false;
+  }
+}
+
 
 /** Keep the card that is about to be REPLACED.
  *
@@ -638,6 +674,8 @@ app.get("/jobs/:id", { preHandler: requireAuth }, async (req, reply) => {
 app.get("/cards/:id", { preHandler: requireAuth }, async (req, reply) => {
   const p = await findCard((req.params as { id: string }).id);
   if (!p) return reply.code(404).send({ ok: false, error: "card not found" });
+  if (!(await mayReadCard((req as AuthCarrier).auth, p)))
+    return reply.code(403).send({ ok: false, error: "key does not belong to that company" });
   return JSON.parse(await fs.readFile(p, "utf8"));
 });
 
@@ -975,6 +1013,9 @@ app.get("/cards/:a/diff/:b", { preHandler: requireAuth }, async (req, reply) => 
   const pa = await findCard(a);
   const pb = await findCard(b);
   if (!pa || !pb) return reply.code(404).send({ ok: false, error: "card not found" });
+  const auth = (req as AuthCarrier).auth;
+  if (!(await mayReadCard(auth, pa)) || !(await mayReadCard(auth, pb)))
+    return reply.code(403).send({ ok: false, error: "key does not belong to that company" });
   const { code, out, err } = await run("node", [COMPILER_CLI, "--card", pa, "--diff", pb]);
   if (code !== 0) return reply.code(500).send({ ok: false, error: err.slice(-2000) });
   return JSON.parse(out);
@@ -998,6 +1039,10 @@ app.post("/greeting", { preHandler: requireAuth }, async (req, reply) => {
   if (!cardPath) {
     if (usageEntry) await refundCredits(usageEntry.id).catch(() => {});
     return reply.code(404).send({ ok: false, error: "card not found" });
+  }
+  if (!(await mayReadCard((req as AuthCarrier).auth, cardPath))) {
+    if (usageEntry) await refundCredits(usageEntry.id).catch(() => {});
+    return reply.code(403).send({ ok: false, error: "key does not belong to that company" });
   }
 
   try {
@@ -1150,6 +1195,10 @@ app.post("/agent/session", { preHandler: requireAuth }, async (req, reply) => {
   if (!cardPath) {
     if (usageEntry) await refundCredits(usageEntry.id).catch(() => {});
     return reply.code(404).send({ ok: false, error: "card not found" });
+  }
+  if (!(await mayReadCard((req as AuthCarrier).auth, cardPath))) {
+    if (usageEntry) await refundCredits(usageEntry.id).catch(() => {});
+    return reply.code(403).send({ ok: false, error: "key does not belong to that company" });
   }
 
   try {
@@ -3248,11 +3297,22 @@ app.post("/agent/chat/:companyId", { preHandler: requireAuth }, async (req, repl
   if (auth && auth.level !== "operator" && auth.companyId !== companyId)
     return reply.code(403).send({ ok: false, error: "not your company" });
 
-  const body = (req.body ?? {}) as { message?: string };
+  const body = (req.body ?? {}) as { message?: string; cardId?: string };
   const message = String(body.message ?? "").trim();
   if (!message) return reply.code(400).send({ ok: false, error: "message required" });
   if (message.length > 4000)
     return reply.code(400).send({ ok: false, error: "message too long (4000 chars max)" });
+
+  // The Account Agent runs the account by default and delegates business-specific
+  // work to the card agent, returning one unified answer. When the dashboard has a
+  // specific card in view it names it, and we route straight to that card's agent.
+  let agent = ACCOUNT_AGENT;
+  const cardId = String(body.cardId ?? "").trim();
+  if (cardId) {
+    if (auth && auth.level !== "operator" && cardId !== companyId)
+      return reply.code(403).send({ ok: false, error: "not your card" });
+    agent = agentNameFor(cardId);
+  }
 
   // OFFLINE must be a clean error, never a spinner that never ends.
   const st = await agentStatus();
@@ -3262,7 +3322,6 @@ app.post("/agent/chat/:companyId", { preHandler: requireAuth }, async (req, repl
       error: "agent_runtime_offline",
       message: "The agent runtime is unreachable.",
     });
-  const agent = agentNameFor(companyId);
   if (st.channels[`nostr.${agent}`] === false)
     return reply.code(503).send({
       ok: false,
@@ -3298,7 +3357,13 @@ app.post("/agent/chat/:companyId", { preHandler: requireAuth }, async (req, repl
 
   let chunks = 0;
   try {
-    const full = await chatStream(agent, message, (f: AgentFrame) => {
+    // The Account Agent is shared across companies, so tell it which account this
+    // conversation belongs to. A card agent already knows its own company.
+    const turn =
+      agent === ACCOUNT_AGENT
+        ? `[dashboard chat — account "${companyId}"] ${message}`
+        : message;
+    const full = await chatStream(agent, turn, (f: AgentFrame) => {
       if (f.type === "chunk") chunks++;
       send(f);
     });
