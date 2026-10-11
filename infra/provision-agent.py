@@ -59,6 +59,23 @@ def agent_block(name: str) -> str:
     return m.group(0) if m else ""
 
 
+def channel_key(cfg: str, name: str) -> str | None:
+    """The nostr private key currently wired to a company's channel.
+
+    This lives in [channels.nostr.<name>], NOT in the [agents.<name>] block — the
+    two are separate tables, and looking for the key in the agent block is how a
+    re-run silently rotates a live credential instead of no-opping."""
+    m = re.search(rf"(?m)^\[channels\.nostr\.{re.escape(name)}\]\n(.*?)(?=\n\[|\Z)", cfg, re.S)
+    if not m:
+        return None
+    k = re.search(r'private_key = "([0-9a-f]{64})"', m.group(1))
+    return k.group(1) if k else None
+
+
+def utcnow() -> datetime.datetime:
+    return datetime.datetime.now(datetime.timezone.utc)
+
+
 # ── the block we write ───────────────────────────────────────────────────────
 
 def render_agent(cid: str, privkey: str, stamp: str) -> str:
@@ -166,6 +183,9 @@ def drop_agent(cfg: str, cid: str) -> str:
     cfg = re.sub(
         rf"(?m)^\[\[mcp\.servers\]\]\n(?:.*?\n)*?env = \{{[^\n]*SPARK_CARD = \"[^\"]*/{re.escape(cid)}/card\.json\"[^\n]*\}}\n",
         "", cfg)
+    # and the comment header the provisioner writes above the block, so a removed
+    # company leaves nothing at all behind
+    cfg = re.sub(rf"(?m)^# ─+ Company: {re.escape(cid)} ─+\n(?:#[^\n]*\n)*", "", cfg)
     return cfg
 
 
@@ -216,7 +236,7 @@ def cmd_remove(cid: str) -> None:
     if not agent_block(cid):
         print(f"{cid}: no agent configured; nothing to remove")
         return
-    shutil.copy2(CONFIG, f"{CONFIG}.bak-decommission-{datetime.datetime.utcnow():%Y%m%d%H%M%S}")
+    shutil.copy2(CONFIG, f"{CONFIG}.bak-decommission-{utcnow():%Y%m%d%H%M%S}")
     cfg = drop_agent(cfg, cid)
     cfg = set_delegates(cfg, card_agents(cfg))
     open(CONFIG, "w").write(cfg)
@@ -235,7 +255,7 @@ def cmd_add(cid: str) -> None:
             f"nothing to ground on would answer out of thin air")
 
     cfg = read_config()
-    stamp = f"{datetime.datetime.utcnow():%Y-%m-%d}"
+    stamp = f"{utcnow():%Y-%m-%d}"
     existing = agent_block(cid)
     privkey = load_privkey(cid)
 
@@ -245,25 +265,18 @@ def cmd_add(cid: str) -> None:
                   f"can call its gate")
 
     if existing:
-        # Refresh in place: keep the block, make sure the key that reaches it works.
-        m = re.search(r'(?m)^private_key = "([0-9a-f]{64})"$', existing)
-        if m and m.group(1) == privkey:
+        # Idempotent re-run: the only thing that can legitimately change is the
+        # channel key, and only when identity's key1 has moved.
+        wired = channel_key(cfg, cid)
+        if wired == privkey:
             print(f"{cid}: agent already configured and its channel key matches — no change")
-            if not re.search(rf'(?m)^delegates = \[[^\]]*"{re.escape(cid)}"', cfg):
-                cfg = set_delegates(cfg, card_agents(cfg))
-                open(CONFIG, "w").write(cfg)
-                print(f"  delegates roster updated -> {card_agents(cfg)}")
-                reload_daemon()
             return
         cfg = drop_agent(cfg, cid)
         print(f"{cid}: rotating the channel key to match {company_dir(cid)}/identity")
 
-    shutil.copy2(CONFIG, f"{CONFIG}.bak-provision-{datetime.datetime.utcnow():%Y%m%d%H%M%S}")
+    shutil.copy2(CONFIG, f"{CONFIG}.bak-provision-{utcnow():%Y%m%d%H%M%S}")
     cfg = cfg.rstrip("\n") + "\n" + render_agent(cid, privkey, stamp)
-    if cid not in card_agents(cfg):
-        cfg = set_delegates(cfg, card_agents(cfg))
-    else:
-        cfg = set_delegates(cfg, card_agents(cfg))
+    cfg = set_delegates(cfg, card_agents(cfg))
     open(CONFIG, "w").write(cfg)
     print(f"{cid}: agent written; delegates now {card_agents(cfg)}")
     reload_daemon()
