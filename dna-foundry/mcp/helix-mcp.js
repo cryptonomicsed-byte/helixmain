@@ -374,26 +374,11 @@ const TOOLS = [
     },
   },
   // ── hierarchy tools ─────────────────────────────────────────────────────────
-  {
-    name: "agent_delegate",
-    description:
-      "Delegate a task to another agent by alias and return that agent's reply. The " +
-      "Account Agent uses this to hand business-specific work to that company's Card " +
-      "Agent, instead of reading another company's data itself. The target agent keeps " +
-      "its own scope — a Card Agent can only ever see its own card.",
-    annotations: { readOnlyHint: false },
-    inputSchema: {
-      type: "object",
-      properties: {
-        targetAgent: {
-          type: "string",
-          description: "Alias of the agent to delegate to, e.g. santinos or demo-barber",
-        },
-        task: { type: "string", description: "What to ask that agent to do" },
-      },
-      required: ["targetAgent", "task"],
-    },
-  },
+  // NOTE: there is deliberately no `agent_delegate` here. The Account Agent
+  // delegates with ZeroClaw's NATIVE `delegate` tool instead: that runs the
+  // sub-agent in-process, whereas an MCP tool that opens a fresh WS session
+  // back into the daemon cannot get a turn while the caller's own turn is in
+  // flight, so it hung to its timeout every single time.
   {
     name: "directory_search",
     description:
@@ -494,64 +479,13 @@ function dnaRun(tool, args) {
   }
 }
 
-// ── hierarchy: delegate to another agent, and read-only directory search ─────
+// ── hierarchy: read-only directory search ────────────────────────────────────
+// Delegation is NOT here. The Account Agent uses ZeroClaw's native `delegate`
+// tool, which runs the sub-agent in-process; an MCP tool that dials a fresh WS
+// session back into the daemon never gets a turn while the caller's own turn is
+// in flight, so it hung to its timeout on every call.
 
-const ZEROCLAW_WS = process.env.ZEROCLAW_WS_URL || "ws://127.0.0.1:42617";
-const ZEROCLAW_TOKEN_PATH = process.env.ZEROCLAW_TOKEN || "/etc/helix/zeroclaw.token";
 const COMPANIES_DIR = process.env.HELIX_COMPANIES_DIR || "/etc/helix/companies";
-
-function zeroclawToken() {
-  try {
-    return require("fs").readFileSync(ZEROCLAW_TOKEN_PATH, "utf8").trim();
-  } catch {
-    return "";
-  }
-}
-
-/** Run one turn against ANOTHER agent and return its reply. This is the whole
- *  point of delegation: the caller does not read the other company's card, it
- *  asks that company's agent, which is scoped to its own business. */
-function delegateRun(targetAgent, task) {
-  return new Promise((resolve) => {
-    const finish = (body) => resolve({ local: true, body });
-    const token = zeroclawToken();
-    if (!token) return finish({ ok: false, error: `no ZeroClaw token at ${ZEROCLAW_TOKEN_PATH}` });
-    if (!targetAgent || !task) return finish({ ok: false, error: "targetAgent and task are required" });
-
-    const url =
-      `${ZEROCLAW_WS}/ws/chat?agent=${encodeURIComponent(targetAgent)}` +
-      `&token=${encodeURIComponent(token)}`;
-
-    let full = "";
-    let settled = false;
-    const done = (body) => { if (settled) return; settled = true; clearTimeout(timer); finish(body); };
-
-    let ws;
-    try {
-      ws = new WebSocket(url);
-    } catch (e) {
-      return finish({ ok: false, error: String(e) });
-    }
-    const timer = setTimeout(() => { try { ws.close(); } catch {} done({ ok: false, error: "delegate timed out" }); }, 90_000);
-
-    ws.addEventListener("open", () => ws.send(JSON.stringify({ type: "message", content: task })));
-    ws.addEventListener("message", (ev) => {
-      let f;
-      try { f = JSON.parse(String(ev.data)); } catch { return; }
-      if (f.type === "chunk" && typeof f.content === "string") full += f.content;
-      if (typeof f.full_response === "string" && f.full_response) full = f.full_response;
-      if (f.type === "error") { try { ws.close(); } catch {} done({ ok: false, error: String(f.message || "agent error") }); }
-      // Resolve on the FINAL frame, not on socket close: ZeroClaw keeps the
-      // session socket open, so waiting for close hangs until the tool timeout.
-      if (f.type === "done" || typeof f.full_response === "string") {
-        try { ws.close(); } catch {}
-        done({ ok: true, delegatedTo: targetAgent, reply: full });
-      }
-    });
-    ws.addEventListener("error", () => done({ ok: false, error: `agent ${targetAgent} is unreachable` }));
-    ws.addEventListener("close", () => done({ ok: true, delegatedTo: targetAgent, reply: full }));
-  });
-}
 
 /** Search every company card. READ-ONLY by construction — it opens card.json
  *  files and returns matches; it has no write path at all. */
@@ -842,7 +776,6 @@ const HANDLERS = {
     dnaRun("dna_sense", { organization_id: a.organization_id, force: a.force }),
 
   // ── hierarchy tools ─────────────────────────────────────────────────────────
-  "agent_delegate": (a) => delegateRun(a.targetAgent, a.task),
   "directory_search": (a) => directorySearch(a.query),
 };
 

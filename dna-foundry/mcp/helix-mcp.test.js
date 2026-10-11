@@ -81,7 +81,6 @@ test("tools/list exposes the platform, foundry, and hierarchy tools", async () =
     assert.deepEqual(
       result.tools.map((t) => t.name).sort(),
       [
-        "agent_delegate",
         "analytics_query",
         "billing_status",
         "content_generate",
