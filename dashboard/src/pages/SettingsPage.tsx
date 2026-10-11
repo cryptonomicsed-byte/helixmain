@@ -42,9 +42,13 @@ export function SettingsPage() {
     if (!v) return
     setBusy(true); setMsg(null)
     try {
-      const res = await api.saveSettings({ keys: { [p]: v } })
+      // Also switch the active provider to this one so the key takes effect immediately
+      const body: Parameters<typeof api.saveSettings>[0] = { keys: { [p]: v } }
+      if (provider !== p) body.provider = p
+      const res = await api.saveSettings(body)
       setData(res); setDrafts((d) => ({ ...d, [p]: '' }))
-      setMsg({ kind: 'ok', text: `${PROVIDER_LABEL[p] ?? p} key saved.` })
+      if (provider !== p) setProvider(p)
+      setMsg({ kind: 'ok', text: `${PROVIDER_LABEL[p] ?? p} key saved${provider !== p ? ` and set as active provider.` : '.'}` })
     } catch (e) {
       setMsg({ kind: 'bad', text: `Save failed: ${e instanceof Error ? e.message : e}` })
     } finally { setBusy(false) }

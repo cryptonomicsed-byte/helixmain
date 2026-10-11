@@ -635,13 +635,14 @@ export class AiGateway {
         // Already deepseek — nothing to fall back to
         throw primaryErr;
       }
-      // Try openrouter before deepseek if key is available
+      // Only fall back if OpenRouter key is available — never silently fall
+      // back to DeepSeek, because that hides misconfigured-key errors from the user.
       let openRouterResult: ProviderResult | null = null;
       try {
         keyForProviderOrThrow("openrouter", req.orgId); // throws if missing
         openRouterResult = await doCall("openrouter", "openrouter/auto");
       } catch {
-        // openrouter key missing or call failed — fall through to deepseek
+        // openrouter key missing or call failed
       }
       if (openRouterResult !== null) {
         fallbackTriggered = true;
@@ -649,10 +650,11 @@ export class AiGateway {
         effectiveModel = "openrouter/auto";
         result = openRouterResult;
       } else {
-        fallbackTriggered = true;
-        effectiveProvider = DEFAULT_PROVIDER;
-        effectiveModel = DEFAULT_MODEL;
-        result = await doCall(DEFAULT_PROVIDER, DEFAULT_MODEL);
+        // Surface the original error so the caller knows which provider failed
+        throw new Error(
+          `${provider} call failed and no fallback key is available. ` +
+          `Original error: ${primaryErr instanceof Error ? primaryErr.message : String(primaryErr)}`
+        );
       }
     }
 

@@ -422,7 +422,7 @@ app.put("/settings", { preHandler: requireAuth }, async (req, reply) => {
     }
     next.provider = body.provider as (typeof PROVIDERS)[number];
   }
-  if (typeof body.model === "string") next.model = body.model;
+  if (typeof body.model === "string") next.model = body.model || undefined;
 
   if (body.keys && typeof body.keys === "object") {
     const keys: Record<string, string> = { ...(cur.keys ?? {}) };

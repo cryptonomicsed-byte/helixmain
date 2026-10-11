@@ -198,15 +198,15 @@ export function resolveModel(
 
   if (scope?.model || scope?.provider) {
     const provider = (scope.provider ?? c.provider ?? g.provider ?? "deepseek") as Provider;
-    return { provider, model: scope.model ?? defaultModelFor(provider), source: `business · ${aspect}` };
+    return { provider, model: scope.model || defaultModelFor(provider), source: `business · ${aspect}` };
   }
   if (c.model || c.provider) {
     const provider = (c.provider ?? g.provider ?? "deepseek") as Provider;
-    return { provider, model: c.model ?? defaultModelFor(provider), source: "business default" };
+    return { provider, model: c.model || defaultModelFor(provider), source: "business default" };
   }
   if (g.model || g.provider) {
     const provider = (g.provider ?? "deepseek") as Provider;
-    return { provider, model: g.model ?? defaultModelFor(provider), source: "account default" };
+    return { provider, model: g.model || defaultModelFor(provider), source: "account default" };
   }
   return { provider: "deepseek", model: "deepseek-chat", source: "built-in" };
 }
