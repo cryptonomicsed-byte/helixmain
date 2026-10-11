@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useHelixStore } from '../../store'
 import { api } from '../../api'
 import { Icon } from '../../components/Icon'
+import { AgentChat } from '../../components/AgentChat'
 import { CardContext } from './CardContext'
 
 // The card is the unit of work. Everything below lives inside /card/:id.
@@ -165,6 +166,10 @@ export function CardLayout() {
 
         <Outlet />
       </div>
+
+      {/* In-card agent chat — the owner's conversational partner, on the card
+          itself. Deliberately outside the tab Outlet so it survives tab changes. */}
+      <AgentChat companyId={id} name={name} />
     </CardContext.Provider>
   )
 }

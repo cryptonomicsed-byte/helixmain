@@ -77,6 +77,59 @@ export async function authFetch(path: string, init: RequestInit = {}): Promise<R
   return res
 }
 
+/** Stream one agent turn (SSE over POST). Calls onChunk for each delta and
+ *  resolves with the full reply. Throws ApiError on 402/403/503 so the caller can
+ *  show a real state (e.g. offline) rather than a generic failure. */
+export async function agentChat(
+  companyId: string,
+  message: string,
+  onChunk: (text: string) => void,
+  signal?: AbortSignal,
+): Promise<string> {
+  const res = await authFetch(`/agent/chat/${encodeURIComponent(companyId)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message }),
+    signal,
+  })
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText)
+    throw new ApiError('POST', `/agent/chat/${companyId}`, res.status, text)
+  }
+  const reader = res.body?.getReader()
+  if (!reader) throw new Error('streaming is not supported by this browser')
+  const dec = new TextDecoder()
+  let buf = ''
+  let full = ''
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buf += dec.decode(value, { stream: true })
+    let idx = buf.indexOf('\n\n')
+    while (idx >= 0) {
+      const frame = buf.slice(0, idx)
+      buf = buf.slice(idx + 2)
+      const line = frame.split('\n').find((l) => l.startsWith('data:'))
+      if (line) {
+        let f: any = null
+        try { f = JSON.parse(line.slice(5).trim()) } catch { f = null }
+        if (f) {
+          if (f.type === 'chunk' && typeof f.content === 'string') {
+            full += f.content
+            onChunk(f.content)
+          } else if (f.type === 'done' && typeof f.full_response === 'string' && f.full_response) {
+            full = f.full_response
+          } else if (f.type === 'error') {
+            throw new Error(f.message || 'agent error')
+          }
+        }
+      }
+      idx = buf.indexOf('\n\n')
+    }
+  }
+  return full
+}
+
 /** An API error that KEEPS the status and parsed body, so a caller can act on a
  *  specific response (e.g. 409 card_exists → show a confirm) rather than parse it
  *  back out of a message string. */
