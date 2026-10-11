@@ -188,6 +188,12 @@ import {
   findByGoogleSub,
   readAccount,
 } from "./services/signup";
+import {
+  agentStatus,
+  agentNameFor,
+  chatStream,
+  type AgentFrame,
+} from "./services/zeroclaw";
 
 const app = Fastify({ logger: true });
 
@@ -3225,6 +3231,138 @@ app.get("/auth/me", async (req, reply) => {
 app.post("/auth/logout", async (_req, reply) => {
   reply.header("Set-Cookie", clearCookie(SESSION_COOKIE));
   return { ok: true };
+});
+
+// ---------------------------------------------------------------------------
+// Agent chat + registry.
+//
+// The owner talks to their company's agent from the card page. Transport is
+// ZeroClaw's WebSocket chat (services/zeroclaw.ts); this route bridges it to SSE
+// so a browser can render the reply as it streams. The tenant is the
+// AUTHENTICATED company — `:companyId` is checked, never trusted.
+// ---------------------------------------------------------------------------
+
+app.post("/agent/chat/:companyId", { preHandler: requireAuth }, async (req, reply) => {
+  const { companyId } = req.params as { companyId: string };
+  const auth = (req as AuthCarrier).auth;
+  if (auth && auth.level !== "operator" && auth.companyId !== companyId)
+    return reply.code(403).send({ ok: false, error: "not your company" });
+
+  const body = (req.body ?? {}) as { message?: string };
+  const message = String(body.message ?? "").trim();
+  if (!message) return reply.code(400).send({ ok: false, error: "message required" });
+  if (message.length > 4000)
+    return reply.code(400).send({ ok: false, error: "message too long (4000 chars max)" });
+
+  // OFFLINE must be a clean error, never a spinner that never ends.
+  const st = await agentStatus();
+  if (!st.ok)
+    return reply.code(503).send({
+      ok: false,
+      error: "agent_runtime_offline",
+      message: "The agent runtime is unreachable.",
+    });
+  const agent = agentNameFor(companyId);
+  if (st.channels[`nostr.${agent}`] === false)
+    return reply.code(503).send({
+      ok: false,
+      error: "agent_offline",
+      message: `The ${agent} agent is not running.`,
+    });
+
+  // Credits BEFORE the turn, refunded if the turn produces nothing — same rule
+  // as /extract. playground_message is the reference cost.
+  let usageEntry: UsageEntry | null = null;
+  try {
+    usageEntry = await deductCredits(companyId, "playground_message");
+  } catch (e) {
+    if (e instanceof QuotaExceeded) return reply.code(402).send({ ok: false, error: e.message });
+    throw e;
+  }
+
+  // Take the response over: everything from here is SSE we write by hand.
+  reply.hijack();
+  reply.raw.writeHead(200, {
+    "content-type": "text/event-stream; charset=utf-8",
+    "cache-control": "no-cache, no-transform",
+    connection: "keep-alive",
+    "x-accel-buffering": "no",
+  });
+  const send = (obj: unknown) => {
+    try {
+      reply.raw.write(`data: ${JSON.stringify(obj)}\n\n`);
+    } catch {
+      /* client went away */
+    }
+  };
+
+  let chunks = 0;
+  try {
+    const full = await chatStream(agent, message, (f: AgentFrame) => {
+      if (f.type === "chunk") chunks++;
+      send(f);
+    });
+    send({ type: "done", full_response: full });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (chunks === 0 && usageEntry) await refundCredits(usageEntry.id).catch(() => {});
+    send({ type: "error", message: msg });
+  } finally {
+    try {
+      reply.raw.end();
+    } catch {
+      /* already closed */
+    }
+  }
+});
+
+// GET /agents — the agent registry: {id, type, company, status, capabilities}.
+// An operator sees every agent; a company sees the shared agents plus its own.
+app.get("/agents", { preHandler: requireAuth }, async (req, reply) => {
+  const auth = (req as AuthCarrier).auth;
+  const isOperator = auth?.level === "operator";
+  const mine = auth?.companyId ?? "";
+  const st = await agentStatus();
+  const statusOf = (alias: string) =>
+    st.channels[`nostr.${alias}`] === true ? "online" : st.ok ? "offline" : "unknown";
+
+  const agents: object[] = [
+    {
+      id: "helix",
+      type: "account",
+      company: null,
+      status: statusOf("helix"),
+      capabilities: ["cross-company", "delegate", "all-tools"],
+      description: "Account Agent — runs the account and delegates business-specific work.",
+    },
+  ];
+  // The Directory Agent only exists once it is configured; report it when it is.
+  if (st.channels["nostr.helix-directory"] !== undefined) {
+    agents.push({
+      id: "helix-directory",
+      type: "directory",
+      company: null,
+      status: statusOf("helix-directory"),
+      capabilities: ["read-cards", "discover"],
+      description: "Directory Agent — helps visitors find businesses. Read-only.",
+    });
+  }
+  const companies = isOperator ? listProvisionedCompanies() : mine ? [mine] : [];
+  for (const c of companies) {
+    agents.push({
+      id: c,
+      type: "card",
+      company: c,
+      status: statusOf(c),
+      capabilities: ["own-card", "voice", "content", "leads", "site", "billing", "crm"],
+      description: `Card Agent for ${c}.`,
+    });
+  }
+  return reply.code(200).send({
+    ok: true,
+    runtime: { reachable: st.ok },
+    agents,
+  });
 });
 
 // ---------------------------------------------------------------------------
