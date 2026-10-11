@@ -226,21 +226,35 @@ const COMPILER_CLI = path.join(ROOT, "compiler", "dist", "cli.js");
 const ORCHESTRATOR = path.join(ROOT, "swarm", "orchestrator.py");
 /** infra/ sits beside dna-foundry/, not inside it. */
 const PROVISION_AGENT = path.resolve(__dirname, "..", "..", "..", "infra", "provision-agent.py");
+const SYNC_AGENT_PROVIDER = path.resolve(__dirname, "..", "..", "..", "infra", "sync-agent-provider.py");
 
-/** An onboarded company gets its Card Agent without anyone remembering to run
- *  infra/provision-agent.py by hand. Idempotent — the script no-ops when the
- *  agent is already configured — and fire-and-forget: the card IS stored and the
- *  caller's actual job is done, so a provisioning failure must never fail the
- *  extract. It is logged loudly, though, because a company with no agent is a
- *  company the Account Agent cannot hand work to. */
-function provisionCardAgent(companyId: string): void {
+/** Fire-and-forget: run one of the infra/*.py scripts against the agent runtime.
+ *  Detached and cheap to call — both scripts no-op when there is nothing to do —
+ *  because the caller's real job (storing a card, saving a setting) is already
+ *  done by the time this runs, and neither must ever fail or delay a response. */
+function runInfraScript(script: string, args: string[], tag: string): void {
   try {
-    const p = spawn("python3", [PROVISION_AGENT, companyId], { detached: true, stdio: "ignore" });
-    p.on("error", (e) => console.error(`provision-agent ${companyId}: ${e.message}`));
+    const p = spawn("python3", [script, ...args], { detached: true, stdio: "ignore" });
+    p.on("error", (e) => console.error(`${tag}: ${e.message}`));
     p.unref();
   } catch (e) {
-    console.error(`provision-agent ${companyId}: ${e instanceof Error ? e.message : String(e)}`);
+    console.error(`${tag}: ${e instanceof Error ? e.message : String(e)}`);
   }
+}
+
+/** An onboarded company gets its Card Agent without anyone remembering to run
+ *  infra/provision-agent.py by hand. The card IS what an agent grounds on, so
+ *  this is the moment the company becomes able to have one. A company with no
+ *  agent is a company the Account Agent cannot hand work to. */
+function provisionCardAgent(companyId: string): void {
+  runInfraScript(PROVISION_AGENT, [companyId], `provision-agent ${companyId}`);
+}
+
+/** The chat agents read /etc/zeroclaw/config.toml, NOT the Settings page. Without
+ *  this, a user saves a provider key, sees Settings confirm it, and every reply
+ *  still comes from the old provider — which reads as "it's hardcoded". */
+function syncAgentProvider(): void {
+  runInfraScript(SYNC_AGENT_PROVIDER, [], "sync-agent-provider");
 }
 
 async function ensureDirs() {
@@ -435,6 +449,9 @@ app.put("/settings", { preHandler: requireAuth }, async (req, reply) => {
   }
 
   await saveSettings(next);
+  // The chat agents run on their own config, so a key saved here is inert until
+  // it is pushed into the runtime. Detached: the save is already committed.
+  syncAgentProvider();
   return publicSettings();
 });
 
@@ -512,6 +529,9 @@ app.put("/settings/:orgId", { preHandler: requireAuth }, async (req, reply) => {
   }
 
   await saveCompanyAi(orgId, next);
+  // A card's own provider/model/key must reach its chat agent too, not just the
+  // API. Detached and idempotent: the save is already committed.
+  syncAgentProvider();
   return publicCompanyAi(orgId);
 });
 
