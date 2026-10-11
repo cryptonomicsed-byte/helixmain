@@ -286,14 +286,25 @@ def company_dir(cid: str) -> str:
 
 
 def load_privkey(cid: str) -> str:
-    ident = os.path.join(company_dir(cid), "identity")
-    if not os.path.isfile(ident):
-        die(f"{cid}: no {ident} — the company has no nostr identity yet, so it "
-            f"cannot be reached as an agent")
-    first = open(ident).read().splitlines()[0].strip()
-    if not re.fullmatch(r"[0-9a-f]{64}", first):
-        die(f"{cid}: {ident} line 1 is not a 64-hex nostr private key")
-    return first
+    """The company's channel key — the one its voice agent already answers on.
+
+    Two files carry it, and both are the same secret:
+      identity  line 1 = sk, line 2 = pk, line 3 = npub (the rich form)
+      seckey    line 1 = sk                          (what signup writes)
+
+    A self-serve company only ever has `seckey`, so insisting on `identity` would
+    have meant a new signup could onboard and still never get an agent.
+    """
+    for name in ("identity", "seckey"):
+        p = os.path.join(company_dir(cid), name)
+        if not os.path.isfile(p):
+            continue
+        first = open(p).read().splitlines()[0].strip() if open(p).read().strip() else ""
+        if re.fullmatch(r"[0-9a-f]{64}", first):
+            return first
+        die(f"{cid}: {p} line 1 is not a 64-hex nostr private key")
+    die(f"{cid}: no identity/seckey in {company_dir(cid)} — the company has no "
+        f"nostr identity yet, so it cannot be reached as an agent")
 
 
 def reload_daemon() -> None:
@@ -311,7 +322,9 @@ def cmd_list() -> None:
     for a in agents:
         d = company_dir(a)
         card = "card.json" if os.path.isfile(os.path.join(d, "card.json")) else "NO CARD"
-        ident = "identity" if os.path.isfile(os.path.join(d, "identity")) else "NO IDENTITY"
+        key = next((n for n in ("identity", "seckey")
+                    if os.path.isfile(os.path.join(d, n))), None)
+        ident = key if key else "NO IDENTITY"
         print(f"  {a:<24} {card:<10} {ident}")
     helm = re.search(
         rf"(?m)^\[agents\.{re.escape(ACCOUNT_AGENT)}\]\n(.*?)(?=\n\[|\Z)", cfg, re.S)

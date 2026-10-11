@@ -224,6 +224,24 @@ const JOBS = path.join(DATA, "jobs");
 const COMPILED = path.join(ROOT, "compiled");
 const COMPILER_CLI = path.join(ROOT, "compiler", "dist", "cli.js");
 const ORCHESTRATOR = path.join(ROOT, "swarm", "orchestrator.py");
+/** infra/ sits beside dna-foundry/, not inside it. */
+const PROVISION_AGENT = path.resolve(__dirname, "..", "..", "..", "infra", "provision-agent.py");
+
+/** An onboarded company gets its Card Agent without anyone remembering to run
+ *  infra/provision-agent.py by hand. Idempotent — the script no-ops when the
+ *  agent is already configured — and fire-and-forget: the card IS stored and the
+ *  caller's actual job is done, so a provisioning failure must never fail the
+ *  extract. It is logged loudly, though, because a company with no agent is a
+ *  company the Account Agent cannot hand work to. */
+function provisionCardAgent(companyId: string): void {
+  try {
+    const p = spawn("python3", [PROVISION_AGENT, companyId], { detached: true, stdio: "ignore" });
+    p.on("error", (e) => console.error(`provision-agent ${companyId}: ${e.message}`));
+    p.unref();
+  } catch (e) {
+    console.error(`provision-agent ${companyId}: ${e instanceof Error ? e.message : String(e)}`);
+  }
+}
 
 async function ensureDirs() {
   for (const d of [CARDS, JOBS, COMPILED]) await fs.mkdir(d, { recursive: true });
@@ -628,6 +646,9 @@ app.post("/extract", { preHandler: requireAuth }, async (req, reply) => {
       const msg = e instanceof Error ? e.message : String(e);
       return reply.code(500).send({ ok: false, error: `card could not be stored: ${msg}` });
     }
+    // The card is what an agent grounds on, so this is the moment the company
+    // becomes able to have one. Idempotent; never blocks or fails the response.
+    provisionCardAgent(target);
     return reply.code(200).send(card);
   } catch (e) {
     if (usageEntry) await refundCredits(usageEntry.id).catch(() => {});
