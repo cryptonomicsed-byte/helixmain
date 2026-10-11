@@ -28,7 +28,7 @@ export const PROVIDER_MODELS: Record<Provider, string[]> = {
   deepseek: ["deepseek-chat", "deepseek-reasoner"],
   openai: ["gpt-4o-mini", "gpt-4o"],
   anthropic: ["claude-sonnet-4", "claude-3-5-haiku-latest"],
-  gemini: ["gemini-1.5-flash", "gemini-1.5-pro"],
+  gemini: ["gemini-3.8-flash", "gemini-3.1-flash-lite", "gemini-3.1-pro-preview"],
   groq: ["llama-3.3-70b-versatile", "mixtral-8x7b-32768"],
   openrouter: ["openrouter/auto"],
   mistral: ["mistral-small-latest", "mistral-large-latest"],
