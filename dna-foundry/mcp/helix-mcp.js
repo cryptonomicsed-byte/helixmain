@@ -847,6 +847,17 @@ function rpcError(id, code, message) {
   return JSON.stringify({ jsonrpc: "2.0", id, error: { code, message } });
 }
 
+// OPTIONAL READ-ONLY INSTANCE. Setting HELIX_MCP_ALLOW to a comma-separated tool
+// list publishes ONLY those tools: they are the only ones advertised, and a call
+// to anything else is refused. Enforcement is at the GRANT — an unlisted tool is
+// never visible to the model, so it cannot be talked into calling it. The
+// Directory Agent runs this way.
+const ALLOW = (process.env.HELIX_MCP_ALLOW || "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+const VISIBLE_TOOLS = ALLOW.length ? TOOLS.filter((t) => ALLOW.includes(t.name)) : TOOLS;
+
 async function handle(msg) {
   const { id, method, params } = msg;
 
@@ -866,10 +877,12 @@ async function handle(msg) {
       return rpcResult(id, {});
 
     case "tools/list":
-      return rpcResult(id, { tools: TOOLS });
+      return rpcResult(id, { tools: VISIBLE_TOOLS });
 
     case "tools/call": {
       const name = params?.name;
+      if (ALLOW.length && !ALLOW.includes(name))
+        return rpcError(id, -32602, `tool not granted in this instance: ${name}`);
       const handler = HANDLERS[name];
       if (!handler) return rpcError(id, -32602, `unknown tool: ${name}`);
 
