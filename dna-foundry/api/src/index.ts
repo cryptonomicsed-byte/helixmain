@@ -2885,7 +2885,16 @@ app.post("/billing/webhook", async (req, reply) => {
       if (companyId && priceId) {
         const entry = PRICE_TO_CREDITS[priceId];
         if (entry) {
-          await topUpCredits(companyId, entry.credits, "stripe_payment");
+          // A SUBSCRIPTION grant upgrades the tier, and that tier already raises the
+          // monthly cap — so record it as "stripe_subscription" and do NOT count it
+          // as extra (which would double the allowance). A one-off PACK has no tier
+          // change, so its credits MUST raise the cap by themselves, or buying them
+          // would leave the customer blocked with a balance they cannot spend.
+          await topUpCredits(
+            companyId,
+            entry.credits,
+            entry.tier ? "stripe_subscription" : "stripe_pack",
+          );
           if (entry.tier) {
             upgradeTier(companyId, entry.tier);
           }

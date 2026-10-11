@@ -169,6 +169,24 @@ function usageInWindow(entries: UsageEntry[], since: Date): number {
     .reduce((sum, e) => sum + e.creditsDeducted, 0);
 }
 
+/** Credits added ON TOP of the plan's own allowance — one-time packs and operator
+ *  grants. Top-ups are stored as `operationType:"top_up"` with a NEGATIVE
+ *  creditsDeducted and the source recorded in `refundReason`.
+ *
+ *  A SUBSCRIPTION grant is excluded: it upgrades the tier, and that tier already
+ *  supplies the allowance, so counting it here would double it. The sum is
+ *  monotonic, so it is a stable cap rather than a moving target. */
+function extraCreditsBeyondPlan(entries: UsageEntry[]): number {
+  return entries
+    .filter(
+      (e) =>
+        e.operationType === "top_up" &&
+        e.creditsDeducted < 0 &&
+        e.refundReason !== "stripe_subscription",
+    )
+    .reduce((sum, e) => sum + -e.creditsDeducted, 0);
+}
+
 // ---------------------------------------------------------------------------
 // Public functions
 // ---------------------------------------------------------------------------
@@ -223,20 +241,27 @@ export function checkQuota(
   const usedToday = usageInWindow(account.usageLog, dayStart);
   const usedThisMonth = usageInWindow(account.usageLog, monthStart);
 
+  // Credits BOUGHT or GRANTED on top of the plan's own allowance raise BOTH caps,
+  // so a purchased credit is always spendable. The free allowance still gates the
+  // baseline and no tier upgrade is required to spend what you paid for — a "buy
+  // credits" button that leaves you blocked is worse than no button at all.
+  const extra = extraCreditsBeyondPlan(account.usageLog);
+  const dailyCap = limits.daily + extra;
+  const monthlyCap = limits.monthly + extra;
+
   const remainingBalance = account.balance;
-  const remainingDaily = limits.daily - usedToday;
-  const remainingMonthly = limits.monthly - usedThisMonth;
+  const remainingDaily = dailyCap - usedToday;
+  const remainingMonthly = monthlyCap - usedThisMonth;
 
   const remaining = Math.min(remainingBalance, remainingDaily, remainingMonthly);
 
   // Say WHICH limit bound. "Quota exceeded … Remaining: -15" told a caller nothing
-  // and read like a bug when they still had credits — which happens whenever a
-  // tier's daily cap sits BELOW its monthly budget and strands the tail of it.
+  // and read like a bug when they still had credits.
   let reason: string | undefined;
   if (remaining <= 0) {
     if (remainingBalance <= 0) reason = `credit balance is ${remainingBalance}`;
-    else if (remainingMonthly <= 0) reason = `monthly cap reached (${usedThisMonth}/${limits.monthly} credits this month)`;
-    else if (remainingDaily <= 0) reason = `daily cap reached (${usedToday}/${limits.daily} credits today)`;
+    else if (remainingMonthly <= 0) reason = `monthly cap reached (${usedThisMonth}/${monthlyCap} credits this month)`;
+    else if (remainingDaily <= 0) reason = `daily cap reached (${usedToday}/${dailyCap} credits today)`;
   }
 
   return { allowed: remaining > 0, remaining: Math.max(0, remaining), resetAt, reason };
