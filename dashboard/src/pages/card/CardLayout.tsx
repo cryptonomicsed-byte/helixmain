@@ -72,7 +72,7 @@ export function CardLayout() {
       else setError('Could not load this card.')
       setHealth(h.status === 'fulfilled' ? h.value : null)
       setChangelog(cl.status === 'fulfilled' ? cl.value : null)
-      setHasSite(sites.status === 'fulfilled' && Array.isArray(sites.value?.companies) && sites.value.companies.includes(id))
+      setHasSite(sites.status === 'fulfilled' && Array.isArray((sites.value as any)?.published) && (sites.value as any).published.includes(id))
       setLoading(false)
     })()
     return () => { live = false }
@@ -85,7 +85,12 @@ export function CardLayout() {
   const version = card?.version ?? 1
   const hash = changelog?.entries?.[0]?.hash ?? ''
   const status: string = card?.status ?? 'draft'
-  const publicUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/api/site/${id}`
+  // The PUBLIC page (served by Hugo at /b/<id>/) — not the API preview endpoint.
+  // This URL goes in the iframe, the "Open ↗" button, the QR code and the NFC
+  // payload, all of which are meant to be used by someone who is NOT logged in.
+  // An /api/... URL cannot do that: it needs x-api-key, so a scanned QR or a
+  // tapped tag would just render an auth error.
+  const publicUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/b/${id}/`
 
   if (loading) {
     return <div style={{ color: 'var(--fg-3)', padding: '3rem', textAlign: 'center' }}>Loading card…</div>

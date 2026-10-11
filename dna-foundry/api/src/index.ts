@@ -2471,8 +2471,43 @@ app.get("/site/:companyId", { preHandler: requireAuth }, async (req, reply) => {
 });
 
 // GET /sites — list all company IDs that have a generated site
-app.get("/sites", { preHandler: requireAuth }, async (_req, reply) => {
-  return reply.code(200).send({ ok: true, companies: listSites() });
+// GET /sites — what the dashboard's Landing page tab needs to know.
+//
+// Two different things were being conflated here, which is what produced
+// `no preview generated for company` in the card's iframe:
+//   * a PREVIEW is LLM single-file HTML held in memory (siteStore) — private,
+//     never charged, and only exists if /site/preview was called
+//   * a PUBLISHED site is the Hugo page actually served at /b/<id>/
+// The tab iframed the preview endpoint while the button PUBLISHED, so a
+// successfully published page still rendered as an error.
+//
+// `published` is read from the web root, so it reflects what a visitor can
+// actually load — not what some in-memory map remembers.
+const PUBLIC_SITE_ROOT =
+  process.env.HELIX_SITE_ROOT || "/var/www/helixmain-site";
+
+async function publishedSites(): Promise<string[]> {
+  try {
+    const entries = await fs.readdir(path.join(PUBLIC_SITE_ROOT, "b"), { withFileTypes: true });
+    return entries.filter((e) => e.isDirectory()).map((e) => e.name).sort();
+  } catch {
+    return [];
+  }
+}
+
+app.get("/sites", { preHandler: requireAuth }, async (req, reply) => {
+  const auth = (req as AuthCarrier).auth;
+  const isOperator = auth?.level === "operator";
+  const mine = auth?.companyId ?? "";
+  // Same rule as every other list: a company sees its OWN, an operator sees all.
+  const scope = (ids: string[]) => (isOperator ? ids : ids.filter((i) => i === mine));
+  const published = await publishedSites();
+  return reply.code(200).send({
+    ok: true,
+    companies: scope(listSites()),
+    published: scope(published),
+    publicBase: PUBLIC_SITE_BASE,
+  });
 });
 
 // ---------------------------------------------------------------------------

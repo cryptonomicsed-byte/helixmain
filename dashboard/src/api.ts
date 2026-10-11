@@ -604,12 +604,27 @@ export const api = {
   campaignExport: (campaignId: string) =>
     get<any>(`/content/campaign/${campaignId}/zip`),
 
-  // Site generator — calls the LLM preview generator, not the Hugo publish path
-  generateSite: (companyId: string) =>
-    post<{ ok: boolean; companyId: string; generatedAt: string }>('/site/preview', { companyId }),
+  // Site generator.
+  //
+  // Two genuinely different actions, kept apart on purpose:
+  //   publishSite  POST /site/generate — Hugo build + rsync to the web root. This
+  //                is the page a visitor loads at /b/<id>/, and the only thing a
+  //                QR code or NFC tag can point at (both need to work for someone
+  //                who has no API key). Charged, but only after a real build.
+  //   previewSite  POST /site/preview  — LLM single-file draft held in memory.
+  //                Private, never charged, for looking before you publish.
+  // The tab used to publish and then iframe the PREVIEW url, so a perfectly good
+  // published page rendered as `no preview generated for company`.
+  publishSite: (companyId: string) =>
+    post<{ ok: boolean; companyId: string; url: string; buildMs: number; creditsCharged: number }>(
+      '/site/generate', { companyId }),
+
+  previewSite: (companyId: string) =>
+    post<{ ok: boolean; companyId: string; previewUrl: string; generatedAt: string }>(
+      '/site/preview', { companyId }),
 
   listSites: () =>
-    get<{ ok: boolean; companies: string[] }>('/sites'),
+    get<{ ok: boolean; companies: string[]; published: string[]; publicBase: string }>('/sites'),
 
   // Runtime settings — provider / model / API keys
   getSettings: () => get<SettingsResponse>('/settings'),

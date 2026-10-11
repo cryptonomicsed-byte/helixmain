@@ -39,31 +39,49 @@ function QrCard({ label, text, note }: { label: string; text: string; note?: str
 
 export function SiteTab() {
   const { id, card, publicUrl } = useCard()
-  const [hasSite, setHasSite] = useState<boolean | null>(null)
-  const [busy, setBusy] = useState(false)
+  const [published, setPublished] = useState<boolean | null>(null)
+  const [draftUrl, setDraftUrl] = useState('')
+  const [busy, setBusy] = useState('')
   const [notice, setNotice] = useState('')
   const [copied, setCopied] = useState(false)
 
   const phone: string = card?.identity?.phone ?? ''
 
+  // `published` comes from the web root (what a visitor can actually load), not
+  // from the in-memory preview cache — those are different things, and conflating
+  // them is what made a live page look broken.
   async function refreshSiteState() {
     try {
       const s = await api.listSites()
-      setHasSite((s.companies ?? []).includes(id))
-    } catch { setHasSite(false) }
+      setPublished((s.published ?? []).includes(id))
+    } catch { setPublished(false) }
   }
 
-  useEffect(() => { refreshSiteState() /* eslint-disable-next-line */ }, [id])
+  useEffect(() => { refreshSiteState(); setDraftUrl('') /* eslint-disable-next-line */ }, [id])
 
-  async function regenerate() {
-    setBusy(true); setNotice('')
+  async function publish() {
+    setBusy('publish'); setNotice('')
     try {
-      const r = await api.generateSite(id)
-      setNotice(r?.ok ? 'Site regenerated from the current card.' : 'Generation returned no result.')
+      const r = await api.publishSite(id)
+      setNotice(r?.url
+        ? `Published to ${r.url}${r.creditsCharged ? ` (${r.creditsCharged} credits)` : ''}`
+        : 'Publish returned no result.')
+      setDraftUrl('')
       await refreshSiteState()
     } catch (e) {
-      setNotice(`Generation failed: ${e instanceof Error ? e.message : String(e)}`)
-    } finally { setBusy(false) }
+      setNotice(`Publish failed: ${e instanceof Error ? e.message : String(e)}`)
+    } finally { setBusy('') }
+  }
+
+  async function previewDraft() {
+    setBusy('preview'); setNotice('')
+    try {
+      const r = await api.previewSite(id)
+      setDraftUrl(`${window.location.origin}${r.previewUrl}`)
+      setNotice('Draft generated — this is a private draft, not the published page.')
+    } catch (e) {
+      setNotice(`Draft failed: ${e instanceof Error ? e.message : String(e)}`)
+    } finally { setBusy('') }
   }
 
   async function copyPayload() {
@@ -82,21 +100,34 @@ export function SiteTab() {
             Landing page
           </div>
           <div style={{ flex: 1 }} />
-          <button className="btn btn-ghost" onClick={regenerate} disabled={busy} style={{ fontSize: '.78rem' }}>
-            <Icon name="globe" size={14} /> {busy ? 'Generating…' : 'Regenerate site'}
+          <button className="btn btn-primary" onClick={publish} disabled={!!busy} style={{ fontSize: '.78rem' }}>
+            <Icon name="globe" size={14} /> {busy === 'publish' ? 'Publishing…' : published ? 'Republish site' : 'Publish site'}
           </button>
-          {hasSite && (
+          <button className="btn btn-ghost" onClick={previewDraft} disabled={!!busy} style={{ fontSize: '.78rem' }}>
+            <Icon name="spark" size={14} /> {busy === 'preview' ? 'Drafting…' : 'Preview draft'}
+          </button>
+          {published && (
             <button className="btn btn-ghost" onClick={() => window.open(publicUrl, '_blank', 'noopener')} style={{ fontSize: '.78rem' }}>
               Open ↗
             </button>
           )}
         </div>
         {notice && <div className="pill pill-ok" style={{ marginBottom: '.6rem', display: 'inline-block' }}>{notice}</div>}
-        {hasSite === false ? (
+        {draftUrl ? (
+          <>
+            <div className="sub" style={{ fontSize: '.72rem', marginBottom: '.4rem' }}>
+              Private draft — <a href={draftUrl} target="_blank" rel="noreferrer">open in a tab</a>
+            </div>
+            <iframe title="draft-preview" src={draftUrl}
+              style={{ width: '100%', height: 460, border: '1px solid var(--line-2)', borderRadius: 10, background: '#fff' }} />
+          </>
+        ) : published === false ? (
           <div className="sub" style={{ fontSize: '.85rem' }}>
-            No site generated yet for this card. Press <strong>Regenerate site</strong> to build the single-file landing page from the card.
+            This card has no published page yet. Press <strong>Publish site</strong> to build it from the
+            card — that is the page at <span className="mono">{publicUrl}</span> that the QR code and NFC tag point at.
+            <strong> Preview draft</strong> shows a private draft first without publishing.
           </div>
-        ) : hasSite ? (
+        ) : published ? (
           <iframe title="landing-preview" src={publicUrl}
             style={{ width: '100%', height: 460, border: '1px solid var(--line-2)', borderRadius: 10, background: '#fff' }} />
         ) : (
@@ -109,7 +140,7 @@ export function SiteTab() {
         QR codes
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '.75rem', marginBottom: '1rem' }}>
-        <QrCard label="Landing page" text={publicUrl} note={hasSite ? undefined : 'generate a site first'} />
+        <QrCard label="Landing page" text={publicUrl} note={published ? undefined : 'publish a site first'} />
         {phone
           ? <QrCard label="Call the business" text={`tel:${phone.replace(/\s/g, '')}`} />
           : <QrCard label="Call the business" text="not set" note="no phone on the card" />}
