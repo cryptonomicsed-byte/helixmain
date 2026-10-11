@@ -370,8 +370,8 @@ export interface CompanyAiPatch {
 
 export const api = {
   // Extraction & compilation
-  extract: async (url: string, orgId: string) =>
-    normalizeCard(await post<any>('/extract', { url, orgId })),
+  extract: async (url: string) =>
+    normalizeCard(await post<any>('/extract', { url })),
 
   compile: (cardId: string, companyId: string) =>
     post<CompileResult>('/compile', { cardId, companyId }),

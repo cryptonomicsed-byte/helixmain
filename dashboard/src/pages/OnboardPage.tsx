@@ -59,7 +59,6 @@ export function OnboardPage() {
   const setCurrentCompany = useHelixStore((s) => s.setCurrentCompany)
 
   const [url, setUrl] = useState('')
-  const [orgId, setOrgId] = useState('')
   const [phase, setPhase] = useState<Phase>('input')
   const [error, setError] = useState<string | null>(null)
   const [card, setCard] = useState<BusinessCard | null>(null)
@@ -80,12 +79,14 @@ export function OnboardPage() {
   async function handleExtract(e: React.FormEvent) {
     e.preventDefault()
     if (!url.trim()) return
-    const id = orgId.trim() || `org_${Date.now().toString(36)}`
-    setOrgId(id)
     setError(null)
     setPhase('extracting')
     try {
-      const extracted = await api.extract(url.trim(), id)
+      // The card lands in the AUTHENTICATED company — there is no org field to
+      // fill. The old "Org ID" input auto-generated `org_<timestamp>` and the API
+      // correctly rejected it as a foreign tenant, so every extraction minted a
+      // brand-new company directory (the org_* clutter).
+      const extracted = await api.extract(url.trim())
       setCard(extracted)
       setPhase('review')
     } catch (err) {
@@ -137,16 +138,6 @@ export function OnboardPage() {
                 onChange={(e) => setUrl(e.target.value)}
                 placeholder="yourbusiness.com — or just a brand name"
                 required
-                disabled={phase === 'extracting'}
-              />
-            </div>
-            <div style={{ marginBottom: '1.25rem' }}>
-              <label style={labelStyle}>Org ID (optional — auto-generated if blank)</label>
-              <input
-                style={inputStyle}
-                value={orgId}
-                onChange={(e) => setOrgId(e.target.value)}
-                placeholder="my-business-01"
                 disabled={phase === 'extracting'}
               />
             </div>

@@ -448,19 +448,31 @@ app.post("/extract", { preHandler: requireAuth }, async (req, reply) => {
   if (!body.url) return reply.code(400).send({ ok: false, error: "url required" });
 
   // THE TENANT IS THE AUTHENTICATED COMPANY — never a caller-supplied id. This
-  // route writes <orgId>/card.json, so trusting body.orgId let any valid key drop
+  // route writes <tenant>/card.json, so trusting body.orgId let any valid key drop
   // a card into any name it chose: a directory-creation primitive. requireAuth
   // already 403s a body that NAMES another provisioned company; it does NOT stop a
   // name that belongs to nobody, which is exactly the name an attacker would pick.
-  const companyId = (req as AuthCarrier).auth?.companyId ?? "";
-  if (!companyId) return reply.code(400).send({ ok: false, error: "no company for this credential" });
-  if (body.orgId && body.orgId !== companyId)
-    return reply.code(403).send({ ok: false, error: "orgId must be your own company" });
-  if (!isProvisionedCompany(companyId))
+  //
+  // The body MAY carry an orgId, but only one that resolves to a REAL company:
+  // your own, or — for an operator — a company that is ALREADY provisioned (the
+  // agency path, onboarding a client). It never creates a directory for an
+  // arbitrary name.
+  const auth = (req as AuthCarrier).auth;
+  const companyId = auth?.companyId ?? "";
+  const isOperator = auth?.level === "operator";
+  let target = companyId;
+  if (body.orgId && body.orgId !== companyId) {
+    if (!isOperator)
+      return reply.code(403).send({ ok: false, error: "orgId must be your own company" });
+    if (!isProvisionedCompany(body.orgId))
+      return reply.code(403).send({ ok: false, error: "no such company to extract into" });
+    target = body.orgId;
+  }
+  if (!target || !isProvisionedCompany(target))
     return reply.code(403).send({ ok: false, error: "this company is not provisioned" });
 
   // Per-account daily ceiling — see EXTRACTIONS_PER_DAY.
-  const acct = getCreditSummary(companyId);
+  const acct = getCreditSummary(target);
   const dayStart = new Date();
   dayStart.setUTCHours(0, 0, 0, 0);
   const usedToday = (acct.usageLog ?? []).filter(
@@ -479,14 +491,14 @@ app.post("/extract", { preHandler: requireAuth }, async (req, reply) => {
 
   let usageEntry: UsageEntry | null = null;
   try {
-    usageEntry = await deductCredits(companyId, "extraction");
+    usageEntry = await deductCredits(target, "extraction");
   } catch (e) {
     if (e instanceof QuotaExceeded) return reply.code(402).send({ error: e.message });
     throw e;
   }
 
   try {
-    const card = await extractor.extractCard({ url: body.url, orgId: companyId });
+    const card = await extractor.extractCard({ url: body.url, orgId: target });
     // A fallback card means the crawl/LLM produced nothing — never charge for that.
     const failed =
       typeof card.identity?.elevatorPitch === "string" &&
@@ -509,7 +521,7 @@ app.post("/extract", { preHandler: requireAuth }, async (req, reply) => {
     // into an ONBOARDED one, so it is no longer swallowed — a card the company
     // cannot see is a charge for nothing.
     try {
-      const companyDir = path.join(HELIX_COMPANIES, companyId);
+      const companyDir = path.join(HELIX_COMPANIES, target);
       await fs.mkdir(companyDir, { recursive: true });
       await fs.writeFile(path.join(companyDir, "card.json"), JSON.stringify(card, null, 2));
     } catch (e) {
