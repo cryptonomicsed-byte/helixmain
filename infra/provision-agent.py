@@ -26,6 +26,7 @@ the config is rewritten by the daemon, so: back up, validate, reload.
 from __future__ import annotations
 
 import datetime
+import json
 import os
 import re
 import shutil
@@ -35,6 +36,7 @@ from typing import NoReturn
 
 CONFIG = os.environ.get("ZEROCLAW_CONFIG", "/etc/zeroclaw/config.toml")
 COMPANIES = os.environ.get("HELIX_COMPANIES", "/etc/helix/companies")
+ZEROCLAW_HOME = os.environ.get("ZEROCLAW_HOME", "/etc/zeroclaw")
 RELAY = os.environ.get("HELIX_RELAY", "wss://omokoda.duckdns.org:3443")
 SPARK_MCP = os.environ.get("SPARK_GATE_MCP", "/usr/local/bin/spark-gate-mcp")
 ACCOUNT_AGENT = os.environ.get("HELIX_ACCOUNT_AGENT", "helix")
@@ -93,7 +95,7 @@ delegate_same_risk_profile = true
 enabled = true
 model_provider = "openai.deepseek"
 risk_profile = "card_agent"
-mcp_bundles = ["{cid}_tools", "helix_platform"]
+mcp_bundles = ["{cid}_tools"]
 channels = ["nostr.{cid}"]
 knowledge_bundles = ["{cid}_card"]
 
@@ -142,6 +144,91 @@ tags = ["card", "{cid}"]
 """
 
 
+# ── the agent's identity ─────────────────────────────────────────────────────
+
+SOUL_HEADER = (
+    "<!-- This file is the agent's identity, loaded every session.\n"
+    "     Compiled from the Business DNA card — DO NOT HAND-EDIT.\n"
+    "     Re-extract and recompile; a hand edit here drifts from the card. -->\n\n"
+)
+
+
+def soul_path(cid: str) -> str:
+    return os.path.join(ZEROCLAW_HOME, "agents", cid, "workspace", "SOUL.md")
+
+
+def persona_from_card(cid: str) -> str | None:
+    """A persona rendered straight from card.json.
+
+    The compiled system-prompt.md is what we prefer, but a card agent whose only
+    identity is ZeroClaw's stock "You are <alias>. Built in Rust." answers about
+    nothing — grounding has to survive a missing sidecar."""
+    p = os.path.join(company_dir(cid), "card.json")
+    try:
+        card = json.loads(open(p).read())
+    except Exception:
+        return None
+    ident = card.get("identity") or {}
+    name = ident.get("name") or cid
+    lines = [f"You are the AI employee of **{name}**."]
+    if ident.get("elevator_pitch"):
+        lines.append(str(ident["elevator_pitch"]))
+    if ident.get("location"):
+        lines.append(f"Location: {ident['location']}")
+    if ident.get("phone"):
+        lines.append(f"Phone: {ident['phone']}")
+    ops = card.get("operations") or {}
+    if ops.get("hours"):
+        lines.append(f"\n## Hours\n{ops['hours']}")
+    off = card.get("offerings") or []
+    if off:
+        lines.append("\n## What the business offers")
+        lines += [f"- {o.get('name')} (price: {o.get('price') or 'not on record'})"
+                  for o in off]
+    voice = card.get("voice") or {}
+    if voice.get("tone") or voice.get("personality"):
+        lines.append("\n## Voice")
+        if voice.get("tone"):
+            lines.append(f"Tone: {', '.join(voice['tone'])}.")
+        if voice.get("personality"):
+            lines.append(f"Personality: {voice['personality']}")
+        for d in voice.get("donts") or []:
+            lines.append(f"Never: {d}")
+    pol = card.get("policies") or []
+    if pol:
+        lines.append("\n## Policies (binding)")
+        for x in pol:
+            if isinstance(x, dict):
+                lines.append(f"- **{x.get('kind', 'policy')}**: {x.get('text', '')}")
+    lines.append("\nAnswer only from this card. If something is not on it, say so and "
+                 "offer to connect the customer with a team member. Never invent prices.")
+    return "\n".join(lines)
+
+
+def install_soul(cid: str) -> str:
+    """Write the agent's SOUL.md from the card. Returns a one-line status."""
+    compiled = os.path.join(company_dir(cid), "system-prompt.md")
+    if os.path.isfile(compiled):
+        body, origin = open(compiled).read(), "system-prompt.md"
+    else:
+        body = persona_from_card(cid)
+        if not body:
+            return "no card.json — SOUL.md left alone"
+        origin = "card.json (system-prompt.md missing)"
+    dst = soul_path(cid)
+    os.makedirs(os.path.dirname(dst), exist_ok=True)
+    if os.path.isfile(dst):
+        shutil.copy2(dst, f"{dst}.prev-{utcnow():%Y%m%d%H%M%S}")
+    open(dst, "w").write(SOUL_HEADER + body)
+    return f"SOUL.md <- {origin} ({len(body)} bytes)"
+
+
+def cmd_sync_soul(ids: list[str]) -> None:
+    cfg = read_config()
+    for cid in (ids or card_agents(cfg)):
+        print(f"{cid}: {install_soul(cid)}")
+
+
 # ── roster maintenance ───────────────────────────────────────────────────────
 
 def card_agents(cfg: str) -> list[str]:
@@ -179,9 +266,12 @@ def drop_agent(cfg: str, cid: str) -> str:
              f"knowledge_bundles.{cid}_card"]
     for n in names:
         cfg = re.sub(rf"(?m)^\[{re.escape(n)}\]\n(?:.*?\n)*?(?=\n\[|\Z)", "", cfg)
-    # the [[mcp.servers]] element whose name is spark_<cid>
+    # The [[mcp.servers]] element named spark_<cid>. Every line of the span must
+    # not itself start a table — without that guard the lazy span happily runs
+    # from the FIRST [[mcp.servers]] past every other server to reach this one,
+    # and removing a company would quietly strip the whole MCP registry.
     cfg = re.sub(
-        rf"(?m)^\[\[mcp\.servers\]\]\n(?:.*?\n)*?env = \{{[^\n]*SPARK_CARD = \"[^\"]*/{re.escape(cid)}/card\.json\"[^\n]*\}}\n",
+        rf"(?m)^\[\[mcp\.servers\]\]\n(?:(?!\[).*\n)*?name = \"spark_{re.escape(cid)}\"\n(?:(?!\[).*\n)*",
         "", cfg)
     # and the comment header the provisioner writes above the block, so a removed
     # company leaves nothing at all behind
@@ -270,6 +360,7 @@ def cmd_add(cid: str) -> None:
         wired = channel_key(cfg, cid)
         if wired == privkey:
             print(f"{cid}: agent already configured and its channel key matches — no change")
+            print(f"  {install_soul(cid)}")
             return
         cfg = drop_agent(cfg, cid)
         print(f"{cid}: rotating the channel key to match {company_dir(cid)}/identity")
@@ -279,14 +370,18 @@ def cmd_add(cid: str) -> None:
     cfg = set_delegates(cfg, card_agents(cfg))
     open(CONFIG, "w").write(cfg)
     print(f"{cid}: agent written; delegates now {card_agents(cfg)}")
+    print(f"  {install_soul(cid)}")
     reload_daemon()
 
 
 def main(argv: list[str]) -> None:
     if not argv:
-        die("usage: provision-agent.py <company-id> | --remove <company-id> | --list")
+        die("usage: provision-agent.py <company-id> | --remove <company-id> | "
+            "--sync-soul [company-id ...] | --list")
     if argv[0] == "--list":
         return cmd_list()
+    if argv[0] == "--sync-soul":
+        return cmd_sync_soul(argv[1:])
     if argv[0] == "--remove":
         if len(argv) < 2:
             die("usage: provision-agent.py --remove <company-id>")
