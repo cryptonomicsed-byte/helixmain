@@ -173,6 +173,11 @@ export function compileSystemPrompt(card: any): string {
   if (id.mission) L.push(`Mission: ${id.mission}`);
   if (id.values?.length) L.push(`Values: ${id.values.join("; ")}`);
   if (id.location) L.push(`Location: ${id.location}`);
+  // Contact details are the single most-asked thing a front desk gets, and
+  // leaving them out is how an agent that HAS the number answers "not on record".
+  if (id.phone) L.push(`Phone: ${id.phone}`);
+  if (id.email) L.push(`Email: ${id.email}`);
+  if (id.website) L.push(`Website: ${id.website}`);
   L.push("");
   L.push("## Voice");
   if (voice.tone?.length) L.push(`Tone: ${voice.tone.join(", ")}.`);
