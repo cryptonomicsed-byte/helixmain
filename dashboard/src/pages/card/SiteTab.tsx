@@ -113,6 +113,7 @@ export function SiteTab() {
         {phone
           ? <QrCard label="Call the business" text={`tel:${phone.replace(/\s/g, '')}`} />
           : <QrCard label="Call the business" text="not set" note="no phone on the card" />}
+        <QrCard label="Talk to AI Agent" text={`https://helixmain.duckdns.org/api/call/${id}`} note="scan to chat with Helix AI" />
       </div>
 
       {/* NFC payload */}
