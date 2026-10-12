@@ -196,6 +196,12 @@ import {
   type AgentFrame,
 } from "./services/zeroclaw";
 import { isAdminCompany, listAdminCompanies } from "./services/admin";
+import {
+  accountOwning,
+  ensureAccount,
+  addOwnedCompany,
+  companiesForAccount,
+} from "./services/accounts";
 
 const app = Fastify({ logger: true });
 
@@ -449,8 +455,16 @@ async function requireAuth(req: FastifyRequest, reply: FastifyReply): Promise<vo
   // cross-tenant read/write. Ids that are not onboarded companies (e.g. test cards
   // under api/data/cards) are left to the route's own lookup.
   if (rec.level === "operator") return;
+  // An account owns companies. A browser session belongs to the ACCOUNT, so it
+  // may name any company the account controls — not only the one it logged in
+  // through. A per-company KEY stays bound to its own company: a bearer string
+  // that leaks must not widen into a portfolio, so this is session-only.
+  const allowed = new Set<string>([rec.companyId]);
+  if (rec.via === "session") {
+    for (const c of accountOwning(rec.companyId)?.owned ?? []) allowed.add(c);
+  }
   for (const named of namedCompanyIds(req)) {
-    if (named !== rec.companyId && isOnboardedCompany(named)) {
+    if (!allowed.has(named) && isOnboardedCompany(named)) {
       await reply.code(403).send({ ok: false, error: "key does not belong to that company" });
       return;
     }
@@ -1113,9 +1127,16 @@ app.get("/companies", { preHandler: requireAuth }, async (req, reply) => {
     }
   };
 
-  // An operator sees every company (that IS the switcher grant); a normal key
-  // sees only its own.
-  const ids = isOperator ? listProvisionedCompanies() : [mine];
+  // An operator sees every company (that IS the switcher grant). A browser session
+  // sees every company its ACCOUNT owns. A bare per-company key sees only its own.
+  let ids: string[];
+  if (isOperator) {
+    ids = listProvisionedCompanies();
+  } else if (auth?.via === "session") {
+    ids = Array.from(new Set<string>([mine, ...companiesForAccount(mine)]));
+  } else {
+    ids = [mine];
+  }
   const results: object[] = [];
   for (const id of ids) {
     const e = await entryFor(id);
@@ -3868,6 +3889,16 @@ app.post("/auth/signup/verify", async (req, reply) => {
   });
   await clearPending(slug);
 
+  // The ACCOUNT is the principal; the company just provisioned is its first
+  // entry. A historical 1:1 account (id == company) migrates to owned: [slug].
+  ensureAccount(slug, {
+    business: account.business,
+    email: account.email,
+    website: account.website,
+    provider: "passkey",
+  });
+  addOwnedCompany(slug, slug);
+
   reply.header("Set-Cookie", [
     setCookie(SESSION_COOKIE, mintSession(slug, "owner"), Math.floor(SESSION_TTL_MS / 1000)),
     clearCookie(CHALLENGE_COOKIE),
@@ -3986,6 +4017,15 @@ app.get("/auth/google/callback", async (req, reply) => {
     });
     company = slug;
   }
+
+  // Keep the account layer in step for Google-created and returning accounts.
+  ensureAccount(company, {
+    business: profile.name || company,
+    email: profile.email ?? null,
+    provider: "google",
+    googleSub: sub,
+  });
+  addOwnedCompany(company, company);
 
   reply.header("Set-Cookie", [
     setCookie(SESSION_COOKIE, mintSession(company, "owner"), Math.floor(SESSION_TTL_MS / 1000)),
