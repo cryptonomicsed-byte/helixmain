@@ -4748,14 +4748,18 @@ app.post("/call-session/:companyId", async (req, reply) => {
 app.post("/call-message/:companyId", async (req, reply) => {
   const { companyId } = req.params as { companyId: string };
   const body = (req.body ?? {}) as { sessionId?: string; message?: string };
-  if (!body.message) return reply.code(400).send({ ok: false, error: "message required" });
-  if (String(body.message).length > 1000)
-    return reply.code(400).send({ ok: false, error: "message too long (1000 chars max)" });
 
+  // FIRST, before any parsing, lookup or LLM work: the limiter must count every
+  // attempt, not only well-formed ones. A limiter that runs after validation is a
+  // limiter an abuser steps around by sending junk.
   const ip = (req.headers["x-real-ip"] as string) || req.ip || "unknown";
   if (!anonLlmAllow(ip)) {
     return reply.code(429).send({ ok: false, error: "too many messages — please slow down" });
   }
+
+  if (!body.message) return reply.code(400).send({ ok: false, error: "message required" });
+  if (String(body.message).length > 1000)
+    return reply.code(400).send({ ok: false, error: "message too long (1000 chars max)" });
 
   const cardPath = await findCard(companyId);
   let agentContext = `You are a helpful AI assistant for a business. Be friendly, concise, and helpful.`;
