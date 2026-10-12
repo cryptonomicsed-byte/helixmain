@@ -4,11 +4,14 @@
      BUILT BY HUGO, NOT by hand: /var/www/helixmain-site is the target of
      `rsync -a --delete` in infra/site-publish.sh, so a hand-placed index.html
      would be deleted by the next publish. Living in site/ is what makes it survive. */}}
+{{/* The public landing shows ONE pinned demo card. It must NEVER fill up with
+     whatever companies happen to exist on the box — the directory is where real
+     cards live; the landing is a fixed demo. Editing this $demoId is the only
+     way the landing card ever changes. */}}
+{{ $demoId := "demo-barber" }}
 {{ $live := slice }}
-{{ range $id, $c := .Site.Data.companies }}
-  {{ if and $c.caller_url (not (hasPrefix $id "org_")) (not (hasPrefix $id "test")) (not (hasPrefix $id "e2e")) }}
-    {{ $live = $live | append (dict "id" $id "c" $c) }}
-  {{ end }}
+{{ with index .Site.Data.companies $demoId }}
+  {{ $live = slice (dict "id" $demoId "c" .) }}
 {{ end }}
 {{/* Content-hash every asset so a redeploy can never be masked by a cache.
      This project has already been bitten once by a stale bundle (a correct PIN

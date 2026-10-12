@@ -4865,7 +4865,12 @@ window.startCall = async function () {
       log('Relay credentials acquired.');
     } catch (e) { log('No TURN relay \u2014 trying a direct path.'); }
 
-    pc = new RTCPeerConnection({ iceServers: iceServers });
+    // Relay-only ICE. The default policy also gathers host + srflx candidates,
+    // which from a NAT'd caller mostly fail — and the srflx gather waits on a
+    // public STUN server, which is seconds of dead air before media starts. The
+    // call is relayed via our own coturn anyway, so gather ONLY relay candidates:
+    // ICE has one working path to find and connects far sooner.
+    pc = new RTCPeerConnection({ iceServers: iceServers, iceTransportPolicy: 'relay' });
     micStream.getTracks().forEach(function (t) { pc.addTrack(t, micStream); });
     pc.ontrack = function (e) {
       remoteAudio.srcObject = e.streams[0];
