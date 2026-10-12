@@ -23,7 +23,7 @@ set -euo pipefail
 VPS="hostinger"
 HELIX_DIR="/etc/helix/companies"
 RELAY="wss://omokoda.duckdns.org:3443"
-CALLER_BASE="https://omokoda.duckdns.org/caller/"
+CALLER_BASE="https://helixmain.duckdns.org/call/"
 SPARK_BASE="https://omokoda.duckdns.org/spark/"
 COMPILER="/root/helixmain/dna-foundry/compiler"
 
@@ -566,7 +566,7 @@ SVCEOF
   append_zeroclaw_config "$id" "$SK_HEX"
 
   # 9. Print summary + QR
-  local caller_url="${CALLER_BASE}?npub=${NPUB}&relay=$(url_encode "$RELAY")&name=$(url_encode "$OPT_NAME")"
+  local caller_url="${CALLER_BASE}${id}"
   local spark_url="${SPARK_BASE}?org=${org_id}"
 
   echo ""
@@ -657,7 +657,7 @@ cmd_status() {
     ssh "$VPS" "systemctl status '${svc_name}' --no-pager -n 5; echo; cat '${card_dir}/identity' | tail -1" 2>/dev/null | head -20
     local npub; npub="$(ssh "$VPS" "tail -1 '${card_dir}/identity'" 2>/dev/null || echo '?')"
     local org_id="org_${id//-/_}"
-    echo "  Caller:   ${CALLER_BASE}?npub=${npub}&relay=${RELAY}"
+    echo "  Caller:   ${CALLER_BASE}${id}"
     echo "  Approval: ${SPARK_BASE}?org=${org_id}"
   else
     echo "==> All companies:"
@@ -678,7 +678,7 @@ cmd_qr() {
     || die "Company '${id}' not found"
   local name; name="$(ssh "$VPS" "grep '{"'key":"name"'"}' '${HELIX_DIR}/${id}/CARD.md'" 2>/dev/null \
     | sed 's/.*"text":"\([^"]*\)".*/\1/' | head -1)" || name="$id"
-  local caller_url="${CALLER_BASE}?npub=${npub}&relay=$(url_encode "$RELAY")&name=$(url_encode "$name")"
+  local caller_url="${CALLER_BASE}${id}"
   echo "==> QR for: ${id}"
   show_qr "$caller_url"
   echo "  Approval: ${SPARK_BASE}?org=${org_id}"

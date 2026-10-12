@@ -18,7 +18,7 @@ mkdir -p "$OUT" "$CONTENT_B" "$QR_OUT"
 rm -f "$QR_OUT"/*.png 2>/dev/null || true
 
 RELAY="${HELIX_RELAY:-wss://omokoda.duckdns.org:3443}"
-CALLER_BASE="${HELIX_CALLER_BASE:-https://omokoda.duckdns.org/caller/}"
+CALLER_BASE="${HELIX_CALLER_BASE:-https://helixmain.duckdns.org/call/}"
 
 echo "==> Building company data from ${CARD_ROOT}"
 
@@ -34,13 +34,11 @@ for dir in "${CARD_ROOT}"/*/; do
     npub=$(sed -n '3p' "$identity")
   fi
 
-  caller_url=""
-  if [ -n "$npub" ]; then
-    encoded_relay=$(python3 -c "import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1], safe=''))" "$RELAY")
-    name=$(python3 -c "import json; print(json.load(open('${card}'))['identity'].get('name',''))")
-    encoded_name=$(python3 -c "import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1], safe=''))" "$name")
-    caller_url="${CALLER_BASE}?npub=${npub}&relay=${encoded_relay}&name=${encoded_name}"
-  fi
+  # The orb page (/call/<slug>) is the CURRENT voice UI and works for every
+  # card-bearing company — it shows a text fallback when there is no npub yet.
+  # Point every talk link + QR here, NOT at the legacy /caller/ page, which was
+  # npub-only and is the OLD UI a new company kept landing on.
+  caller_url="${CALLER_BASE}${id}"
 
   python3 - "$card" "$id" "$npub" "$caller_url" "$OUT" << 'PYEOF'
 import json, sys, datetime
