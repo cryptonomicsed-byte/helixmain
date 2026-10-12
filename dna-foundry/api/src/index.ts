@@ -4430,7 +4430,7 @@ function buildCallPageHtml(opts: {
   }
   .btn-start:hover { transform: translateY(-2px); box-shadow: 0 0 45px rgba(74,158,255,0.6); }
   .btn-start:active { transform: scale(0.97); }
-  .btn-start.hidden { opacity: 0; pointer-events: none; }
+  .btn-start.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
 
   /* ---- Input area ---- */
   .input-area {
@@ -4777,6 +4777,7 @@ const bars        = Array.from(document.querySelectorAll('.bar'));
 const remoteAudio = document.getElementById('remoteAudio');
 
 let state = null, pc = null, sub = null, audioCtx = null;
+let playbackBlocked = false;
 let micStream = null, micAn = null, remoteAn = null;
 let callId = null, pool = null, mySeckey = null, myPubkey = null, agentPubkey = null;
 
@@ -4796,7 +4797,9 @@ function setState(s) {
   orb.className = 'orb ' + s;
   wrapper.className = 'orb-wrapper ' + s;
   orbIcon.textContent = ICONS[s] || ICONS.idle;
-  statusEl.textContent = STATUS[s] || '';
+  statusEl.textContent = playbackBlocked
+    ? ('Tap anywhere to hear ' + AGENT_NAME)
+    : (STATUS[s] || '');
   statusEl.className = 'status-text' + (s !== 'idle' ? ' active' : '');
   waveBars.style.opacity = (s === 'listening' || s === 'speaking') ? '1' : '0';
   if (s === 'idle') { endBtn.classList.remove('visible'); }
@@ -4918,6 +4921,11 @@ window.startCall = async function () {
       audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
     });
     micAn = analyserFor(micStream);
+    // Obtaining the mic is a user activation on Chromium, and a page holding a live
+    // capture stream is exempt from the autoplay block there -- resuming the context
+    // here is what unlocks the agent's audio on desktop Chrome / Android. On WebKit
+    // this is a no-op; the first-gesture fallback below is what recovers sound there.
+    try { if (audioCtx && audioCtx.state === 'suspended') await audioCtx.resume(); } catch (e) {}
     log('Microphone ready.');
 
     callId = Array.from(crypto.getRandomValues(new Uint8Array(8)))
@@ -4946,6 +4954,12 @@ window.startCall = async function () {
     pc.ontrack = function (e) {
       remoteAudio.srcObject = e.streams[0];
       remoteAn = analyserFor(e.streams[0]);
+      // The analyser reads the MediaStream, not the <audio> element, so the orb can
+      // animate "speaking" while the caller still hears nothing (WebKit keeps audio
+      // blocked until a real gesture). Try to play; if refused, say so instead of
+      // showing a silently-broken call. The first tap recovers it via _unlock.
+      var p = remoteAudio.play();
+      if (p && p.catch) p.catch(function () { playbackBlocked = true; statusEl.textContent = 'Tap anywhere to hear ' + AGENT_NAME; });
     };
     pc.onicecandidate = function (e) {
       if (e.candidate) { sendSignal('ice', { candidate: e.candidate.toJSON() }).catch(function () {}); }
@@ -5046,9 +5060,11 @@ if (VOICE.enabled) {
   // Some browsers gate playback until the first gesture. The first tap anywhere
   // resumes audio and, if the auto-start was blocked, (re)starts the call.
   var _unlock = function () {
+    playbackBlocked = false;
     try { if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume(); } catch (e) {}
     try { if (remoteAudio.play) remoteAudio.play().catch(function () {}); } catch (e) {}
     if (state === 'error' || state === 'idle' || !state) { startCall().catch(function () {}); }
+    else { statusEl.textContent = STATUS[state] || ''; }
   };
   window.addEventListener('pointerdown', _unlock, { once: true });
   window.addEventListener('keydown', _unlock, { once: true });
