@@ -4778,6 +4778,7 @@ const remoteAudio = document.getElementById('remoteAudio');
 
 let state = null, pc = null, sub = null, audioCtx = null;
 let playbackBlocked = false;
+let starting = false;
 let micStream = null, micAn = null, remoteAn = null;
 let callId = null, pool = null, mySeckey = null, myPubkey = null, agentPubkey = null;
 
@@ -4913,6 +4914,10 @@ function stopTimer() {
 
 window.startCall = async function () {
   if (!VOICE.enabled) { log('Voice is not enabled for this business yet.'); return; }
+  // Retrying a failed auto-start fires this twice: the window pointerdown _unlock
+  // and the button's own onclick are the same gesture. Run it once.
+  if (starting) return;
+  starting = true;
   setState('connecting');
   startBtn.classList.add('hidden');
   try {
@@ -4982,6 +4987,8 @@ window.startCall = async function () {
     log('Could not start the call: ' + (e && e.message ? e.message : e), 'user');
     startBtn.classList.remove('hidden');
     cleanup();
+  } finally {
+    starting = false;
   }
 };
 
