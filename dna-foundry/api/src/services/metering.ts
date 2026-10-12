@@ -11,6 +11,7 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import { budgetCreditsFor } from "./settings";
 import { isProvisionedCompany } from "./companies";
+import { isAdminCompany } from "./admin";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -235,6 +236,12 @@ export function checkQuota(
   const resetAt = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000).toISOString();
   if (!account) return { allowed: false, remaining: 0, resetAt };
 
+  // The admin account is never blocked. This is driven by the on-disk allowlist,
+  // never by anything in the request, so it cannot be claimed.
+  if (isAdminCompany(companyId)) {
+    return { allowed: true, remaining: Number.MAX_SAFE_INTEGER, resetAt };
+  }
+
   const limits = TIER_LIMITS[account.tier];
   const monthStart = startOfMonthUtc();
 
@@ -271,6 +278,28 @@ export async function deductCredits(
   companyId: string,
   operationType: string,
 ): Promise<UsageEntry> {
+  // The admin account runs everything without spending. It still gets a usage
+  // entry — with creditsDeducted 0 — so admin activity is visible in the same
+  // ledger as everyone else's, and "unlimited" never means "unaudited".
+  // `isAdminCompany` reads the allowlist from disk, so no request can claim this.
+  if (isAdminCompany(companyId)) {
+    const account = accountFor(companyId);
+    const entry: UsageEntry = {
+      id: randomUUID(),
+      timestamp: new Date().toISOString(),
+      operationType,
+      creditsDeducted: 0,
+      costUsd: 0,
+      refunded: false,
+      refundReason: "admin_unmetered",
+    };
+    if (account) {
+      account.usageLog.push(entry);
+      saveAccountStore().catch(() => {});
+    }
+    return entry;
+  }
+
   const quota = checkQuota(companyId);
   if (!quota.allowed) {
     throw new QuotaExceeded(

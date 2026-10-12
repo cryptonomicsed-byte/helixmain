@@ -24,6 +24,14 @@ export type KeyLevel = "company" | "owner" | "operator";
 export interface KeyRecord {
   companyId: string;
   level: KeyLevel;
+  /** How this caller authenticated. Set by requireAuth.
+   *
+   *  A passkey SESSION is a ceremony the owner performs; a per-company KEY is a
+   *  bearer string that lives in config files, shell history and logs. Admin
+   *  powers require the former, so the two must stay distinguishable all the way
+   *  down — collapsing them into one opaque "authenticated" flag is exactly how
+   *  a leaked key becomes a platform takeover. */
+  via?: "key" | "session";
 }
 
 /** Human-recognisable prefix so a leaked key is identifiable in logs/greps. */

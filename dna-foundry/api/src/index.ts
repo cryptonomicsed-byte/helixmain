@@ -195,6 +195,7 @@ import {
   chatStream,
   type AgentFrame,
 } from "./services/zeroclaw";
+import { isAdminCompany, listAdminCompanies } from "./services/admin";
 
 const app = Fastify({ logger: true });
 
@@ -379,9 +380,16 @@ async function requireAuth(req: FastifyRequest, reply: FastifyReply): Promise<vo
   // cookie minted by a passkey login. Either way the SERVER decides the tenant —
   // a caller-supplied companyId is never trusted on its own.
   let rec: KeyRecord | null = lookupKey(req.headers["x-api-key"]);
+  if (rec) rec.via = "key";
   if (!rec) {
     const sess = readSession(parseCookies(req.headers.cookie)[SESSION_COOKIE]);
-    if (sess) rec = { companyId: sess.company, level: sess.role === "owner" ? "owner" : "company" };
+    if (sess) {
+      rec = {
+        companyId: sess.company,
+        level: sess.role === "owner" ? "owner" : "company",
+        via: "session",
+      };
+    }
   }
   if (!rec) {
     await reply.code(401).send({ ok: false, error: "missing or invalid credentials" });
@@ -415,7 +423,84 @@ async function requireOwner(req: FastifyRequest, reply: FastifyReply): Promise<v
   }
 }
 
+/**
+ * Admin — the platform operator. The ONE account with unlimited credits and sight
+ * of platform-wide data.
+ *
+ * Gated on the PASSKEY SESSION, deliberately:
+ *   - `via === "session"` means a passkey ceremony produced this request. A
+ *     per-company API key is a bearer string that ends up in config files, shell
+ *     history, logs and bug reports; it must never be enough to administer the
+ *     platform.
+ *   - `level === "owner"` means the session is not a downgraded one.
+ *   - `isAdminCompany` is an ALLOWLIST READ FROM DISK. Nothing in the request can
+ *     influence it — that is the whole point. If the allowlist file is missing or
+ *     unreadable the list is empty and every admin action is refused (fail closed).
+ *
+ * Mounted with requireAuth first, so `auth` is guaranteed non-null here.
+ */
+async function requireAdmin(req: FastifyRequest, reply: FastifyReply): Promise<void> {
+  const auth = (req as AuthCarrier).auth;
+  if (!auth || auth.via !== "session" || auth.level !== "owner") {
+    req.log.warn(
+      { company: auth?.companyId, via: auth?.via, level: auth?.level, url: req.url },
+      "admin route refused: not an owner passkey session",
+    );
+    await reply.code(403).send({
+      ok: false,
+      error: "admin requires a passkey sign-in — a company API key is never enough",
+    });
+    return;
+  }
+  if (!isAdminCompany(auth.companyId)) {
+    req.log.warn({ company: auth.companyId, url: req.url }, "admin route refused: not an admin account");
+    await reply.code(403).send({ ok: false, error: "this account is not an admin" });
+    return;
+  }
+  // Admin actions are always attributable. Unlimited credits and platform-wide
+  // reads should never happen silently.
+  req.log.warn({ company: auth.companyId, url: req.url, method: req.method }, "ADMIN action");
+}
+
 app.get("/health", async () => ({ ok: true, service: "dna-foundry" }));
+
+/**
+ * Rate limiter for the ANONYMOUS LLM endpoints (the public call page, the
+ * directory concierge).
+ *
+ * These answer anyone on the internet using the account-level provider key, and
+ * nobody is charged — so they are the platform's OWN money at risk. Without a
+ * limit, one client can point a script at /call-message/<any slug> and use the
+ * deployment as a free LLM proxy until the credit card notices.
+ *
+ * Per-IP window plus a global ceiling, because a per-IP limit alone is defeated by
+ * a botnet and a global one alone lets one visitor starve everyone.
+ */
+const anonLlmHits = new Map<string, number[]>();
+let anonLlmGlobal: number[] = [];
+
+function anonLlmAllow(ip: string, perIp = 20, global = 600, windowMs = 60_000): boolean {
+  const now = Date.now();
+  const recent = (anonLlmHits.get(ip) ?? []).filter((t) => now - t < windowMs);
+  anonLlmGlobal = anonLlmGlobal.filter((t) => now - t < windowMs);
+
+  if (recent.length >= perIp || anonLlmGlobal.length >= global) {
+    anonLlmHits.set(ip, recent);
+    return false;
+  }
+  recent.push(now);
+  anonLlmGlobal.push(now);
+  anonLlmHits.set(ip, recent);
+
+  // Keep the map from growing without bound: a new IP every request would
+  // otherwise be a memory leak dressed as a rate limiter.
+  if (anonLlmHits.size > 10_000) {
+    for (const [k, v] of anonLlmHits) {
+      if (!v.some((t) => now - t < windowMs)) anonLlmHits.delete(k);
+    }
+  }
+  return true;
+}
 
 // ---------------------------------------------------------------------------
 // Runtime settings — provider / model / API keys set from the dashboard.
@@ -2181,16 +2266,27 @@ app.get("/metering/:companyId/history", { preHandler: requireAuth }, async (req,
   return reply.code(200).send({ ok: true, companyId, total: log.length, entries: log });
 });
 
-// POST /metering/topup/:companyId — admin top-up credits
-app.post("/metering/topup/:companyId", { preHandler: requireAuth }, async (req, reply) => {
+// POST /metering/topup/:companyId — ADMIN ONLY.
+//
+// This used to be `requireAuth`, which meant ANY company key could mint itself an
+// unlimited number of credits — a total bypass of the payment system wearing the
+// label "admin top-up". Credits may now enter an account in exactly two ways:
+// Stripe's signature-verified webhook, and this route behind the admin passkey.
+app.post("/metering/topup/:companyId", { preHandler: [requireAuth, requireAdmin] }, async (req, reply) => {
   const { companyId } = req.params as { companyId: string };
   const body = (req.body ?? {}) as { credits?: number; reason?: string };
 
-  if (typeof body.credits !== "number" || body.credits <= 0)
+  if (typeof body.credits !== "number" || !Number.isFinite(body.credits) || body.credits <= 0)
     return reply.code(400).send({ ok: false, error: "credits (positive number) required" });
+  // A single call cannot mint an unbounded balance. A fat-fingered extra zero on a
+  // manual grant is not recoverable by any ledger logic, so refuse it up front.
+  if (body.credits > 100_000)
+    return reply.code(400).send({ ok: false, error: "refusing a single grant above 100000 credits" });
 
   try {
-    const entry = await topUpCredits(companyId, body.credits, body.reason ?? "admin_topup");
+    const entry = await topUpCredits(companyId, body.credits, `admin:${body.reason ?? "topup"}`);
+    req.log.warn({ actor: (req as AuthCarrier).auth?.companyId, companyId, credits: body.credits },
+      "ADMIN grant: credits added");
     return reply.code(200).send({ ok: true, entry });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -3162,11 +3258,33 @@ app.get("/affiliate/:companyId", { preHandler: requireAuth }, async (req, reply)
   return reply.code(200).send({ ok: true, ...stats });
 });
 
-// POST /affiliate/refer — record a referral
+// POST /affiliate/refer — record a referral.
+//
+// `newCompanyId` is the company BEING referred, and it used to be taken straight
+// from the body with no ownership check — so any authenticated user could attach
+// any company (a real paying customer, found by slug) to their own referral code
+// and collect commission credits on that customer's payments. Referral hijacking,
+// on the money path.
+//
+// The only honest caller is the new company itself, at signup: "I signed up with
+// this code". So the referred company must BE the authenticated company. Nothing
+// else is a referral.
 app.post("/affiliate/refer", { preHandler: requireAuth }, async (req, reply) => {
   const body = (req.body ?? {}) as { code?: string; newCompanyId?: string };
   if (!body.code)          return reply.code(400).send({ ok: false, error: "code required" });
   if (!body.newCompanyId)  return reply.code(400).send({ ok: false, error: "newCompanyId required" });
+
+  const auth = (req as AuthCarrier).auth;
+  if (body.newCompanyId !== auth?.companyId) {
+    req.log.warn(
+      { actor: auth?.companyId, tried: body.newCompanyId },
+      "referral refused: cannot refer a company that is not yours",
+    );
+    return reply.code(403).send({
+      ok: false,
+      error: "you may only record a referral for your own company",
+    });
+  }
 
   const recorded = recordReferral(body.code, body.newCompanyId);
   if (!recorded) {
@@ -3179,8 +3297,11 @@ app.post("/affiliate/refer", { preHandler: requireAuth }, async (req, reply) => 
 // Admin
 // ---------------------------------------------------------------------------
 
-// GET /admin/health — system health snapshot (no auth — PIN enforced client-side)
-app.get("/admin/health", { preHandler: requireAuth }, async (_req, reply) => {
+// GET /admin/health — platform health. ADMIN ONLY.
+// (The old comment claimed "no auth — PIN enforced client-side" while the route
+// actually ran requireAuth, which was wrong twice: a client-side check is not a
+// check, and requireAuth let ANY company key read platform-wide state.)
+app.get("/admin/health", { preHandler: [requireAuth, requireAdmin] }, async (_req, reply) => {
   const cacheStats = getCacheStats();
   return reply.code(200).send({
     api: {
@@ -3200,7 +3321,7 @@ app.get("/admin/health", { preHandler: requireAuth }, async (_req, reply) => {
 });
 
 // GET /admin/sessions — all playground sessions across all companies
-app.get("/admin/sessions", { preHandler: requireAuth }, async (_req, reply) => {
+app.get("/admin/sessions", { preHandler: [requireAuth, requireAdmin] }, async (_req, reply) => {
   // getSessions filters by companyId — use empty string to get all
   // Instead, call it without filter by gathering from all known companies
   const companyIds = Array.from(
@@ -3350,7 +3471,15 @@ app.post("/auth/login/verify", async (req, reply) => {
 app.get("/auth/me", async (req, reply) => {
   const sess = readSession(parseCookies(req.headers.cookie)[SESSION_COOKIE]);
   if (!sess) return reply.code(401).send({ ok: false });
-  return { ok: true, company: sess.company, role: sess.role };
+  // `admin` is decided HERE, from the on-disk allowlist — the client only ever
+  // reports what the server told it. A dashboard that decides for itself whether
+  // to show admin controls is a dashboard that can be told otherwise.
+  return {
+    ok: true,
+    company: sess.company,
+    role: sess.role,
+    admin: sess.role === "owner" && isAdminCompany(sess.company),
+  };
 });
 
 app.post("/auth/logout", async (_req, reply) => {
@@ -4611,11 +4740,22 @@ app.post("/call-session/:companyId", async (req, reply) => {
   return reply.code(200).send({ ok: true, sessionId });
 });
 
-// POST /call-message/:companyId — public stub: send a message in a call session
+// POST /call-message/:companyId — public: a visitor talks to the business's agent.
+//
+// UNAUTHENTICATED and LLM-backed, so it is the platform's own spend at risk, not
+// the company's — nothing deducts credits here. It shipped with no limiter and no
+// length cap at all, which made it a free, unmetered LLM proxy on the account key.
 app.post("/call-message/:companyId", async (req, reply) => {
   const { companyId } = req.params as { companyId: string };
   const body = (req.body ?? {}) as { sessionId?: string; message?: string };
   if (!body.message) return reply.code(400).send({ ok: false, error: "message required" });
+  if (String(body.message).length > 1000)
+    return reply.code(400).send({ ok: false, error: "message too long (1000 chars max)" });
+
+  const ip = (req.headers["x-real-ip"] as string) || req.ip || "unknown";
+  if (!anonLlmAllow(ip)) {
+    return reply.code(429).send({ ok: false, error: "too many messages — please slow down" });
+  }
 
   const cardPath = await findCard(companyId);
   let agentContext = `You are a helpful AI assistant for a business. Be friendly, concise, and helpful.`;
