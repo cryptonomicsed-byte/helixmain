@@ -4779,6 +4779,7 @@ const remoteAudio = document.getElementById('remoteAudio');
 let state = null, pc = null, sub = null, audioCtx = null;
 let playbackBlocked = false;
 let starting = false;
+let autoStartTimer = null;
 let micStream = null, micAn = null, remoteAn = null;
 let callId = null, pool = null, mySeckey = null, myPubkey = null, agentPubkey = null;
 
@@ -5001,6 +5002,7 @@ window.endCall = function () {
 };
 
 function cleanup() {
+  if (autoStartTimer) { clearTimeout(autoStartTimer); autoStartTimer = null; }
   stopTimer();
   if (sub) { try { sub.close(); } catch (e) {} sub = null; }
   if (pc) { try { pc.close(); } catch (e) {} pc = null; }
@@ -5051,11 +5053,11 @@ try {
     // No voice endpoint for this business: keep the text assistant instead of
     // offering a button that could only ever ring forever.
     startBtn.classList.add('hidden');
+    setState('idle');
     inputArea.classList.add('visible');
     statusEl.textContent = 'Text assistant (voice not enabled for this business yet)';
     statusEl.className = 'status-text active';
     log('Voice is not enabled for this business yet \u2014 you can still type.');
-    setState('idle');
   }
 } catch (e) {
   setState('error');
@@ -5065,7 +5067,7 @@ try {
 
 if (VOICE.enabled) {
   log('Connecting you to ' + AGENT_NAME + '\u2026');
-  setTimeout(function () { startCall().catch(function () {}); }, 250);
+  autoStartTimer = setTimeout(function () { autoStartTimer = null; startCall().catch(function () {}); }, 250);
   // Some browsers gate playback until the first gesture. The first tap anywhere
   // resumes audio and, if the auto-start was blocked, (re)starts the call.
   var _unlock = function () {
