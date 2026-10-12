@@ -4987,10 +4987,21 @@ window.startCall = async function () {
       if (e.candidate) { sendSignal('ice', { candidate: e.candidate.toJSON() }).catch(function () {}); }
     };
     pc.onconnectionstatechange = function () {
+      if (!pc) return;                       // a teardown below nulls pc
       const s = pc.connectionState;
       log('Connection: ' + s);
-      if (s === 'connected') setState('listening');
-      if (s === 'failed' || s === 'disconnected' || s === 'closed') setState('error');
+      if (s === 'connected') { setState('listening'); return; }
+      if (s === 'failed' || s === 'closed') {
+        // Terminal: release the mic, the PC and the pool rather than leaving them
+        // open behind an error state -- otherwise a failed call keeps the mic hot
+        // and its relay socket open until the page is reloaded.
+        cleanup();
+        setState('error');
+        startBtn.classList.remove('hidden');
+      } else if (s === 'disconnected') {
+        // Often recovers (ICE retries); keep the session so 'connected' can follow.
+        setState('error');
+      }
     };
 
     const offer = await pc.createOffer();
