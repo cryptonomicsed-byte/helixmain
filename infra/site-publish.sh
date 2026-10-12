@@ -38,7 +38,10 @@ if [ ! -f "$PAGE" ]; then
 fi
 
 # 4. Deploy.
-rsync -a --delete "${SITE_DIR}/public/" "${WEB_ROOT}/"
+#    --exclude=/l is load-bearing: landing pages live in the web root's /l tree
+#    (written by the API), NOT in the Hugo build. Without the exclude, --delete
+#    would erase every landing page on every card publish.
+rsync -a --delete --exclude=/l "${SITE_DIR}/public/" "${WEB_ROOT}/"
 
 # 5. Record the build.
 python3 - "$WEB_ROOT" "$COMPANY_ID" <<'PY'

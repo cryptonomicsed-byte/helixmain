@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import QRCode from 'qrcode'
 import { useCard } from './CardContext'
-import { api } from '../../api'
+import { api, type Landing } from '../../api'
 import { Icon } from '../../components/Icon'
 
 function useQr(text: string): string {
@@ -37,6 +37,13 @@ function QrCard({ label, text, note }: { label: string; text: string; note?: str
   )
 }
 
+function LandingQr({ text }: { text: string }) {
+  const url = useQr(text)
+  return url
+    ? <img src={url} alt="landing QR" width={128} height={128} style={{ borderRadius: 6, background: '#fff', padding: 3 }} />
+    : null
+}
+
 export function SiteTab() {
   const { id, card, publicUrl } = useCard()
   const [published, setPublished] = useState<boolean | null>(null)
@@ -46,6 +53,31 @@ export function SiteTab() {
   const [copied, setCopied] = useState(false)
 
   const phone: string = card?.identity?.phone ?? ''
+
+  // Landing pages are SEPARATE artifacts from the directory page above: creating
+  // one adds a page, it never replaces the directory entry.
+  const [landings, setLandings] = useState<Landing[]>([])
+  const [landingTitle, setLandingTitle] = useState('')
+
+  async function refreshLandings() {
+    try { const r = await api.listLandings(id); setLandings(r.landings || []) } catch { setLandings([]) }
+  }
+  useEffect(() => { refreshLandings() /* eslint-disable-next-line */ }, [id])
+
+  async function addLanding() {
+    setBusy('landing'); setNotice('')
+    try {
+      const r = await api.createLanding(id, landingTitle.trim() || undefined)
+      setNotice(`Landing page created: ${r.landing?.title ?? ''}`)
+      setLandingTitle('')
+      await refreshLandings()
+    } catch (e) { setNotice(`Landing failed: ${e instanceof Error ? e.message : String(e)}`) }
+    finally { setBusy('') }
+  }
+
+  async function removeLanding(slug: string) {
+    try { await api.deleteLanding(id, slug); await refreshLandings() } catch { /* ignore */ }
+  }
 
   // `published` comes from the web root (what a visitor can actually load), not
   // from the in-memory preview cache — those are different things, and conflating
@@ -97,7 +129,7 @@ export function SiteTab() {
       <div className="panel" style={{ padding: '1rem 1.25rem', marginBottom: '1rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '.6rem', marginBottom: '.7rem', flexWrap: 'wrap' }}>
           <div style={{ fontSize: '.72rem', textTransform: 'uppercase', letterSpacing: '.07em', color: 'var(--fg-3)', fontWeight: 600 }}>
-            Landing page
+            Directory page
           </div>
           <div style={{ flex: 1 }} />
           <button className="btn btn-primary" onClick={publish} disabled={!!busy} style={{ fontSize: '.78rem' }}>
@@ -133,6 +165,42 @@ export function SiteTab() {
         ) : (
           <div className="sub" style={{ fontSize: '.85rem' }}>Checking…</div>
         )}
+      </div>
+
+      {/* Landing pages — additive. Creating one adds a new page beside the
+          directory page; it never replaces the directory entry. */}
+      <div className="panel" style={{ padding: '1rem 1.25rem', marginBottom: '1rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '.6rem', marginBottom: '.7rem', flexWrap: 'wrap' }}>
+          <div style={{ fontSize: '.72rem', textTransform: 'uppercase', letterSpacing: '.07em', color: 'var(--fg-3)', fontWeight: 600 }}>
+            Landing pages
+          </div>
+          <div style={{ flex: 1 }} />
+          <input value={landingTitle} onChange={(e) => setLandingTitle(e.target.value)} placeholder="Title (optional)"
+            style={{ background: 'rgba(0,0,0,.25)', border: '1px solid var(--line-2)', borderRadius: 8, color: 'var(--fg-2)', padding: '.4rem .6rem', fontSize: '.8rem', outline: 'none', width: 180 }} />
+          <button className="btn btn-primary" onClick={addLanding} disabled={!!busy} style={{ fontSize: '.78rem' }}>
+            <Icon name="spark" size={14} /> {busy === 'landing' ? 'Creating…' : 'New landing page'}
+          </button>
+        </div>
+        {landings.length === 0
+          ? <div className="sub" style={{ fontSize: '.85rem' }}>
+              No landing pages yet. Creating one adds a page at <span className="mono">/l/{id}/…</span> beside the
+              directory page — it never replaces the directory entry.
+            </div>
+          : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '.75rem' }}>
+              {landings.map((l) => (
+                <div className="panel" key={l.slug} style={{ padding: '.75rem', display: 'flex', flexDirection: 'column', gap: '.4rem', alignItems: 'center' }}>
+                  <div style={{ fontWeight: 650, fontSize: '.85rem', textAlign: 'center' }}>{l.title}</div>
+                  <LandingQr text={`${typeof window !== 'undefined' ? window.location.origin : ''}${l.url}`} />
+                  <div className="sub mono" style={{ fontSize: '.66rem', wordBreak: 'break-all', textAlign: 'center' }}>{l.url}</div>
+                  <div style={{ display: 'flex', gap: '.4rem' }}>
+                    <button className="btn btn-ghost" onClick={() => window.open(l.url, '_blank', 'noopener')} style={{ fontSize: '.74rem' }}>Open ↗</button>
+                    <button className="btn btn-ghost" onClick={() => removeLanding(l.slug)} style={{ fontSize: '.74rem' }}>Delete</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
       </div>
 
       {/* QR codes */}

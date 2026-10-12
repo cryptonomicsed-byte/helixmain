@@ -202,6 +202,13 @@ import {
   addOwnedCompany,
   companiesForAccount,
 } from "./services/accounts";
+import {
+  listLandings,
+  saveLanding,
+  deleteLanding,
+  uniqueLandingSlug,
+  slugifyTitle,
+} from "./services/landings";
 
 const app = Fastify({ logger: true });
 
@@ -2747,8 +2754,9 @@ app.get("/sites", { preHandler: requireAuth }, async (req, reply) => {
   const auth = (req as AuthCarrier).auth;
   const isOperator = auth?.level === "operator";
   const mine = auth?.companyId ?? "";
-  // Same rule as every other list: a company sees its OWN, an operator sees all.
-  const scope = (ids: string[]) => (isOperator ? ids : ids.filter((i) => i === mine));
+  // Same rule as every other list: a caller sees the companies it may act on
+  // (its account's portfolio), an operator sees all.
+  const scope = (ids: string[]) => (isOperator ? ids : ids.filter((i) => mayActOnCompany(auth, i)));
   const published = await publishedSites();
   return reply.code(200).send({
     ok: true,
@@ -2756,6 +2764,51 @@ app.get("/sites", { preHandler: requireAuth }, async (req, reply) => {
     published: scope(published),
     publicBase: PUBLIC_SITE_BASE,
   });
+});
+
+// ---------------------------------------------------------------------------
+// Landing pages — ADDITIVE. The card's directory page lives at /b/<id>/ and is
+// rebuilt from the card; it is never written here. Each landing page is its own
+// artifact at /l/<id>/<slug>/, shown as a tab + QR next to the directory page.
+// Creating one cannot replace the directory entry: different route, store, tree.
+// ---------------------------------------------------------------------------
+
+app.get("/landings/:companyId", { preHandler: requireAuth }, async (req, reply) => {
+  const { companyId } = req.params as { companyId: string };
+  const auth = (req as AuthCarrier).auth;
+  if (!mayActOnCompany(auth, companyId))
+    return reply.code(403).send({ ok: false, error: "not your company" });
+  return reply.code(200).send({ ok: true, base: PUBLIC_SITE_BASE, landings: listLandings(companyId) });
+});
+
+app.post("/landing/:companyId", { preHandler: requireAuth }, async (req, reply) => {
+  const { companyId } = req.params as { companyId: string };
+  const auth = (req as AuthCarrier).auth;
+  if (!mayActOnCompany(auth, companyId))
+    return reply.code(403).send({ ok: false, error: "not your company" });
+  const cardPath = await findCard(companyId);
+  if (!cardPath) return reply.code(404).send({ ok: false, error: "card not found" });
+  const body = (req.body ?? {}) as { title?: string };
+  try {
+    const card = JSON.parse(await fs.readFile(cardPath, "utf8")) as { identity?: { name?: string } };
+    const gen = await generateWebsite(card, companyId);
+    const base = slugifyTitle(body.title || card?.identity?.name || companyId) || "landing";
+    const slug = uniqueLandingSlug(base, listLandings(companyId).map((l) => l.slug));
+    const landing = saveLanding(companyId, slug, body.title || base, gen.html);
+    return reply.code(200).send({ ok: true, landing, url: `${PUBLIC_SITE_BASE}${landing.url}` });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return reply.code(500).send({ ok: false, error: msg });
+  }
+});
+
+app.delete("/landing/:companyId/:slug", { preHandler: requireAuth }, async (req, reply) => {
+  const { companyId, slug } = req.params as { companyId: string; slug: string };
+  const auth = (req as AuthCarrier).auth;
+  if (!mayActOnCompany(auth, companyId))
+    return reply.code(403).send({ ok: false, error: "not your company" });
+  const ok = deleteLanding(companyId, slug);
+  return reply.code(ok ? 200 : 404).send({ ok });
 });
 
 // ---------------------------------------------------------------------------

@@ -457,6 +457,8 @@ export interface CompanyAiPatch {
   budgetCredits?: number | null
 }
 
+export interface Landing { slug: string; title: string; url: string; createdAt?: string }
+
 export const api = {
   // Extraction & compilation
   extract: async (url: string, replace = false) =>
@@ -645,6 +647,18 @@ export const api = {
 
   listSites: () =>
     get<{ ok: boolean; companies: string[]; published: string[]; publicBase: string }>('/sites'),
+
+  // Landing pages — ADDITIVE. Each is its own artifact served at /l/<id>/<slug>/,
+  // beside the card's directory page at /b/<id>/. Creating one never replaces the
+  // directory page; the directory entry is untouched by anything here.
+  listLandings: (companyId: string) =>
+    get<{ ok: boolean; base: string; landings: Landing[] }>(`/landings/${encodeURIComponent(companyId)}`),
+  createLanding: (companyId: string, title?: string) =>
+    post<{ ok: boolean; url: string; landing: Landing }>(
+      `/landing/${encodeURIComponent(companyId)}`, { title }),
+  deleteLanding: (companyId: string, slug: string) =>
+    request<{ ok: boolean }>(
+      'DELETE', `/landing/${encodeURIComponent(companyId)}/${encodeURIComponent(slug)}`),
 
   // Runtime settings — provider / model / API keys
   getSettings: () => get<SettingsResponse>('/settings'),
