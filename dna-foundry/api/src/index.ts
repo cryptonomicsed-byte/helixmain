@@ -4890,6 +4890,7 @@ async function sendSignal(type, extra) {
   await Promise.allSettled(pool.publish(VOICE.relays, ev));
 }
 function subscribeAnswer() {
+  var pendingIce = [];   // candidates that arrived before the answer was applied
   sub = pool.subscribeMany(
     VOICE.relays,
     [{ kinds: [1059], '#p': [myPubkey], since: Math.floor(Date.now() / 1000) - 5 }],
@@ -4904,11 +4905,21 @@ function subscribeAnswer() {
           if (ringTimeout) { clearTimeout(ringTimeout); ringTimeout = null; }
           if (pc && pc.signalingState !== 'stable') {
             pc.setRemoteDescription({ type: 'answer', sdp: sig.sdp })
-              .then(function () { log('Agent answered.'); })
+              .then(function () {
+                log('Agent answered.');
+                while (pc && pendingIce.length) {
+                  pc.addIceCandidate(new RTCIceCandidate(pendingIce.shift())).catch(function () {});
+                }
+              })
               .catch(function (e) { log('Answer rejected: ' + e.message, 'system'); });
           }
         } else if (sig.type === 'ice' && sig.candidate) {
-          if (pc) pc.addIceCandidate(new RTCIceCandidate(sig.candidate)).catch(function () {});
+          // addIceCandidate rejects -- and the candidate is silently lost -- if no
+          // remote description is applied yet. The agent sends its answer and its
+          // candidates back to back, so a candidate can arrive before the SDP lands.
+          // Buffer until setRemoteDescription resolves, then flush there.
+          if (pc && pc.remoteDescription) pc.addIceCandidate(new RTCIceCandidate(sig.candidate)).catch(function () {});
+          else pendingIce.push(sig.candidate);
         } else if (sig.type === 'hangup') {
           log('The agent ended the call.');
           endCall();
