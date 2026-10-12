@@ -38,16 +38,26 @@ def token_path(company: str) -> str:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Issue a one-time passkey enrollment link.")
-    ap.add_argument("company", help="onboarded company slug (the dashboard company id)")
+    ap.add_argument("company", help="provisioned company slug (the dashboard company id)")
     ap.add_argument("--hours", type=float, default=24.0, help="token lifetime (default 24)")
     ap.add_argument("--show", action="store_true", help="report status without issuing a new token")
     args = ap.parse_args()
 
     company = args.company
-    card = os.path.join(COMPANIES_ROOT, company, "card.json")
-    if not os.path.isfile(card):
-        print(f"ERROR: {company} is not an onboarded company (no {card})", file=sys.stderr)
+    # PROVISIONED, not onboarded. The passkey store keys off
+    # listProvisionedCompanies, so a company with api-keys.json can sign in whether
+    # or not it has a card — and the admin account is DELIBERATELY card-less (it is
+    # not a business, so there is nothing to extract). Requiring card.json made the
+    # admin unreachable: make-admin.py --status points at this script, and this
+    # script refused the very account it was pointed at.
+    keys = os.path.join(COMPANIES_ROOT, company, "api-keys.json")
+    if not os.path.isfile(keys):
+        print(f"ERROR: {company} is not a provisioned company (no {keys}). "
+              f"Sign up first, or check the spelling.", file=sys.stderr)
         return 1
+    if not os.path.isfile(os.path.join(COMPANIES_ROOT, company, "card.json")):
+        print(f"NOTE: {company} has no card yet — it can sign in and enroll, it just "
+              f"has nothing to show. Expected for an account like helix-admin.")
 
     p = token_path(company)
     if args.show:
