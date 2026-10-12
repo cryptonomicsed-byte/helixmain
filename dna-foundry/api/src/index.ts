@@ -4794,6 +4794,7 @@ let playbackBlocked = false;
 let starting = false;
 let autoStartTimer = null;
 let ringTimeout = null;
+let bootOk = false;
 let micStream = null, micAn = null, remoteAn = null;
 let callId = null, pool = null, mySeckey = null, myPubkey = null, agentPubkey = null;
 
@@ -5099,13 +5100,15 @@ try {
     statusEl.className = 'status-text active';
     log('Voice is not enabled for this business yet \u2014 you can still type.');
   }
+  bootOk = true;
 } catch (e) {
   setState('error');
   startBtn.classList.add('hidden');
+  inputArea.classList.add('visible');
   log('The voice line could not start: ' + (e && e.message ? e.message : e), 'user');
 }
 
-if (VOICE.enabled) {
+if (VOICE.enabled && bootOk) {
   log('Connecting you to ' + AGENT_NAME + '\u2026');
   autoStartTimer = setTimeout(function () { autoStartTimer = null; startCall().catch(function () {}); }, 250);
   // Some browsers gate playback until the first gesture. The first tap anywhere
