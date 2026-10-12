@@ -4510,6 +4510,12 @@ function buildCallPageHtml(opts: {
     align-self: flex-start;
     color: var(--text);
   }
+  .msg.system {
+    background: rgba(245,158,11,0.10);
+    border: 1px solid rgba(245,158,11,0.28);
+    align-self: flex-start;
+    color: var(--amber);
+  }
   .msg .sender {
     font-size: .72rem;
     color: var(--text-muted);
@@ -4899,7 +4905,7 @@ function subscribeAnswer() {
           if (pc && pc.signalingState !== 'stable') {
             pc.setRemoteDescription({ type: 'answer', sdp: sig.sdp })
               .then(function () { log('Agent answered.'); })
-              .catch(function (e) { log('Answer rejected: ' + e.message, 'user'); });
+              .catch(function (e) { log('Answer rejected: ' + e.message, 'system'); });
           }
         } else if (sig.type === 'ice' && sig.candidate) {
           if (pc) pc.addIceCandidate(new RTCIceCandidate(sig.candidate)).catch(function () {});
@@ -5016,7 +5022,7 @@ window.startCall = async function () {
     ringTimeout = setTimeout(function () {
       ringTimeout = null;
       if (pc && pc.connectionState === 'connected') return;
-      log('Nobody picked up just yet - you can type instead.', 'user');
+      log('Nobody picked up just yet - you can type instead.', 'system');
       setState('error');
       inputArea.classList.add('visible');
       startBtn.classList.remove('hidden');
@@ -5024,7 +5030,7 @@ window.startCall = async function () {
     requestAnimationFrame(loop);
   } catch (e) {
     setState('error');
-    log('Could not start the call: ' + (e && e.message ? e.message : e), 'user');
+    log('Could not start the call: ' + (e && e.message ? e.message : e), 'system');
     startBtn.classList.remove('hidden');
     cleanup();
   } finally {
@@ -5116,7 +5122,7 @@ try {
   setState('error');
   startBtn.classList.add('hidden');
   inputArea.classList.add('visible');
-  log('The voice line could not start: ' + (e && e.message ? e.message : e), 'user');
+  log('The voice line could not start: ' + (e && e.message ? e.message : e), 'system');
 }
 
 if (VOICE.enabled && bootOk) {
