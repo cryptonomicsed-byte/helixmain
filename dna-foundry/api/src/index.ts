@@ -4202,8 +4202,16 @@ function buildCallPageHtml(opts: {
   voice: { enabled: boolean; npub: string; relays: string[] };
   /** Same-origin path that mints ephemeral TURN credentials. */
   turnCredsUrl: string;
+  /** Card details, so the page shows WHAT the business is, not just an orb. */
+  card?: { hours?: string; phone?: string; offerings?: string[]; accent?: string };
 }): string {
   const { companyId, companyName, tagline, agentName, voice, turnCredsUrl } = opts;
+  const card = opts.card ?? {};
+  const offers = (card.offerings ?? []).filter(Boolean).slice(0, 8);
+  const hours = card.hours ?? "";
+  const phone = card.phone ?? "";
+  const accent = /^#[0-9a-fA-F]{3,8}$/.test(card.accent ?? "") ? (card.accent as string) : "";
+  const esc = (s: string) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c] as string));
   const apiBase = process.env.HELIX_API_BASE || "/api";
 
   return `<!DOCTYPE html>
@@ -4628,7 +4636,37 @@ function buildCallPageHtml(opts: {
     .ripple-3 { width: 265px; height: 265px; }
     .orb-icon { font-size: 2.2rem; }
   }
+  /* ---- Business info panel (card-driven) ---- */
+  .biz-panel {
+    width: min(560px, 92vw);
+    background: var(--surface);
+    border: 1px solid var(--primary-dim);
+    border-radius: 14px;
+    padding: 1rem 1.1rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: .7rem;
+    justify-content: center;
+  }
+  .biz-row { display: flex; flex-wrap: wrap; gap: .5rem; justify-content: center; }
+  .biz-chip {
+    font-size: .78rem; color: var(--text);
+    background: var(--surface2);
+    border: 1px solid var(--primary-dim);
+    border-radius: 999px; padding: .35rem .7rem;
+    display: inline-flex; gap: .35rem; align-items: center;
+  }
+  .biz-label {
+    font-size: .68rem; text-transform: uppercase; letter-spacing: .08em;
+    color: var(--text-muted); font-weight: 700; text-align: center;
+  }
+  .call-timer {
+    display: none; font-variant-numeric: tabular-nums; font-size: .82rem;
+    letter-spacing: .06em; color: var(--text-muted);
+  }
+  .call-timer.live { display: block; }
 </style>
+${accent ? `<style>:root{--primary:${accent};--primary-dim:${accent}22;}</style>` : ""}
 </head>
 <body>
 <canvas id="particles"></canvas>
@@ -4673,6 +4711,8 @@ function buildCallPageHtml(opts: {
 
   <div class="status-text" id="statusText">Ready to connect</div>
 
+  <div class="call-timer" id="callTimer">00:00</div>
+
   <button class="btn-start" id="btnStart" onclick="startCall()">✦ Start Call</button>
 
   <div class="input-area" id="inputArea">
@@ -4688,6 +4728,17 @@ function buildCallPageHtml(opts: {
   </div>
 
   <div class="transcript" id="transcript"></div>
+
+  ${(hours || phone || offers.length) ? `<div class="biz-panel" id="bizPanel">
+    ${(hours || phone) ? `<div class="biz-row">
+      ${hours ? `<span class="biz-chip">🕘 ${esc(hours)}</span>` : ""}
+      ${phone ? `<span class="biz-chip">📞 ${esc(phone)}</span>` : ""}
+    </div>` : ""}
+    ${offers.length ? `<div style="width:100%">
+      <div class="biz-label">What we can help with</div>
+      <div class="biz-row" style="margin-top:.45rem">${offers.map((o) => `<span class="biz-chip">${esc(o)}</span>`).join("")}</div>
+    </div>` : ""}
+  </div>` : ""}
 
   <button class="btn-end" id="btnEnd" onclick="endCall()">✕ End Call</button>
 </div>
@@ -4741,6 +4792,7 @@ const STATUS = {
 function setState(s) {
   if (s === state) return;              // the rAF loop calls this every frame
   state = s;
+  if (s === 'listening') startTimer();
   orb.className = 'orb ' + s;
   wrapper.className = 'orb-wrapper ' + s;
   orbIcon.textContent = ICONS[s] || ICONS.idle;
@@ -4837,6 +4889,25 @@ function subscribeAnswer() {
       } });
 }
 
+let callStartTs = null, timerInt = null;
+function startTimer() {
+  if (timerInt) return;
+  callStartTs = Date.now();
+  var el = document.getElementById('callTimer');
+  if (!el) return;
+  el.classList.add('live');
+  timerInt = setInterval(function () {
+    var s = Math.floor((Date.now() - callStartTs) / 1000);
+    el.textContent = String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+  }, 500);
+}
+function stopTimer() {
+  if (timerInt) { clearInterval(timerInt); timerInt = null; }
+  var el = document.getElementById('callTimer');
+  if (el) el.classList.remove('live');
+  callStartTs = null;
+}
+
 window.startCall = async function () {
   if (!VOICE.enabled) { log('Voice is not enabled for this business yet.'); return; }
   setState('connecting');
@@ -4909,6 +4980,7 @@ window.endCall = function () {
 };
 
 function cleanup() {
+  stopTimer();
   if (sub) { try { sub.close(); } catch (e) {} sub = null; }
   if (pc) { try { pc.close(); } catch (e) {} pc = null; }
   if (micStream) {
@@ -4947,7 +5019,11 @@ window.sendMessage = async function () {
 try {
   if (VOICE.enabled) {
     agentPubkey = nip19.decode(VOICE.npub).data;
-    log('Voice line ready. Press Start Call to reach ' + AGENT_NAME + '.');
+    // Entering the page IS the intent to call — no redundant button. Start the
+    // call immediately; the browser prompts for the mic once (granting it also
+    // unlocks playback of the agent's audio).
+    startBtn.classList.add('hidden');
+    setState('connecting');
   } else {
     // No voice endpoint for this business: keep the text assistant instead of
     // offering a button that could only ever ring forever.
@@ -4956,12 +5032,26 @@ try {
     statusEl.textContent = 'Text assistant (voice not enabled for this business yet)';
     statusEl.className = 'status-text active';
     log('Voice is not enabled for this business yet \u2014 you can still type.');
+    setState('idle');
   }
-  setState('idle');
 } catch (e) {
   setState('error');
   startBtn.classList.add('hidden');
   log('The voice line could not start: ' + (e && e.message ? e.message : e), 'user');
+}
+
+if (VOICE.enabled) {
+  log('Connecting you to ' + AGENT_NAME + '\u2026');
+  setTimeout(function () { startCall().catch(function () {}); }, 250);
+  // Some browsers gate playback until the first gesture. The first tap anywhere
+  // resumes audio and, if the auto-start was blocked, (re)starts the call.
+  var _unlock = function () {
+    try { if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume(); } catch (e) {}
+    try { if (remoteAudio.play) remoteAudio.play().catch(function () {}); } catch (e) {}
+    if (state === 'error' || state === 'idle' || !state) { startCall().catch(function () {}); }
+  };
+  window.addEventListener('pointerdown', _unlock, { once: true });
+  window.addEventListener('keydown', _unlock, { once: true });
 }
 
 window.addEventListener('beforeunload', function () {
@@ -4997,11 +5087,20 @@ app.get("/call/:companyId", async (req, reply) => {
       } catch { /* skip malformed */ }
     }
   }
+  let cardDetails: { hours?: string; phone?: string; offerings?: string[]; accent?: string } = {};
   if (cardPath) {
     try {
       const card = JSON.parse(await fs.readFile(cardPath, "utf8"));
       companyName = card?.identity?.name ?? card?.name?.value ?? companyName;
       tagline = card?.identity?.tagline ?? card?.tagline ?? tagline;
+      cardDetails = {
+        hours: card?.operations?.hours ?? "",
+        phone: card?.identity?.phone ?? "",
+        offerings: Array.isArray(card?.offerings)
+          ? card.offerings.map((o: { name?: string }) => o?.name).filter((n: unknown): n is string => typeof n === "string" && n.length > 0)
+          : [],
+        accent: card?.visual?.colors?.[0]?.hex ?? "",
+      };
     } catch {
       // fall through to defaults
     }
@@ -5024,6 +5123,7 @@ app.get("/call/:companyId", async (req, reply) => {
     agentName: "Helix AI",
     voice,
     turnCredsUrl: process.env.HELIX_TURN_CREDS_PATH || "/turn-creds",
+    card: cardDetails,
   });
 
   return reply
