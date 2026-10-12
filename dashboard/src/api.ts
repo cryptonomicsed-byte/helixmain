@@ -37,7 +37,7 @@ export function clearKeys(): void {
  */
 export async function signOut(): Promise<void> {
   try {
-    await api.logout()
+    await auth.logout()
   } catch {
     // A sign-out that refuses to complete because the network is down is the
     // worst kind. The cookie still expires on its own; drop the keys regardless.
