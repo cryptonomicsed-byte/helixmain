@@ -4452,6 +4452,70 @@ function buildCallPageHtml(opts: {
     .orb-icon { font-size: 2.2rem; }
   }
 </style>
+</head>
+<body>
+<canvas id="particles"></canvas>
+<div class="grid-overlay"></div>
+
+<div class="app" id="app">
+  <div class="header">
+    <h1>${companyName}</h1>
+    <p>${tagline || "Talk to our AI voice agent — available 24/7"}</p>
+  </div>
+
+  <div class="agent-badge">Powered by <span>${agentName}</span></div>
+
+  <div class="orb-wrapper" id="orbWrapper">
+    <!-- Ripple rings (speaking) -->
+    <div class="ripple ripple-1"></div>
+    <div class="ripple ripple-2"></div>
+    <div class="ripple ripple-3"></div>
+
+    <!-- Spinning ring (connecting) -->
+    <div class="ring-spin" id="ringSpin"></div>
+
+    <!-- Core orb -->
+    <div class="orb idle" id="orb">
+      <div class="orb-glow"></div>
+      <div class="orb-body">
+        <div class="orb-inner-glow"></div>
+        <!-- Waveform bars -->
+        <div class="wave-bars" id="waveBars">
+          <div class="bar" id="b1" style="height:12px"></div>
+          <div class="bar" id="b2" style="height:20px"></div>
+          <div class="bar" id="b3" style="height:28px"></div>
+          <div class="bar" id="b4" style="height:16px"></div>
+          <div class="bar" id="b5" style="height:24px"></div>
+          <div class="bar" id="b6" style="height:10px"></div>
+          <div class="bar" id="b7" style="height:20px"></div>
+        </div>
+      </div>
+      <div class="orb-icon" id="orbIcon">🤖</div>
+    </div>
+  </div>
+
+  <div class="status-text" id="statusText">Ready to connect</div>
+
+  <button class="btn-start" id="btnStart" onclick="startCall()">✦ Start Call</button>
+
+  <div class="input-area" id="inputArea">
+    <input
+      class="msg-input"
+      id="msgInput"
+      type="text"
+      placeholder="Type your message…"
+      maxlength="500"
+      onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault();sendMessage()}"
+    />
+    <button class="btn-send" id="btnSend" onclick="sendMessage()">Send →</button>
+  </div>
+
+  <div class="transcript" id="transcript"></div>
+
+  <button class="btn-end" id="btnEnd" onclick="endCall()">✕ End Call</button>
+</div>
+
+
 <audio id="remoteAudio" autoplay playsinline></audio>
 
 <script type="importmap">
