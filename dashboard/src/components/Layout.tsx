@@ -2,7 +2,7 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { useHelixStore } from '../store'
-import { api } from '../api'
+import { api, signOut } from '../api'
 import { Icon } from './Icon'
 import { useIsMobile } from '../hooks'
 
@@ -37,6 +37,11 @@ export function Layout() {
   const inCard = pathname.startsWith('/card/')
   const title = inCard ? '' : (TITLES[pathname] ?? '')
   const isMobile = useIsMobile()
+
+  // Signing out clears the server session and reloads, so the button stays
+  // disabled from the click onward — a second click would race the reload.
+  const [signingOut, setSigningOut] = useState(false)
+  const doSignOut = () => { setSigningOut(true); void signOut() }
 
   // Desktop: collapse the sidebar to an icon rail (persisted).
   const [collapsed, setCollapsed] = useState(() => {
@@ -202,6 +207,26 @@ export function Layout() {
           ))}
         </div>
 
+        {/* Sign out. In the rail as well as the header: on mobile the drawer is
+            what you actually open, and a control that only exists in the header
+            would be unreachable behind the hamburger. */}
+        <button
+          className="btn btn-ghost"
+          onClick={doSignOut}
+          disabled={signingOut}
+          title={showLabels ? undefined : 'Sign out'}
+          style={{
+            marginTop: 10, padding: '.55rem', width: '100%',
+            display: 'flex', alignItems: 'center', gap: '.55rem',
+            justifyContent: showLabels ? 'flex-start' : 'center',
+          }}
+        >
+          <Icon name="logout" size={16} />
+          {showLabels && (
+            <span style={{ fontSize: '.8rem' }}>{signingOut ? 'Signing out…' : 'Sign out'}</span>
+          )}
+        </button>
+
         {/* Status footer */}
         <div style={{
           marginTop: 10, padding: '10px 10px 4px', borderTop: '1px solid var(--line)',
@@ -266,6 +291,16 @@ export function Layout() {
               <Icon name="bell" size={17} />
             </button>
           )}
+          <button
+            className="btn btn-ghost"
+            onClick={doSignOut}
+            disabled={signingOut}
+            title="Sign out"
+            aria-label="Sign out"
+            style={{ padding: '.45rem' }}
+          >
+            <Icon name="logout" size={17} />
+          </button>
         </header>
 
         <main

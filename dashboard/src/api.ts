@@ -26,6 +26,26 @@ export function clearKeys(): void {
   localStorage.removeItem(OWNER_STORE)
 }
 
+/** Sign out, for real.
+ *
+ *  Three things, and skipping any one of them leaves the user signed in:
+ *   - the server must clear the HttpOnly session cookie;
+ *   - the break-glass keys must go too, or a stored key silently re-authenticates
+ *     the very next request and the "sign out" did nothing;
+ *   - the page must reload, so in-memory state (cards, agent chat, any open
+ *     drawer) does not outlive the session it was loaded under.
+ */
+export async function signOut(): Promise<void> {
+  try {
+    await api.logout()
+  } catch {
+    // A sign-out that refuses to complete because the network is down is the
+    // worst kind. The cookie still expires on its own; drop the keys regardless.
+  }
+  clearKeys()
+  window.location.replace('/dashboard/')
+}
+
 // ---------------------------------------------------------------------------
 // Session auth — ONE credential.
 //
