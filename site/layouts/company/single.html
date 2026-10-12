@@ -48,6 +48,31 @@
   .offerings-list .offer-name { font-weight: 500; font-size: 0.9rem; }
   .offerings-list .offer-price { color: var(--amber); font-family: var(--mono); font-size: 0.85rem; }
   .connect-section { margin-top: 2rem; }
+  /* Destination tabs. The voice-agent tab is first and always present: the
+     orb page is served by the API at /call/<slug> and works for every company
+     with a card, whereas caller_url only exists once a business has an npub. */
+  .page-tabs {
+    display: flex; gap: .4rem; flex-wrap: wrap; align-items: center;
+    margin: 0 0 1.75rem; padding-bottom: .85rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .page-tab {
+    display: inline-flex; align-items: center; gap: .45rem;
+    padding: .42rem .8rem; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--surface);
+    color: var(--muted); font-size: .82rem; font-weight: 500;
+    text-decoration: none; white-space: nowrap;
+  }
+  .page-tab:hover { border-color: var(--accent); color: var(--text); text-decoration: none; }
+  .page-tab--voice { border-color: var(--accent); color: var(--accent); }
+  .page-tab--voice:hover { background: var(--accent); color: var(--bg); }
+  .tab-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: currentColor; box-shadow: 0 0 8px currentColor;
+    animation: tabPulse 2.4s ease-in-out infinite;
+  }
+  @keyframes tabPulse { 0%,100% { opacity: .45 } 50% { opacity: 1 } }
+  @media (prefers-reduced-motion: reduce) { .tab-dot { animation: none } }
   .call-button {
     display: inline-block; background: var(--accent); color: #000;
     padding: 0.7rem 1.4rem; border-radius: 6px; font-weight: 700; font-size: 0.95rem;
@@ -107,6 +132,16 @@
       {{ with $c.review_url }}<a class="review-cta" href="{{ . }}" target="_blank" rel="noopener">Leave a review</a>{{ end }}
     </div>
   </header>
+
+  {{ $call_url := printf "/call/%s" $id }}
+  <nav class="page-tabs" aria-label="Talk to {{ $c.name }}">
+    <a class="page-tab page-tab--voice" href="{{ $call_url }}">
+      <span class="tab-dot" aria-hidden="true"></span> Talk to our AI
+    </a>
+    {{ with $c.review_url }}<a class="page-tab" href="{{ . }}" target="_blank" rel="noopener">Leave a review</a>{{ end }}
+    {{ with $c.website }}<a class="page-tab" href="{{ . }}" target="_blank" rel="noopener">Website</a>{{ end }}
+    {{ with $c.phone }}<a class="page-tab" href="tel:{{ . }}">Call {{ . }}</a>{{ end }}
+  </nav>
 
   {{ if or $c.mission $c.values $c.founded $c.voice_personality }}
   <section>
@@ -192,7 +227,9 @@
     {{ if $c.caller_url }}
     <a class="call-button" href="{{ $c.caller_url }}">Call now (browser)</a>
     {{ else }}
-    <p class="call-pending">📞 Call setup pending — the AI front desk isn't live for this business yet.</p>
+    {{/* No npub means no live voice front desk — but the AI page is served for
+         every company with a card, so offer that instead of a dead end. */}}
+    <a class="call-button" href="{{ $call_url }}">Talk to our AI</a>
     {{ end }}
 
     {{ if $c.socials }}
