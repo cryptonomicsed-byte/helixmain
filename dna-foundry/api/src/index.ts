@@ -4714,7 +4714,7 @@ ${accent ? `<style>:root{--primary:${accent};--primary-dim:${accent}22;}</style>
 
   <div class="call-timer" id="callTimer">00:00</div>
 
-  <button class="btn-start" id="btnStart" onclick="startCall()">✦ Start Call</button>
+  <button class="btn-start hidden" id="btnStart" onclick="startCall()">✦ Start Call</button>
 
   <div class="input-area" id="inputArea">
     <input
@@ -4750,8 +4750,20 @@ ${accent ? `<style>:root{--primary:${accent};--primary-dim:${accent}22;}</style>
 <script type="importmap">
 { "imports": { "nostr-tools": "https://cdn.jsdelivr.net/npm/nostr-tools@2.10.4/+esm" } }
 </script>
+<script>
+// If the module below never runs -- a blocked CDN, an offline phone -- nothing
+// on this page works. Say so, rather than leaving a live-looking button that
+// can never do anything. A classic script, no imports, so it runs regardless.
+window.__callBooted = false;
+setTimeout(function () {
+  if (window.__callBooted) return;
+  var s = document.getElementById('statusText');
+  if (s) { s.textContent = 'Could not load the call agent. Check your connection and reload.'; s.className = 'status-text active'; }
+}, 6000);
+</script>
 <script type="module">
 import { generateSecretKey, getPublicKey, finalizeEvent, nip19, nip44, SimplePool } from 'nostr-tools';
+window.__callBooted = true;
 
 // ---------------------------------------------------------------------------
 // A real call, not a rendering of one.
@@ -5053,8 +5065,9 @@ window.sendMessage = async function () {
 };
 
 // ---- Boot ----
-// Wrapped so a failure to load the signalling library reports itself. An
-// uncaught throw here leaves a silent blank page where a call should be.
+// Wrapped so a throw inside boot reports itself. A failure to load the
+// signalling library happens before this runs, so the guard in the document
+// head catches that instead (and stops a dead button being shown).
 try {
   if (VOICE.enabled) {
     agentPubkey = nip19.decode(VOICE.npub).data;
