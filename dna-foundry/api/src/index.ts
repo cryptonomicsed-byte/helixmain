@@ -4439,11 +4439,12 @@ function buildCallPageHtml(opts: {
     width: 100%;
     max-width: 500px;
     opacity: 0;
+    visibility: hidden;
     pointer-events: none;
-    transition: opacity 0.4s ease;
+    transition: opacity 0.4s ease, visibility 0.4s ease;
     flex-wrap: wrap;
   }
-  .input-area.visible { opacity: 1; pointer-events: all; }
+  .input-area.visible { opacity: 1; visibility: visible; pointer-events: all; }
   .msg-input {
     flex: 1;
     min-width: 200px;
