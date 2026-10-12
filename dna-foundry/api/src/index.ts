@@ -146,9 +146,9 @@ import {
   getAffiliateStats,
   loadAffiliateStore,
 } from "./services/affiliate";
-import { createHmac, randomUUID, timingSafeEqual } from "crypto";
+import { createHmac, randomUUID, randomBytes, timingSafeEqual } from "crypto";
 import { type FastifyRequest, type FastifyReply } from "fastify";
-import { lookupKey, type KeyRecord } from "./services/apiKeys";
+import { lookupKey, ensureKeys, resetKeyCache, type KeyRecord } from "./services/apiKeys";
 import {
   SESSION_COOKIE,
   CHALLENGE_COOKIE,
@@ -234,6 +234,7 @@ const ORCHESTRATOR = path.join(ROOT, "swarm", "orchestrator.py");
 /** infra/ sits beside dna-foundry/, not inside it. */
 const PROVISION_AGENT = path.resolve(__dirname, "..", "..", "..", "infra", "provision-agent.py");
 const SYNC_AGENT_PROVIDER = path.resolve(__dirname, "..", "..", "..", "infra", "sync-agent-provider.py");
+const PROVISION_VOICE = path.resolve(__dirname, "..", "..", "..", "infra", "provision-voice.py");
 
 /** Fire-and-forget: run one of the infra/*.py scripts against the agent runtime.
  *  Detached and cheap to call — both scripts no-op when there is nothing to do —
@@ -255,6 +256,17 @@ function runInfraScript(script: string, args: string[], tag: string): void {
  *  agent is a company the Account Agent cannot hand work to. */
 function provisionCardAgent(companyId: string): void {
   runInfraScript(PROVISION_AGENT, [companyId], `provision-agent ${companyId}`);
+}
+
+/** Give a company its sovereign VOICE endpoint (its own npub + systemd unit).
+ *
+ *  Separate from the ZeroClaw card agent above: a card agent talks over nostr
+ *  chat, the voice endpoint answers the /call page. Every card is supposed to
+ *  come with one, so this fires wherever a company becomes card-bearing. It is
+ *  idempotent (provision-voice.py no-ops on an already-wired company) and
+ *  fire-and-forget — a slow whisper/piper cold start must never block /extract. */
+function provisionVoice(companyId: string): void {
+  runInfraScript(PROVISION_VOICE, [companyId], `provision-voice ${companyId}`);
 }
 
 /** The chat agents read /etc/zeroclaw/config.toml, NOT the Settings page. Without
@@ -336,6 +348,17 @@ async function findCard(cardId: string): Promise<string | null> {
   const files = await fs.readdir(CARDS).catch(() => []);
   const hits = files.filter((f) => f.startsWith(cardId)).sort();
   return hits.length ? path.join(CARDS, hits[hits.length - 1]) : null;
+}
+
+/** The host of a URL, for deriving a new company's slug before extraction knows
+ *  the business name. Deterministic, so orgId/changelog/slug all agree. */
+function hostOf(url: string): string {
+  try {
+    const u = new URL(/^https?:\/\//i.test(url) ? url : `https://${url}`);
+    return u.hostname.replace(/^www\./i, "");
+  } catch {
+    return "";
+  }
 }
 
 /** The tenant a RESOLVED card path belongs to, or null when it has none.
@@ -732,18 +755,36 @@ app.post("/extract", { preHandler: requireAuth }, async (req, reply) => {
   // agency path, onboarding a client). It never creates a directory for an
   // arbitrary name.
   const auth = (req as AuthCarrier).auth;
-  const companyId = auth?.companyId ?? "";
+  const accountId = auth?.companyId ?? "";
   const isOperator = auth?.level === "operator";
-  let target = companyId;
-  if (body.orgId && body.orgId !== companyId) {
-    if (!isOperator)
-      return reply.code(403).send({ ok: false, error: "orgId must be your own company" });
-    if (!isProvisionedCompany(body.orgId))
+
+  // Resolve the TARGET company.
+  //   - An explicit companyId/orgId → re-extract INTO that existing card (it must
+  //     be one this principal may act on; the clobber guard below still applies).
+  //   - Nothing named → a NEW card, which is a NEW company under the account.
+  //     Each card is its own company: own dir, own npub, own voice endpoint.
+  let target: string;
+  let isNew = false;
+  const requested = body.companyId || body.orgId;
+  if (requested) {
+    if (requested !== accountId && !mayActOnCompany(auth, requested))
+      return reply.code(403).send({ ok: false, error: "companyId must be a company you own" });
+    if (!isProvisionedCompany(requested))
       return reply.code(403).send({ ok: false, error: "no such company to extract into" });
-    target = body.orgId;
+    target = requested;
+  } else {
+    // Prefer the account's card-less "home" company (so a brand-new signup's
+    // account becomes its first card instead of leaving an orphan), else mint a
+    // new company slug from the URL host.
+    const acct = accountOwning(accountId) ?? ensureAccount(accountId);
+    const cardless = acct.owned.find((c) => isProvisionedCompany(c) && !isOnboardedCompany(c));
+    if (cardless) {
+      target = cardless;
+    } else {
+      target = uniqueSlug(slugify(hostOf(body.url)) || "site", pendingSlugs());
+      isNew = true;
+    }
   }
-  if (!target || !isProvisionedCompany(target))
-    return reply.code(403).send({ ok: false, error: "this company is not provisioned" });
 
   // CLOBBER GUARD. This route REPLACES <tenant>/card.json wholesale, so extracting
   // over a company that already has a card destroys whatever was curated there —
@@ -826,6 +867,20 @@ app.post("/extract", { preHandler: requireAuth }, async (req, reply) => {
     try {
       const companyDir = path.join(HELIX_COMPANIES, target);
       await fs.mkdir(companyDir, { recursive: true });
+      // A NEW card is a new company: mint its identity key and register it in the
+      // account's portfolio so the /call page and every owned-company route can
+      // reach it. An existing company already has these — never rotate them.
+      if (isNew) {
+        const skPath = path.join(companyDir, "seckey");
+        const hasKey = await fs.access(skPath).then(() => true).catch(() => false);
+        if (!hasKey) {
+          await fs.writeFile(skPath, randomBytes(32).toString("hex") + "\n", { mode: 0o600 });
+        }
+        ensureKeys(target);
+        resetKeyCache();
+        const acct = accountOwning(accountId) ?? ensureAccount(accountId);
+        addOwnedCompany(acct.id, target);
+      }
       await snapshotCompanyCard(target, path.join(companyDir, "card.json"));
       await fs.writeFile(path.join(companyDir, "card.json"), JSON.stringify(card, null, 2));
     } catch (e) {
@@ -834,8 +889,10 @@ app.post("/extract", { preHandler: requireAuth }, async (req, reply) => {
       return reply.code(500).send({ ok: false, error: `card could not be stored: ${msg}` });
     }
     // The card is what an agent grounds on, so this is the moment the company
-    // becomes able to have one. Idempotent; never blocks or fails the response.
+    // becomes able to have one — both agents, chat and voice. Idempotent; never
+    // blocks or fails the response.
     provisionCardAgent(target);
+    provisionVoice(target);
     return reply.code(200).send(card);
   } catch (e) {
     if (usageEntry) await refundCredits(usageEntry.id).catch(() => {});
