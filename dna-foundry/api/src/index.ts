@@ -786,6 +786,12 @@ app.post("/extract", { preHandler: requireAuth }, async (req, reply) => {
     }
   }
 
+  // The ACCOUNT pays for the extraction, not the company the card lands in — a
+  // brand-new company has no credit account yet, so billing `target` would 402
+  // every new card. An operator (companyId "*") has no account of its own, so it
+  // bills the company it named.
+  const billing = accountId && accountId !== "*" ? accountId : target;
+
   // CLOBBER GUARD. This route REPLACES <tenant>/card.json wholesale, so extracting
   // over a company that already has a card destroys whatever was curated there —
   // silently. Refuse unless the caller says `replace: true`, and name what is at
@@ -816,7 +822,7 @@ app.post("/extract", { preHandler: requireAuth }, async (req, reply) => {
   }
 
   // Per-account daily ceiling — see EXTRACTIONS_PER_DAY.
-  const acct = getCreditSummary(target);
+  const acct = getCreditSummary(billing);
   const dayStart = new Date();
   dayStart.setUTCHours(0, 0, 0, 0);
   const usedToday = (acct.usageLog ?? []).filter(
@@ -835,7 +841,7 @@ app.post("/extract", { preHandler: requireAuth }, async (req, reply) => {
 
   let usageEntry: UsageEntry | null = null;
   try {
-    usageEntry = await deductCredits(target, "extraction");
+    usageEntry = await deductCredits(billing, "extraction");
   } catch (e) {
     if (e instanceof QuotaExceeded) return reply.code(402).send({ error: e.message });
     throw e;
