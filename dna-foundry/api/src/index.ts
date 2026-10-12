@@ -363,10 +363,10 @@ function cardTenant(p: string): string | null {
 async function mayReadCard(auth: KeyRecord | undefined, p: string): Promise<boolean> {
   if (auth?.level === "operator") return true;
   const t = cardTenant(p);
-  if (t) return t === auth?.companyId;
+  if (t) return mayActOnCompany(auth, t);
   try {
     const c = JSON.parse(await fs.readFile(p, "utf8")) as { organizationId?: string };
-    return !!c?.organizationId && c.organizationId === auth?.companyId;
+    return !!c?.organizationId && mayActOnCompany(auth, c.organizationId);
   } catch {
     return false;
   }
@@ -428,6 +428,30 @@ function namedCompanyIds(req: FastifyRequest): string[] {
   return out;
 }
 
+/** Companies this credential may act on BEYOND its own tenant.
+ *
+ *  operator → handled separately (sees every company).
+ *  session  → every company the caller's ACCOUNT owns (its portfolio).
+ *  key      → none: a per-company bearer stays bound to its own company.
+ *
+ *  ONE definition, so auth (requireAuth), card reads (mayReadCard) and any future
+ *  gate all widen together instead of each drifting. */
+function portfolio(auth: KeyRecord | undefined): string[] {
+  if (!auth) return [];
+  if (auth.level === "operator") return [];
+  if (auth.via === "session") return accountOwning(auth.companyId)?.owned ?? [];
+  return [];
+}
+
+/** May this credential act on `company`? Its own tenant, an operator, or any
+ *  company in its account's portfolio. */
+function mayActOnCompany(auth: KeyRecord | undefined, company: string): boolean {
+  if (!auth || !company) return false;
+  if (auth.level === "operator") return true;
+  if (company === auth.companyId) return true;
+  return portfolio(auth).includes(company);
+}
+
 async function requireAuth(req: FastifyRequest, reply: FastifyReply): Promise<void> {
   // Machine callers present a per-company key; the browser presents a session
   // cookie minted by a passkey login. Either way the SERVER decides the tenant —
@@ -459,10 +483,7 @@ async function requireAuth(req: FastifyRequest, reply: FastifyReply): Promise<vo
   // may name any company the account controls — not only the one it logged in
   // through. A per-company KEY stays bound to its own company: a bearer string
   // that leaks must not widen into a portfolio, so this is session-only.
-  const allowed = new Set<string>([rec.companyId]);
-  if (rec.via === "session") {
-    for (const c of accountOwning(rec.companyId)?.owned ?? []) allowed.add(c);
-  }
+  const allowed = new Set<string>([rec.companyId, ...portfolio(rec)]);
   for (const named of namedCompanyIds(req)) {
     if (!allowed.has(named) && isOnboardedCompany(named)) {
       await reply.code(403).send({ ok: false, error: "key does not belong to that company" });
