@@ -5034,8 +5034,10 @@ try {
   if (VOICE.enabled) {
     agentPubkey = nip19.decode(VOICE.npub).data;
     // Entering the page IS the intent to call — no redundant button. Start the
-    // call immediately; the browser prompts for the mic once (granting it also
-    // unlocks playback of the agent's audio).
+    // call immediately. The browser prompts for the mic once; on Chromium that
+    // grant also unlocks playback (a page holding a live capture stream is exempt
+    // from the autoplay block), but WebKit still needs a real gesture — which is
+    // what the first-tap _unlock fallback below is for.
     startBtn.classList.add('hidden');
     setState('connecting');
   } else {
