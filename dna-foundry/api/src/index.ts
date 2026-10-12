@@ -5034,6 +5034,13 @@ function cleanup() {
   stopTimer();
   if (sub) { try { sub.close(); } catch (e) {} sub = null; }
   if (pc) { try { pc.close(); } catch (e) {} pc = null; }
+  // The pool owns a WebSocket per relay and is created fresh on every startCall.
+  // Leaving it open leaked one connection per call -- and the retry paths
+  // (ring timeout, error, end then start again) repeat that within one visit.
+  if (pool) {
+    try { if (pool.close) pool.close(VOICE.relays); else if (pool.destroy) pool.destroy(); } catch (e) {}
+    pool = null;
+  }
   if (micStream) {
     try { micStream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {}
     micStream = null;
@@ -5041,7 +5048,9 @@ function cleanup() {
   if (remoteAudio.srcObject) remoteAudio.srcObject = null;
   micAn = null; remoteAn = null;
   if (waveBars) waveBars.style.opacity = '0';
-  callId = null; agentPubkey = VOICE.enabled ? agentPubkey : null;
+  playbackBlocked = false;
+  callId = null; mySeckey = null; myPubkey = null;
+  agentPubkey = VOICE.enabled ? agentPubkey : null;
 }
 
 // ---- Text assistant: only for a business with no voice endpoint ----
