@@ -4781,6 +4781,7 @@ let state = null, pc = null, sub = null, audioCtx = null;
 let playbackBlocked = false;
 let starting = false;
 let autoStartTimer = null;
+let ringTimeout = null;
 let micStream = null, micAn = null, remoteAn = null;
 let callId = null, pool = null, mySeckey = null, myPubkey = null, agentPubkey = null;
 
@@ -4881,6 +4882,7 @@ function subscribeAnswer() {
         } catch (e) { return; }
         if (!sig || sig.call_id !== callId) return;
         if (sig.type === 'answer') {
+          if (ringTimeout) { clearTimeout(ringTimeout); ringTimeout = null; }
           if (pc && pc.signalingState !== 'stable') {
             pc.setRemoteDescription({ type: 'answer', sdp: sig.sdp })
               .then(function () { log('Agent answered.'); })
@@ -4983,6 +4985,18 @@ window.startCall = async function () {
     await sendSignal('offer', { sdp: offer.sdp });
     log('Ringing ' + AGENT_NAME + '\u2026');
     subscribeAnswer();
+    // A business can not answer two ways: no endpoint at all (the no-voice branch
+    // below), or an endpoint that exists but is down. The first is handled at boot;
+    // this is the second -- if no answer arrives, stop leaving the caller ringing
+    // and hand them the text assistant that branch offers.
+    ringTimeout = setTimeout(function () {
+      ringTimeout = null;
+      if (pc && pc.connectionState === 'connected') return;
+      log('Nobody picked up just yet - you can type instead.', 'user');
+      setState('error');
+      inputArea.classList.add('visible');
+      startBtn.classList.remove('hidden');
+    }, 25000);
     requestAnimationFrame(loop);
   } catch (e) {
     setState('error');
@@ -5004,6 +5018,7 @@ window.endCall = function () {
 
 function cleanup() {
   if (autoStartTimer) { clearTimeout(autoStartTimer); autoStartTimer = null; }
+  if (ringTimeout) { clearTimeout(ringTimeout); ringTimeout = null; }
   stopTimer();
   if (sub) { try { sub.close(); } catch (e) {} sub = null; }
   if (pc) { try { pc.close(); } catch (e) {} pc = null; }
@@ -5051,8 +5066,10 @@ try {
     startBtn.classList.add('hidden');
     setState('connecting');
   } else {
-    // No voice endpoint for this business: keep the text assistant instead of
-    // offering a button that could only ever ring forever.
+    // No voice endpoint provisioned for this business (no npub): keep the text
+    // assistant instead of offering a button that could only ever ring forever.
+    // A business whose endpoint exists but is down gets the same fallback from
+    // the ring timeout in startCall.
     startBtn.classList.add('hidden');
     setState('idle');
     inputArea.classList.add('visible');
