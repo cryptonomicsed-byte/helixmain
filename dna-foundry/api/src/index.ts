@@ -272,6 +272,53 @@ function run(cmd: string, args: string[]): Promise<{ code: number; out: string; 
   });
 }
 
+/**
+ * The business's sovereign voice identity.
+ *
+ * A business's agent-voice endpoint (one systemd unit per business,
+ * agent-voice-<slug>.service) is addressed by npub, not by slug: a caller
+ * gift-wraps an offer to the npub and the matching endpoint answers it.
+ * <company>/identity is written by the provisioner as
+ *   line 1: seckey    (secret — must never leave the server)
+ *   line 2: pubkey hex
+ *   line 3: npub
+ * Only the public halves are returned, so the page can reach the agent without
+ * being able to impersonate it.
+ */
+async function readVoiceIdentity(
+  companyId: string,
+): Promise<{ npub: string; pubkey: string } | null> {
+  if (!companyId || companyId.includes("/") || companyId.includes("\\") || companyId.includes("..")) {
+    return null;
+  }
+  try {
+    const raw = await fs.readFile(path.join(HELIX_COMPANIES, companyId, "identity"), "utf8");
+    const lines = raw.split("\n").map((l) => l.trim()).filter(Boolean);
+    const npub = lines.find((l) => l.startsWith("npub1")) ?? "";
+    // lines[0] is the seckey, and it is also 64 hex chars — exclude it.
+    const secret = lines[0] ?? "";
+    const pubkey = lines.find((l) => /^[0-9a-f]{64}$/i.test(l) && l !== secret) ?? "";
+    if (!npub) return null;
+    return { npub, pubkey };
+  } catch {
+    return null;
+  }
+}
+
+/** The relays a business's endpoint subscribes to (its env), else the platform default. */
+async function readVoiceRelays(companyId: string): Promise<string[]> {
+  const fallback = [process.env.HELIX_VOICE_RELAY || "wss://omokoda.duckdns.org:3443"];
+  try {
+    const env = await fs.readFile(path.join(HELIX_COMPANIES, companyId, "env"), "utf8");
+    const m = env.match(/^AGENT_VOICE_RELAYS=(.*)$/m);
+    if (m) {
+      const list = m[1].split(",").map((s) => s.trim()).filter(Boolean);
+      if (list.length) return list;
+    }
+  } catch { /* no env file — use the platform default */ }
+  return fallback;
+}
+
 async function findCard(cardId: string): Promise<string | null> {
   // A card id is a slug ("ok") or a dna_* id — never a path. Reject separators
   // (and "..") so a caller cannot aim this at an arbitrary file.
@@ -3974,8 +4021,12 @@ function buildCallPageHtml(opts: {
   companyName: string;
   tagline: string;
   agentName: string;
+  /** The business's sovereign voice identity (its agent-voice endpoint). */
+  voice: { enabled: boolean; npub: string; relays: string[] };
+  /** Same-origin path that mints ephemeral TURN credentials. */
+  turnCredsUrl: string;
 }): string {
-  const { companyId, companyName, tagline, agentName } = opts;
+  const { companyId, companyName, tagline, agentName, voice, turnCredsUrl } = opts;
   const apiBase = process.env.HELIX_API_BASE || "/api";
 
   return `<!DOCTYPE html>
@@ -4401,281 +4452,265 @@ function buildCallPageHtml(opts: {
     .orb-icon { font-size: 2.2rem; }
   }
 </style>
-</head>
-<body>
-<canvas id="particles"></canvas>
-<div class="grid-overlay"></div>
+<audio id="remoteAudio" autoplay playsinline></audio>
 
-<div class="app" id="app">
-  <div class="header">
-    <h1>${companyName}</h1>
-    <p>${tagline || "Talk to our AI voice agent — available 24/7"}</p>
-  </div>
+<script type="importmap">
+{ "imports": { "nostr-tools": "https://cdn.jsdelivr.net/npm/nostr-tools@2.10.4/+esm" } }
+</script>
+<script type="module">
+// ---------------------------------------------------------------------------
+// A real call, not a rendering of one.
+//
+// The business's agent-voice endpoint listens on the relay for a gift-wrapped
+// offer addressed to its npub. We wrap an offer the way /caller/index.html
+// does; the audio that comes back is the agent actually speaking.
+// ---------------------------------------------------------------------------
+const COMPANY_ID   = "${companyId}";
+const AGENT_NAME   = "${agentName}";
+const VOICE        = ${JSON.stringify(voice)};
+const TURN_URL     = "${turnCredsUrl}";
 
-  <div class="agent-badge">Powered by <span>${agentName}</span></div>
+const orb         = document.getElementById('orb');
+const wrapper     = document.getElementById('orbWrapper');
+const orbIcon     = document.getElementById('orbIcon');
+const statusEl    = document.getElementById('statusText');
+const startBtn    = document.getElementById('btnStart');
+const inputArea   = document.getElementById('inputArea');
+const transcript  = document.getElementById('transcript');
+const endBtn      = document.getElementById('btnEnd');
+const waveBars    = document.getElementById('waveBars');
+const bars        = Array.from(document.querySelectorAll('.bar'));
+const remoteAudio = document.getElementById('remoteAudio');
 
-  <div class="orb-wrapper" id="orbWrapper">
-    <!-- Ripple rings (speaking) -->
-    <div class="ripple ripple-1"></div>
-    <div class="ripple ripple-2"></div>
-    <div class="ripple ripple-3"></div>
+let state = null, pc = null, sub = null, audioCtx = null;
+let micStream = null, micAn = null, remoteAn = null;
+let callId = null, pool = null, mySeckey = null, myPubkey = null, agentPubkey = null;
 
-    <!-- Spinning ring (connecting) -->
-    <div class="ring-spin" id="ringSpin"></div>
+const ICONS = { idle: '\u{1F916}', connecting: '\u27F3', listening: '\u{1F3A4}', speaking: '\u{1F50A}', error: '\u26A0\uFE0F' };
+const STATUS = {
+  idle:       'Ready to connect',
+  connecting: 'Connecting\u2026',
+  listening:  'Connected \u2014 go ahead and talk',
+  speaking:   AGENT_NAME + ' is speaking\u2026',
+  error:      'Voice is unavailable right now'
+};
 
-    <!-- Core orb -->
-    <div class="orb idle" id="orb">
-      <div class="orb-glow"></div>
-      <div class="orb-body">
-        <div class="orb-inner-glow"></div>
-        <!-- Waveform bars -->
-        <div class="wave-bars" id="waveBars">
-          <div class="bar" id="b1" style="height:12px"></div>
-          <div class="bar" id="b2" style="height:20px"></div>
-          <div class="bar" id="b3" style="height:28px"></div>
-          <div class="bar" id="b4" style="height:16px"></div>
-          <div class="bar" id="b5" style="height:24px"></div>
-          <div class="bar" id="b6" style="height:10px"></div>
-          <div class="bar" id="b7" style="height:20px"></div>
-        </div>
-      </div>
-      <div class="orb-icon" id="orbIcon">🤖</div>
-    </div>
-  </div>
+function setState(s) {
+  if (s === state) return;              // the rAF loop calls this every frame
+  state = s;
+  orb.className = 'orb ' + s;
+  wrapper.className = 'orb-wrapper ' + s;
+  orbIcon.textContent = ICONS[s] || ICONS.idle;
+  statusEl.textContent = STATUS[s] || '';
+  statusEl.className = 'status-text' + (s !== 'idle' ? ' active' : '');
+  waveBars.style.opacity = (s === 'listening' || s === 'speaking') ? '1' : '0';
+  if (s === 'idle') { endBtn.classList.remove('visible'); }
+  else { endBtn.classList.add('visible'); }
+}
 
-  <div class="status-text" id="statusText">Ready to connect</div>
+function log(text, kind) {
+  const d = document.createElement('div');
+  d.className = 'msg ' + (kind || 'agent');
+  d.textContent = text;
+  transcript.appendChild(d);
+  transcript.scrollTop = transcript.scrollHeight;
+}
 
-  <button class="btn-start" id="btnStart" onclick="startCall()">✦ Start Call</button>
-
-  <div class="input-area" id="inputArea">
-    <input
-      class="msg-input"
-      id="msgInput"
-      type="text"
-      placeholder="Type your message…"
-      maxlength="500"
-      onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault();sendMessage()}"
-    />
-    <button class="btn-send" id="btnSend" onclick="sendMessage()">Send →</button>
-  </div>
-
-  <div class="transcript" id="transcript"></div>
-
-  <button class="btn-end" id="btnEnd" onclick="endCall()">✕ End Call</button>
-</div>
-
-<script>
-(function() {
-  // ---- State ----
-  let state = 'idle'; // idle | connecting | listening | thinking | speaking
-  let sessionId = null;
-  let waveInterval = null;
-  let speakTimeout = null;
-  const COMPANY_ID = '${companyId}';
-  const API_BASE = '${apiBase}';
-
-  // ---- DOM refs ----
-  const orb        = document.getElementById('orb');
-  const orbWrapper  = document.getElementById('orbWrapper');
-  const orbIcon     = document.getElementById('orbIcon');
-  const ringSpin    = document.getElementById('ringSpin');
-  const statusText  = document.getElementById('statusText');
-  const btnStart    = document.getElementById('btnStart');
-  const inputArea   = document.getElementById('inputArea');
-  const msgInput    = document.getElementById('msgInput');
-  const btnSend     = document.getElementById('btnSend');
-  const transcript  = document.getElementById('transcript');
-  const btnEnd      = document.getElementById('btnEnd');
-  const waveBars    = document.getElementById('waveBars');
-  const bars        = Array.from(document.querySelectorAll('.bar'));
-
-  const icons = { idle: '🤖', connecting: '⟳', listening: '🎤', thinking: '✦', speaking: '🔊' };
-  const statuses = {
-    idle:       'Ready to connect',
-    connecting: 'Connecting to agent…',
-    listening:  'Listening…',
-    thinking:   'Agent is thinking…',
-    speaking:   'Agent is speaking…'
-  };
-
-  function setState(s) {
-    state = s;
-    orb.className = 'orb ' + s;
-    orbWrapper.className = 'orb-wrapper ' + s;
-    orbIcon.textContent = icons[s] || '🤖';
-    statusText.textContent = statuses[s] || '';
-    statusText.className = 'status-text' + (s !== 'idle' ? ' active' : '');
-
-    // Wave bars visibility
-    if (s === 'thinking' || s === 'speaking') {
-      waveBars.style.opacity = '1';
-      startWave(s);
-    } else {
-      waveBars.style.opacity = '0';
-      stopWave();
-    }
-
-    // Input area
-    if (s === 'listening') {
-      inputArea.classList.add('visible');
-      msgInput.focus();
-    }
-
-    // End button
-    if (s !== 'idle') {
-      btnEnd.classList.add('visible');
-    } else {
-      btnEnd.classList.remove('visible');
-      inputArea.classList.remove('visible');
-    }
+// ---- Real audio levels (replaces the Math.random() waveform) ----
+function analyserFor(stream) {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const an = audioCtx.createAnalyser();
+  an.fftSize = 512;
+  an.smoothingTimeConstant = 0.7;
+  audioCtx.createMediaStreamSource(stream).connect(an);
+  return an;
+}
+const timeBuf = new Uint8Array(512);
+const freqBuf = new Uint8Array(256);
+function loudness(an) {
+  if (!an) return 0;
+  an.getByteTimeDomainData(timeBuf);
+  let sum = 0;
+  for (let i = 0; i < timeBuf.length; i++) { const v = (timeBuf[i] - 128) / 128; sum += v * v; }
+  return Math.sqrt(sum / timeBuf.length);
+}
+function drawBars(an) {
+  if (!an) return;
+  an.getByteFrequencyData(freqBuf);
+  const n = bars.length, span = Math.floor(freqBuf.length * 0.45 / n) || 1;
+  for (let i = 0; i < n; i++) {
+    let peak = 0;
+    for (let q = 0; q < span; q++) peak = Math.max(peak, freqBuf[i * span + q] || 0);
+    bars[i].style.height = (6 + (peak / 255) * 46) + 'px';
   }
-
-  function startWave(mode) {
-    stopWave();
-    const barHeights = [8, 16, 28, 20, 32, 14, 22];
-    waveInterval = setInterval(() => {
-      bars.forEach((b, i) => {
-        const base = mode === 'thinking' ? 8 : 10;
-        const amp  = mode === 'thinking' ? 14 : 22;
-        b.style.height = (base + Math.random() * amp) + 'px';
-      });
-    }, 120);
+}
+function loop() {
+  if (!pc) return;
+  const lv = loudness(remoteAn);
+  drawBars(remoteAn || micAn);
+  if (pc.connectionState === 'connected') {
+    setState(lv > 0.035 ? 'speaking' : 'listening');
   }
+  requestAnimationFrame(loop);
+}
 
-  function stopWave() {
-    if (waveInterval) { clearInterval(waveInterval); waveInterval = null; }
-    bars.forEach((b, i) => { b.style.height = [12,20,28,16,24,10,20][i] + 'px'; });
-  }
+// ---- Signaling: gift-wrapped events over the relay (NIP-44 / kind:1059) ----
+function giftWrap(obj) {
+  const key = nip44.v2.utils.getConversationKey(mySeckey, agentPubkey);
+  return finalizeEvent({
+    kind: 1059,
+    created_at: Math.floor(Date.now() / 1000),
+    tags: [['p', agentPubkey]],
+    content: nip44.v2.encrypt(JSON.stringify(obj), key)
+  }, mySeckey);
+}
+async function sendSignal(type, extra) {
+  const ev = giftWrap(Object.assign({ type: type, call_id: callId }, extra || {}));
+  await Promise.allSettled(pool.publish(VOICE.relays, ev));
+}
+function subscribeAnswer() {
+  sub = pool.subscribeMany(
+    VOICE.relays,
+    [{ kinds: [1059], '#p': [myPubkey], since: Math.floor(Date.now() / 1000) - 5 }],
+    { onevent(ev) {
+        let sig;
+        try {
+          const key = nip44.v2.utils.getConversationKey(mySeckey, ev.pubkey);
+          sig = JSON.parse(nip44.v2.decrypt(ev.content, key));
+        } catch (e) { return; }
+        if (!sig || sig.call_id !== callId) return;
+        if (sig.type === 'answer') {
+          if (pc && pc.signalingState !== 'stable') {
+            pc.setRemoteDescription({ type: 'answer', sdp: sig.sdp })
+              .then(function () { log('Agent answered.'); })
+              .catch(function (e) { log('Answer rejected: ' + e.message, 'user'); });
+          }
+        } else if (sig.type === 'ice' && sig.candidate) {
+          if (pc) pc.addIceCandidate(new RTCIceCandidate(sig.candidate)).catch(function () {});
+        } else if (sig.type === 'hangup') {
+          log('The agent ended the call.');
+          endCall();
+        }
+      } });
+}
 
-  function addMessage(role, text) {
-    const div = document.createElement('div');
-    div.className = 'msg ' + role;
-    const sender = document.createElement('div');
-    sender.className = 'sender';
-    sender.textContent = role === 'user' ? 'You' : '${agentName}';
-    div.appendChild(sender);
-    const content = document.createElement('div');
-    content.textContent = text;
-    div.appendChild(content);
-    transcript.appendChild(div);
-    transcript.scrollTop = transcript.scrollHeight;
-  }
-
-  // ---- Particle canvas ----
-  (function initParticles() {
-    const canvas = document.getElementById('particles');
-    const ctx = canvas.getContext('2d');
-    let W = window.innerWidth, H = window.innerHeight;
-    canvas.width = W; canvas.height = H;
-    window.addEventListener('resize', () => {
-      W = window.innerWidth; H = window.innerHeight;
-      canvas.width = W; canvas.height = H;
+window.startCall = async function () {
+  if (!VOICE.enabled) { log('Voice is not enabled for this business yet.'); return; }
+  setState('connecting');
+  startBtn.classList.add('hidden');
+  try {
+    log('Requesting microphone\u2026');
+    micStream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
     });
-    const particles = Array.from({length: 55}, () => ({
-      x: Math.random() * W, y: Math.random() * H,
-      vx: (Math.random() - 0.5) * 0.3, vy: (Math.random() - 0.5) * 0.3,
-      r: Math.random() * 1.8 + 0.4,
-      a: Math.random() * 0.6 + 0.1
-    }));
-    function draw() {
-      ctx.clearRect(0, 0, W, H);
-      particles.forEach(p => {
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(74,158,255,' + p.a + ')';
-        ctx.fill();
-        p.x += p.vx; p.y += p.vy;
-        if (p.x < 0) p.x = W; if (p.x > W) p.x = 0;
-        if (p.y < 0) p.y = H; if (p.y > H) p.y = 0;
-      });
-      requestAnimationFrame(draw);
-    }
-    draw();
-  })();
+    micAn = analyserFor(micStream);
+    log('Microphone ready.');
 
-  // ---- Start call ----
-  window.startCall = async function() {
-    setState('connecting');
-    btnStart.classList.add('hidden');
+    callId = Array.from(crypto.getRandomValues(new Uint8Array(8)))
+      .map(function (b) { return b.toString(16).padStart(2, '0'); }).join('');
 
-    // Try to create a session — use the public /call-session endpoint
+    mySeckey = generateSecretKey();
+    myPubkey = getPublicKey(mySeckey);
+    pool = new SimplePool();
+
+    const iceServers = [{ urls: 'stun:stun.l.google.com:19302' }];
     try {
-      const r = await fetch('/api/call-session/' + COMPANY_ID, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ companyId: COMPANY_ID })
+      const c = await (await fetch(TURN_URL, { cache: 'no-store' })).json();
+      (Array.isArray(c.urls) ? c.urls : [c.urls]).forEach(function (u) {
+        iceServers.push({ urls: u, username: c.username, credential: c.credential });
       });
-      if (r.ok) {
-        const data = await r.json();
-        sessionId = data.sessionId || data.session_id || 'demo-' + Date.now();
-      } else {
-        sessionId = 'demo-' + Date.now();
-      }
-    } catch {
-      sessionId = 'demo-' + Date.now();
-    }
+      log('Relay credentials acquired.');
+    } catch (e) { log('No TURN relay \u2014 trying a direct path.'); }
 
-    setTimeout(() => {
-      setState('listening');
-      addMessage('agent', 'Hello! I\'m ${agentName}, the AI assistant for ${companyName}. How can I help you today?');
-    }, 1200);
-  };
+    pc = new RTCPeerConnection({ iceServers: iceServers });
+    micStream.getTracks().forEach(function (t) { pc.addTrack(t, micStream); });
+    pc.ontrack = function (e) {
+      remoteAudio.srcObject = e.streams[0];
+      remoteAn = analyserFor(e.streams[0]);
+    };
+    pc.onicecandidate = function (e) {
+      if (e.candidate) { sendSignal('ice', { candidate: e.candidate.toJSON() }).catch(function () {}); }
+    };
+    pc.onconnectionstatechange = function () {
+      const s = pc.connectionState;
+      log('Connection: ' + s);
+      if (s === 'connected') setState('listening');
+      if (s === 'failed' || s === 'disconnected' || s === 'closed') setState('error');
+    };
 
-  // ---- Send message ----
-  window.sendMessage = async function() {
-    const text = msgInput.value.trim();
-    if (!text || state === 'thinking') return;
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    await sendSignal('offer', { sdp: offer.sdp });
+    log('Ringing ' + AGENT_NAME + '\u2026');
+    subscribeAnswer();
+    requestAnimationFrame(loop);
+  } catch (e) {
+    setState('error');
+    log('Could not start the call: ' + (e && e.message ? e.message : e), 'user');
+    startBtn.classList.remove('hidden');
+    cleanup();
+  }
+};
 
-    msgInput.value = '';
-    addMessage('user', text);
-    setState('thinking');
-    btnSend.disabled = true;
-
-    try {
-      const r = await fetch('/api/call-message/' + COMPANY_ID, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId, message: text, companyId: COMPANY_ID })
-      });
-
-      let reply;
-      if (r.ok) {
-        const data = await r.json();
-        reply = data.reply || data.text || data.message || 'I received your message. Let me look into that for you.';
-      } else {
-        reply = 'I\'m having a moment — could you say that again?';
-      }
-
-      setState('speaking');
-      addMessage('agent', reply);
-
-      if (speakTimeout) clearTimeout(speakTimeout);
-      speakTimeout = setTimeout(() => {
-        setState('listening');
-        btnSend.disabled = false;
-        msgInput.focus();
-      }, Math.max(2000, reply.length * 35));
-
-    } catch (e) {
-      setState('listening');
-      btnSend.disabled = false;
-      addMessage('agent', 'I lost connection for a moment. Please try again.');
-    }
-  };
-
-  // ---- End call ----
-  window.endCall = function() {
-    if (speakTimeout) clearTimeout(speakTimeout);
-    stopWave();
-    sessionId = null;
-    setState('idle');
-    btnStart.classList.remove('hidden');
-    transcript.innerHTML = '';
-  };
-
-  // Initialize
+window.endCall = function () {
+  try { if (pc) sendSignal('hangup', { reason: 'caller hangup' }); } catch (e) {}
+  cleanup();
   setState('idle');
-})();
+  startBtn.classList.remove('hidden');
+  log('Call ended.');
+};
+
+function cleanup() {
+  if (sub) { try { sub.close(); } catch (e) {} sub = null; }
+  if (pc) { try { pc.close(); } catch (e) {} pc = null; }
+  if (micStream) {
+    try { micStream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {}
+    micStream = null;
+  }
+  if (remoteAudio.srcObject) remoteAudio.srcObject = null;
+  micAn = null; remoteAn = null;
+  if (waveBars) waveBars.style.opacity = '0';
+  callId = null; agentPubkey = VOICE.enabled ? agentPubkey : null;
+}
+
+// ---- Text assistant: only for a business with no voice endpoint ----
+window.sendMessage = async function () {
+  const box = document.getElementById('msgInput');
+  const text = (box.value || '').trim();
+  if (!text) return;
+  box.value = '';
+  log(text, 'user');
+  try {
+    const r = await fetch('${apiBase}/call-message/' + COMPANY_ID, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: text, companyId: COMPANY_ID })
+    });
+    const data = r.ok ? await r.json() : {};
+    log(data.reply || data.text || data.message || 'I could not answer that just now.', 'agent');
+  } catch (e) {
+    log('I lost connection for a moment. Please try again.', 'agent');
+  }
+};
+
+// ---- Boot ----
+if (VOICE.enabled) {
+  agentPubkey = nip19.decode(VOICE.npub).data;
+  log('Voice line ready. Press Start Call to reach ' + AGENT_NAME + '.');
+} else {
+  // No voice endpoint for this business: keep the text assistant instead of
+  // offering a button that could only ever ring forever.
+  startBtn.classList.add('hidden');
+  inputArea.classList.add('visible');
+  statusEl.textContent = 'Text assistant (voice not enabled for this business yet)';
+  statusEl.className = 'status-text active';
+  log('Voice is not enabled for this business yet \u2014 you can still type.');
+}
+setState('idle');
+
+window.addEventListener('beforeunload', function () {
+  try { if (pc) sendSignal('hangup', { reason: 'page close' }); } catch (e) {}
+});
 </script>
 </body>
 </html>`;
@@ -4716,11 +4751,23 @@ app.get("/call/:companyId", async (req, reply) => {
     }
   }
 
+  // The business's voice endpoint is addressed by npub, not by slug. Only the
+  // public half leaves the server, so the page can call the agent but cannot
+  // impersonate it.
+  const ident = await readVoiceIdentity(companyId);
+  const voice = {
+    enabled: Boolean(ident?.npub),
+    npub: ident?.npub ?? "",
+    relays: await readVoiceRelays(companyId),
+  };
+
   const html = buildCallPageHtml({
     companyId,
     companyName,
     tagline,
     agentName: "Helix AI",
+    voice,
+    turnCredsUrl: process.env.HELIX_TURN_CREDS_PATH || "/turn-creds",
   });
 
   return reply
