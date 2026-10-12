@@ -4458,6 +4458,8 @@ function buildCallPageHtml(opts: {
 { "imports": { "nostr-tools": "https://cdn.jsdelivr.net/npm/nostr-tools@2.10.4/+esm" } }
 </script>
 <script type="module">
+import { generateSecretKey, getPublicKey, finalizeEvent, nip19, nip44, SimplePool } from 'nostr-tools';
+
 // ---------------------------------------------------------------------------
 // A real call, not a rendering of one.
 //
@@ -4694,19 +4696,27 @@ window.sendMessage = async function () {
 };
 
 // ---- Boot ----
-if (VOICE.enabled) {
-  agentPubkey = nip19.decode(VOICE.npub).data;
-  log('Voice line ready. Press Start Call to reach ' + AGENT_NAME + '.');
-} else {
-  // No voice endpoint for this business: keep the text assistant instead of
-  // offering a button that could only ever ring forever.
+// Wrapped so a failure to load the signalling library reports itself. An
+// uncaught throw here leaves a silent blank page where a call should be.
+try {
+  if (VOICE.enabled) {
+    agentPubkey = nip19.decode(VOICE.npub).data;
+    log('Voice line ready. Press Start Call to reach ' + AGENT_NAME + '.');
+  } else {
+    // No voice endpoint for this business: keep the text assistant instead of
+    // offering a button that could only ever ring forever.
+    startBtn.classList.add('hidden');
+    inputArea.classList.add('visible');
+    statusEl.textContent = 'Text assistant (voice not enabled for this business yet)';
+    statusEl.className = 'status-text active';
+    log('Voice is not enabled for this business yet \u2014 you can still type.');
+  }
+  setState('idle');
+} catch (e) {
+  setState('error');
   startBtn.classList.add('hidden');
-  inputArea.classList.add('visible');
-  statusEl.textContent = 'Text assistant (voice not enabled for this business yet)';
-  statusEl.className = 'status-text active';
-  log('Voice is not enabled for this business yet \u2014 you can still type.');
+  log('The voice line could not start: ' + (e && e.message ? e.message : e), 'user');
 }
-setState('idle');
 
 window.addEventListener('beforeunload', function () {
   try { if (pc) sendSignal('hangup', { reason: 'page close' }); } catch (e) {}
