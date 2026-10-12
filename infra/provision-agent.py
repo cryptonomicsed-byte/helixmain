@@ -42,6 +42,13 @@ SPARK_MCP = os.environ.get("SPARK_GATE_MCP", "/usr/local/bin/spark-gate-mcp")
 ACCOUNT_AGENT = os.environ.get("HELIX_ACCOUNT_AGENT", "helix")
 RESTART = os.environ.get("ZEROCLAW_RESTART", "1") == "1"
 
+# A placeholder that sync-agent-provider.py immediately overwrites with whatever
+# Settings resolves to. Hardcoding a real provider here is how a newly onboarded
+# company silently ends up on DeepSeek while every other agent uses the key the
+# owner actually saved — the agent appeared, so nothing looked wrong.
+PROVIDER_ALIAS = os.environ.get("HELIX_AGENT_PROVIDER", "openai.helix_llm")
+SYNC_SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sync-agent-provider.py")
+
 
 def die(msg: str, code: int = 1) -> NoReturn:
     print(f"error: {msg}", file=sys.stderr)
@@ -93,7 +100,7 @@ def render_agent(cid: str, privkey: str, stamp: str) -> str:
 acp_enable_mcp = false
 delegate_same_risk_profile = true
 enabled = true
-model_provider = "openai.deepseek"
+model_provider = "{PROVIDER_ALIAS}"
 risk_profile = "card_agent"
 mcp_bundles = ["{cid}_tools"]
 channels = ["nostr.{cid}"]
@@ -308,6 +315,31 @@ def load_privkey(cid: str) -> str:
 
 
 def reload_daemon() -> None:
+    """Point every agent at the Settings provider, THEN restart once.
+
+    The agent block we just wrote carries PROVIDER_ALIAS, which is only correct
+    once sync-agent-provider.py has rendered the provider blocks from
+    /etc/helix/settings.json. Running it here means a new company comes up on the
+    key its owner saved, rather than on a stale default the sync would only fix
+    the next time somebody happened to save Settings.
+
+    The sync is best-effort: a card agent that exists on the right provider is
+    strictly better than no agent because the sync tripped over itself.
+    """
+    if os.path.isfile(SYNC_SCRIPT):
+        r = subprocess.run(
+            ["python3", SYNC_SCRIPT],
+            env={**os.environ, "ZEROCLAW_RESTART": "0"},
+            capture_output=True, text=True, check=False)
+        for line in (r.stdout or "").strip().splitlines():
+            print(f"  llm-sync: {line.strip()}")
+        if r.returncode != 0:
+            print(f"  llm-sync failed (rc={r.returncode}): {(r.stderr or '').strip()[:200]}")
+            print("  the agent is configured but may be on the wrong provider — run "
+                  "sync-agent-provider.py by hand")
+    else:
+        print(f"  {SYNC_SCRIPT} not found; agent keeps {PROVIDER_ALIAS}")
+
     if not RESTART:
         print("  (ZEROCLAW_RESTART=0 — not restarting)")
         return
