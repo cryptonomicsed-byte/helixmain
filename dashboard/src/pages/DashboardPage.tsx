@@ -58,6 +58,7 @@ export function DashboardPage() {
   const [healthMap, setHealthMap] = useState<Record<string, HealthResult>>({})
   const [analytics, setAnalytics] = useState<AnalyticsSummary | null>(null)
   const [adminHealth, setAdminHealth] = useState<AdminHealth | null>(null)
+  const [isAdmin, setIsAdmin]         = useState(false)
   const [credits, setCredits]         = useState<number | null>(null)
   const [tier, setTier]               = useState<string | null>(null)
   const [scope, setScope]             = useState<string>('')
@@ -76,9 +77,18 @@ export function DashboardPage() {
         const map: Record<string, HealthResult> = {}
         list.forEach((c, i) => { const r = results[i]; if (r.status === 'fulfilled') map[c.id] = r.value })
         if (live) setHealthMap(map)
+        // Platform-wide health exists only for the admin account. Ask the SERVER
+        // who we are rather than guessing, and never call the admin route on a
+        // non-admin session — a 403 is the API correctly refusing, not an error
+        // worth showing a normal owner.
         try {
-          const ah = await authFetch('/admin/health').then((r) => r.json()) as AdminHealth
-          if (live) setAdminHealth(ah)
+          const me = await authFetch('/auth/me').then((r) => r.json()) as { admin?: boolean }
+          if (!live) return
+          setIsAdmin(Boolean(me?.admin))
+          if (me?.admin) {
+            const ah = await authFetch('/admin/health').then((r) => r.json()) as AdminHealth
+            if (live) setAdminHealth(ah)
+          }
         } catch { /* non-fatal */ }
       } catch (e) {
         if (live) setError(e instanceof Error ? e.message : String(e))
@@ -160,6 +170,22 @@ export function DashboardPage() {
         <div>
           <div className="h1">
             {greeting()} <span className="grad-text">✦</span>
+            {/* Only the server decides this (/auth/me). Seeing the badge means the
+                API already agreed this session is the admin passkey. */}
+            {isAdmin ? (
+              <span
+                className="mono"
+                title="Signed in with the admin passkey — unlimited credits, platform-wide sight."
+                style={{
+                  marginLeft: 10, fontSize: '.62rem', letterSpacing: '.09em',
+                  padding: '3px 8px', borderRadius: 999, verticalAlign: 'middle',
+                  background: 'rgba(74,222,128,.14)', color: '#4ade80',
+                  border: '1px solid rgba(74,222,128,.35)',
+                }}
+              >
+                ADMIN
+              </span>
+            ) : null}
           </div>
           <div className="sub" style={{ marginTop: 6, fontSize: '.86rem' }}>
             {companies.length} business{companies.length !== 1 ? 'es' : ''} onboarded
