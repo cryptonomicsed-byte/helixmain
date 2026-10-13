@@ -4219,8 +4219,8 @@ function buildCallPageHtml(opts: {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="description" content="Talk to the AI agent for ${companyName}">
-<title>Talk to ${agentName} — ${companyName}</title>
+<meta name="description" content="Talk to the AI agent for ${esc(companyName)}">
+<title>Talk to ${agentName} — ${esc(companyName)}</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -4549,12 +4549,13 @@ function buildCallPageHtml(opts: {
     font-weight: 600;
     cursor: pointer;
     opacity: 0;
+    visibility: hidden;
     pointer-events: none;
-    transition: opacity 0.3s ease, background 0.2s ease;
+    transition: opacity 0.3s ease, visibility 0.3s ease, background 0.2s ease;
     letter-spacing: .03em;
     font-family: inherit;
   }
-  .btn-end.visible { opacity: 1; pointer-events: all; }
+  .btn-end.visible { opacity: 1; visibility: visible; pointer-events: all; }
   .btn-end:hover { background: rgba(239,68,68,0.1); }
 
   /* ---- State-based animations ---- */
@@ -4681,8 +4682,8 @@ ${accent ? `<style>:root{--primary:${accent};--primary-dim:${accent}22;}</style>
 
 <div class="app" id="app">
   <div class="header">
-    <h1>${companyName}</h1>
-    <p>${tagline || "Talk to our AI voice agent — available 24/7"}</p>
+    <h1>${esc(companyName)}</h1>
+    <p>${esc(tagline || "Talk to our AI voice agent — available 24/7")}</p>
   </div>
 
   <div class="agent-badge">Powered by <span>${agentName}</span></div>
@@ -4778,10 +4779,10 @@ window.__callBooted = true;
 // offer addressed to its npub. We wrap an offer the way /caller/index.html
 // does; the audio that comes back is the agent actually speaking.
 // ---------------------------------------------------------------------------
-const COMPANY_ID   = "${companyId}";
-const AGENT_NAME   = "${agentName}";
+const COMPANY_ID   = ${JSON.stringify(companyId)};
+const AGENT_NAME   = ${JSON.stringify(agentName)};
 const VOICE        = ${JSON.stringify(voice)};
-const TURN_URL     = "${turnCredsUrl}";
+const TURN_URL     = ${JSON.stringify(turnCredsUrl)};
 
 const orb         = document.getElementById('orb');
 const wrapper     = document.getElementById('orbWrapper');
@@ -4801,6 +4802,7 @@ let starting = false;
 let autoStartTimer = null;
 let ringTimeout = null;
 let bootOk = false;
+let everConnected = false;
 let micStream = null, micAn = null, remoteAn = null;
 let callId = null, pool = null, mySeckey = null, myPubkey = null, agentPubkey = null;
 
@@ -5007,7 +5009,7 @@ window.startCall = async function () {
       if (!pc) return;                       // a teardown below nulls pc
       const s = pc.connectionState;
       log('Connection: ' + s);
-      if (s === 'connected') { setState('listening'); return; }
+      if (s === 'connected') { everConnected = true; setState('listening'); return; }
       if (s === 'failed' || s === 'closed') {
         // Terminal: release the mic, the PC and the pool rather than leaving them
         // open behind an error state -- otherwise a failed call keeps the mic hot
@@ -5145,7 +5147,10 @@ if (VOICE.enabled && bootOk) {
     playbackBlocked = false;
     try { if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume(); } catch (e) {}
     try { if (remoteAudio.play) remoteAudio.play().catch(function () {}); } catch (e) {}
-    if (state === 'error' || state === 'idle' || !state) { startCall().catch(function () {}); }
+    // Only restart if the call never got going. 'idle' alone is ambiguous -- it
+    // is also the state after a call ends -- so without everConnected the caller's
+    // first tap after a finished call would silently re-dial.
+    if (!everConnected && (state === 'error' || state === 'idle' || !state)) { startCall().catch(function () {}); }
     else { statusEl.textContent = STATUS[state] || ''; }
   };
   window.addEventListener('pointerdown', _unlock, { once: true });
@@ -5163,7 +5168,9 @@ window.addEventListener('beforeunload', function () {
 // GET /call/:companyId — public animated voice agent call page (NO auth)
 app.get("/call/:companyId", async (req, reply) => {
   const { companyId } = req.params as { companyId: string };
-  if (!companyId || companyId.includes("/") || companyId.includes("..")) {
+  // A company id is a slug. A charset whitelist is what makes it safe to
+  // interpolate into the page at all -- into HTML and into the inline script.
+  if (!companyId || !/^[A-Za-z0-9._-]{1,64}$/.test(companyId) || companyId.includes("..")) {
     return reply.code(400).send("invalid companyId");
   }
 
