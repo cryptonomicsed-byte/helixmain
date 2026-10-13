@@ -6,11 +6,11 @@ import { api } from '../api'
 import { Icon } from './Icon'
 
 /**
- * App chrome: no sidebar, no top bar — one thin bar fixed to the BOTTOM (the
- * Vantage StatusBar pattern).
+ * App chrome: no sidebar, no top bar — one thin icon-only bar fixed to the
+ * BOTTOM (the Vantage StatusBar pattern).
  *   Left  — the Helix mark, which IS the main (Companies) tab.
- *   Right — Settings, which now also holds Portfolio, Billing and Approvals.
- * Everything else lives inside the page itself.
+ *   Right — Settings, which also holds Portfolio, Billing and Approvals.
+ * No labels: icons only, so the bar stays thin.
  */
 export function Layout() {
   const { buildStatus, setCompanies, setBuildStatus } = useHelixStore()
@@ -28,14 +28,14 @@ export function Layout() {
   useEffect(() => { api.listCompanies().then(setCompanies).catch(() => {}) }, [setCompanies])
 
   const ok = !buildStatus || buildStatus.status === 'ok'
+  const sha = buildStatus?.sha ? buildStatus.sha.slice(0, 7) : (buildStatus?.status ?? 'checking…')
 
-  const barItem = (active: boolean): CSSProperties => ({
-    display: 'inline-flex', alignItems: 'center', gap: '.5rem',
-    padding: '.35rem .6rem', borderRadius: 10, textDecoration: 'none',
+  const icon = (active: boolean): CSSProperties => ({
+    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+    padding: '.3rem', borderRadius: 9, textDecoration: 'none',
     color: active ? 'var(--fg)' : 'var(--fg-3)',
-    fontWeight: active ? 650 : 450, fontSize: '.86rem',
     background: active ? 'linear-gradient(90deg, rgba(129,140,248,.18), rgba(129,140,248,.04))' : 'transparent',
-    transition: 'background 160ms, color 160ms', whiteSpace: 'nowrap',
+    transition: 'background 160ms, color 160ms',
   })
 
   return (
@@ -43,49 +43,42 @@ export function Layout() {
       <div className="aurora" />
 
       {/* Content clears the fixed bar. */}
-      <main className="reveal" style={{ padding: '22px 22px 96px' }}>
+      <main className="reveal" style={{ padding: '22px 22px 74px' }}>
         <Outlet />
       </main>
 
-      {/* ───── Bottom bar ───── */}
+      {/* ───── Bottom bar (icon only) ───── */}
       <nav style={{
         position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 40,
-        height: 58, display: 'flex', alignItems: 'center', gap: '.5rem', padding: '0 12px',
+        height: 42, display: 'flex', alignItems: 'center', gap: '.4rem', padding: '0 10px',
         background: 'linear-gradient(180deg, rgba(11,13,22,.74), rgba(11,13,22,.95))',
         borderTop: '1px solid var(--line)', backdropFilter: 'blur(16px)',
       }}>
         {/* Left — the Helix mark is the main (Companies) tab */}
-        <NavLink to="/" end style={({ isActive }) => barItem(isActive)} title="Companies">
+        <NavLink to="/" end style={({ isActive }) => icon(isActive)} title="Companies">
           {({ isActive }) => (
-            <>
-              <span style={{
-                width: 28, height: 28, borderRadius: 9, display: 'grid', placeItems: 'center', flexShrink: 0,
-                background: 'linear-gradient(140deg, var(--brand), var(--violet))',
-                boxShadow: isActive ? 'var(--glow)' : 'none', color: 'var(--bg)',
-              }}>
-                <Icon name="bolt" size={15} />
-              </span>
-              <span style={{ fontWeight: 750, letterSpacing: '-.02em', fontSize: '.95rem' }}>
-                Helix<span className="grad-text">Main</span>
-              </span>
-            </>
+            <span style={{
+              width: 24, height: 24, borderRadius: 7, display: 'grid', placeItems: 'center', flexShrink: 0,
+              background: 'linear-gradient(140deg, var(--brand), var(--violet))',
+              boxShadow: isActive ? 'var(--glow)' : 'none', color: 'var(--bg)',
+              opacity: isActive ? 1 : 0.7, transition: 'opacity 160ms',
+            }}>
+              <Icon name="bolt" size={14} />
+            </span>
           )}
         </NavLink>
 
         <div style={{ flex: 1 }} />
 
-        {/* System status */}
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '.4rem', paddingRight: '.3rem' }}
-              title={ok ? 'Systems nominal' : 'Build failed'}>
+        {/* System status — dot only; the SHA is the tooltip */}
+        <span title={ok ? `Systems nominal · ${sha}` : `Build failed · ${sha}`}
+              style={{ display: 'inline-flex', alignItems: 'center', padding: '.3rem .15rem' }}>
           <span className={`dot ${ok ? '' : 'dot-bad'}`} style={{ color: ok ? 'var(--ok)' : 'var(--bad)' }} />
-          <span className="sub mono" style={{ fontSize: '.64rem' }}>
-            {buildStatus?.sha ? buildStatus.sha.slice(0, 7) : (buildStatus?.status ?? '…')}
-          </span>
         </span>
 
         {/* Right — Settings (also Portfolio / Billing / Approvals) */}
-        <NavLink to="/settings" style={({ isActive }) => barItem(isActive)} title="Settings">
-          <Icon name="settings" size={16} /> Settings
+        <NavLink to="/settings" style={({ isActive }) => icon(isActive)} title="Settings">
+          <Icon name="settings" size={17} />
         </NavLink>
       </nav>
     </div>
