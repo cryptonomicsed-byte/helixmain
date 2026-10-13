@@ -12,6 +12,16 @@ make that happen.
 Run on the VPS:  /opt/venv/bin/python3 infra/call_e2e.py [URL] [SECONDS] [SHOT]
 Needs playwright in that venv, and /root/fake-mic.wav (the WAV the fake mic
 replays as caller audio).
+
+THE FIXTURE MUST HAVE A LEADING SILENCE. Chrome loops that WAV forever, so a
+clip that is speech from byte 0 makes the "caller" talk non-stop — and since
+barge-in landed, that cuts the agent off ~0.7 s into every utterance, so the orb
+almost never sits in 'speaking' long enough for this harness to sample it. The
+gate then reports `speaking: False` for a call that is working correctly
+(observed 2026-10-13, twice, immediately after the barge-in commit). Shape it as
+[ ~6 s silence ][ the spoken sentence ]: the silence lets the greeting play out
+(so 'speaking' latches, proving agent audio arrived) and the sentence still
+exercises STT end to end. /root/rebuild_fake_mic.py on the dev host rebuilds it.
 """
 import sys
 import time
