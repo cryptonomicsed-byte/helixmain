@@ -410,6 +410,18 @@ export function getStripeCustomerId(companyId: string): string | null {
   return accountStore.get(companyId)?.stripeCustomerId ?? null;
 }
 
+/** Flush the account store to disk and await it.
+ *
+ *  The mutation helpers above save fire-and-forget (`.catch(() => {})`), which is
+ *  right for the per-call hot path where a few ms of write latency would be paid on
+ *  every AI call. It is WRONG for a payment webhook: there, a 200 tells Stripe the
+ *  grant was accepted, so the write must have actually landed before we answer —
+ *  otherwise a crash between the response and the flush loses a paid-for credit
+ *  quietly. Callers that need that guarantee await this explicitly. */
+export async function flushAccountStore(): Promise<void> {
+  await saveAccountStore();
+}
+
 // ---------------------------------------------------------------------------
 // Stripe pricing config
 //

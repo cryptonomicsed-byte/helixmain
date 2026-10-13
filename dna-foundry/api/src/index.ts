@@ -103,6 +103,7 @@ import {
   getStripeCustomerId,
   loadAccountStore,
   getAccountStoreSize,
+  flushAccountStore,
   QuotaExceeded,
   type UsageEntry,
 } from "./services/metering";
@@ -3305,6 +3306,24 @@ app.post("/billing/checkout", { preHandler: requireAuth }, async (req, reply) =>
   }
 });
 
+// Processed Stripe event ids — idempotency for a route that MINTS CREDITS.
+//
+// Stripe retries deliveries, and a captured signed body stays valid for the whole
+// 300s replay tolerance, so without this the same logical payment can be applied
+// more than once. (Measured: replaying one correctly-signed
+// `checkout.session.completed` granted its credits a second time.) In-memory is
+// enough: the replay window is 300s and Stripe's own retry window is hours, both
+// far inside this TTL.
+const processedStripeEvents = new Map<string, number>();
+const STRIPE_EVENT_TTL_MS = 24 * 60 * 60 * 1000;
+
+function pruneProcessedEvents(): void {
+  const cutoff = Date.now() - STRIPE_EVENT_TTL_MS;
+  for (const [id, at] of processedStripeEvents) {
+    if (at < cutoff) processedStripeEvents.delete(id);
+  }
+}
+
 // POST /billing/webhook — Stripe webhook handler
 app.post("/billing/webhook", async (req, reply) => {
   const sig    = req.headers["stripe-signature"] as string | undefined;
@@ -3348,6 +3367,17 @@ app.post("/billing/webhook", async (req, reply) => {
   if (got.length !== exp.length || !timingSafeEqual(got, exp)) {
     req.log.warn("Stripe webhook signature verification FAILED");
     return reply.code(400).send({ ok: false, error: "signature verification failed" });
+  }
+
+  // Idempotency — AFTER the signature is proven, never before. Deduping first would
+  // let an unauthenticated caller register an event id and suppress the real event.
+  const eventId = ((req.body ?? {}) as { id?: string }).id;
+  if (eventId) {
+    pruneProcessedEvents();
+    if (processedStripeEvents.has(eventId)) {
+      req.log.info({ eventId }, "Stripe webhook duplicate — already applied");
+      return reply.code(200).send({ received: true, duplicate: true });
+    }
   }
 
   try {
@@ -3400,6 +3430,11 @@ app.post("/billing/webhook", async (req, reply) => {
   } catch (e) {
     app.log.error(`Webhook processing error: ${e}`);
   }
+
+  // Record the event (so a replay is a no-op) and do not answer Stripe until the
+  // grant has actually reached disk — the mutation helpers save fire-and-forget.
+  if (eventId) processedStripeEvents.set(eventId, Date.now());
+  await flushAccountStore();
 
   return reply.code(200).send({ received: true });
 });
