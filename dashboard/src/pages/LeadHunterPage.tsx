@@ -1,6 +1,6 @@
 import { authFetch } from '../api'
 import { useState } from 'react'
-import { useHelixStore } from '../store'
+import { useLeadsSeller } from './leads/LeadsContext'
 
 // ---------------------------------------------------------------------------
 // Local types
@@ -67,7 +67,7 @@ function TierBadge({ tier }: { tier?: string }) {
 // ---------------------------------------------------------------------------
 
 export function LeadHunterPage() {
-  const { currentCompany } = useHelixStore()
+  const currentCompany = useLeadsSeller()
 
   const [locMode, setLocMode]     = useState<'gps' | 'manual'>('gps')
   const [lat, setLat]             = useState('')

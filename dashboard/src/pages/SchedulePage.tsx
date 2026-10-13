@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useHelixStore } from '../store'
+import { useLeadsSeller } from './leads/LeadsContext'
 import { api } from '../api'
 
 // ---------------------------------------------------------------------------
@@ -172,7 +172,7 @@ function ScheduledRow({
 // ---------------------------------------------------------------------------
 
 export function SchedulePage() {
-  const { currentCompany } = useHelixStore()
+  const currentCompany = useLeadsSeller()
 
   const [scheduled, setScheduled] = useState<ScheduledAsset[]>([])
   const [assetMap, setAssetMap] = useState<Map<string, CampaignAsset>>(new Map())

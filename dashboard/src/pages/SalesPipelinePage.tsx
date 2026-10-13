@@ -1,6 +1,6 @@
 import { authFetch } from '../api'
 import { useState, useEffect, useCallback } from 'react'
-import { useHelixStore } from '../store'
+import { useLeadsSeller } from './leads/LeadsContext'
 import { useIsMobile } from '../hooks'
 
 // ---------------------------------------------------------------------------
@@ -510,7 +510,7 @@ function KanbanColumn({ col, leads, onView, onMove }: ColumnProps) {
 // ---------------------------------------------------------------------------
 
 export function SalesPipelinePage() {
-  const { currentCompany } = useHelixStore()
+  const currentCompany = useLeadsSeller()
   const [leads, setLeads]         = useState<LeadRow[]>([])
   const [loading, setLoading]     = useState(false)
   const [qualifying, setQualifying] = useState(false)
