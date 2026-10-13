@@ -153,6 +153,8 @@ Return JSON: {"simulatedFeedback":["...","...","...","..."],"sentiment":"positiv
     systemPrompt: "You are a consumer research analyst. Return only valid JSON.",
     jsonMode: true,
     temperature: 0.6,
+    orgId: (card?.organizationId ?? card?.org_id) as string | undefined,
+    operationType: "intel_simulate",
   });
 
   type SimRaw = {
@@ -202,6 +204,8 @@ Return JSON: {"industry":"","trends":[{"name":"","relevance":"high"|"medium"|"lo
     systemPrompt: "You are a market intelligence analyst. Return only valid JSON.",
     jsonMode: true,
     temperature: 0.5,
+    orgId: (card?.organizationId ?? card?.org_id) as string | undefined,
+    operationType: "intel_trends",
   });
 
   type TrendRaw = {

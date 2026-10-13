@@ -99,6 +99,8 @@ import {
   deductCredits,
   refundCredits,
   topUpCredits,
+  setStripeCustomerId,
+  getStripeCustomerId,
   loadAccountStore,
   getAccountStoreSize,
   QuotaExceeded,
@@ -1520,6 +1522,8 @@ app.post("/agent/session", { preHandler: requireAuth }, async (req, reply) => {
       systemPrompt,
       temperature: 0.65,
       maxTokens: 512,
+      orgId: companyId,
+      operationType: "agent_session",
       cacheKey: `agent:${companyId}:${role}:${body.message.slice(0, 80)}`,
     });
 
@@ -3351,6 +3355,7 @@ app.post("/billing/webhook", async (req, reply) => {
       type: string;
       data: {
         object: {
+          customer?: string;
           metadata?: { companyId?: string };
           line_items?: { data: Array<{ price: { id: string } }> };
           lines?: { data: Array<{ price: { id: string } }> };
@@ -3367,6 +3372,11 @@ app.post("/billing/webhook", async (req, reply) => {
       const priceId    =
         obj.line_items?.data?.[0]?.price?.id ??
         obj.lines?.data?.[0]?.price?.id;
+
+      // Persist Stripe customer ID for portal access
+      if (companyId && obj.customer) {
+        setStripeCustomerId(companyId, obj.customer);
+      }
 
       if (companyId && priceId) {
         const entry = PRICE_TO_CREDITS[priceId];
@@ -3410,11 +3420,9 @@ app.get("/billing/portal/:companyId", { preHandler: requireAuth }, async (req, r
     return reply.code(200).send({ ok: false, error: "Stripe not configured" });
   }
 
-  // Stub: customer ID lookup not yet implemented
-  // In a full implementation this would load customerId from a customer store
-  const customerId: string | null = null;
+  const customerId = getStripeCustomerId(companyId);
   if (!customerId) {
-    return reply.code(200).send({ ok: false, error: "No Stripe customer found" });
+    return reply.code(200).send({ ok: false, error: "No Stripe customer found — complete a purchase first." });
   }
 
   try {
@@ -5245,14 +5253,23 @@ app.get("/call/:companyId", async (req, reply) => {
     .send(html);
 });
 
-// POST /call-session/:companyId — public stub: create a demo agent session for the call page
+// In-memory store for public call page sessions (not metered, keyed by sessionId)
+const callSessionStore = new Map<string, { companyId: string; history: string[]; createdAt: number }>();
+
+// POST /call-session/:companyId — create a lightweight public call session
 app.post("/call-session/:companyId", async (req, reply) => {
   const { companyId } = req.params as { companyId: string };
   if (!companyId) return reply.code(400).send({ ok: false, error: "companyId required" });
 
-  // Real implementation would create a playground session without auth.
-  // For now, return a demo session ID so the call page UX works end-to-end.
-  const sessionId = `call-${companyId}-${Date.now()}`;
+  const sessionId = `call-${companyId}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+  callSessionStore.set(sessionId, { companyId, history: [], createdAt: Date.now() });
+
+  // Prune sessions older than 2 hours to avoid unbounded growth
+  const cutoff = Date.now() - 2 * 60 * 60 * 1000;
+  for (const [id, s] of callSessionStore) {
+    if (s.createdAt < cutoff) callSessionStore.delete(id);
+  }
+
   return reply.code(200).send({ ok: true, sessionId });
 });
 
@@ -5304,12 +5321,31 @@ app.post("/call-message/:companyId", async (req, reply) => {
   }
 });
 
-// POST /api/contact/:companyId — public stub: receive contact form submissions
+// POST /api/contact/:companyId — receive and persist contact form submissions
 app.post("/contact/:companyId", async (req, reply) => {
   const { companyId } = req.params as { companyId: string };
+  if (!companyId || companyId.includes("/") || companyId.includes(".."))
+    return reply.code(400).send({ ok: false, error: "invalid companyId" });
+
   const body = (req.body ?? {}) as { name?: string; email?: string; phone?: string; message?: string };
-  app.log.info({ contact: { companyId, name: body.name, email: body.email } }, "contact form submission");
-  // Future: store or email the submission
+  const submission = {
+    id: `contact-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+    receivedAt: new Date().toISOString(),
+    name: String(body.name ?? "").slice(0, 200),
+    email: String(body.email ?? "").slice(0, 200),
+    phone: String(body.phone ?? "").slice(0, 50),
+    message: String(body.message ?? "").slice(0, 2000),
+  };
+
+  try {
+    const dir = path.join(HELIX_COMPANIES, companyId, "contacts");
+    await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(path.join(dir, `${submission.id}.json`), JSON.stringify(submission, null, 2));
+    app.log.info({ contact: { companyId, id: submission.id, email: submission.email } }, "contact form saved");
+  } catch (e) {
+    app.log.warn({ err: e }, "contact form: failed to persist submission");
+  }
+
   return reply.code(200).send({ ok: true, message: "Thank you! We'll be in touch soon." });
 });
 

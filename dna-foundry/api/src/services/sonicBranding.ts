@@ -122,6 +122,8 @@ Rules:
     jsonMode: true,
     temperature: 0.75,
     maxTokens: 512,
+    orgId: companyId,
+    operationType: "sonic_branding",
     cacheKey: `jingle:${companyId}:${name}:${toneStr}`,
   });
 

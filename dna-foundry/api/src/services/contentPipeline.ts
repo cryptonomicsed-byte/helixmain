@@ -354,6 +354,8 @@ Return JSON only:
       systemPrompt: "You are a social media copywriter. Return valid JSON only.",
       jsonMode: true,
       temperature: 0.8,
+      orgId: prd.companyId,
+      operationType: "campaign_asset",
     });
 
     let raw: any;
@@ -567,6 +569,8 @@ Return JSON only:
     systemPrompt: "You are a social media copywriter. Return valid JSON only.",
     jsonMode: true,
     temperature: 0.7,
+    orgId: asset.campaignId ? prdStore.get(asset.campaignId)?.companyId : undefined,
+    operationType: "campaign_asset_heal",
   });
 
   let raw: any;
@@ -679,6 +683,8 @@ Return JSON only:
       systemPrompt: "You are a social media copywriter. Return valid JSON only.",
       jsonMode: true,
       temperature: temperatures[i] ?? 0.85 + i * 0.05,
+      orgId: prd.companyId,
+      operationType: "campaign_variant",
     }),
   );
 

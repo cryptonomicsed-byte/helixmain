@@ -51,6 +51,8 @@ Return JSON only: {"passed": boolean, "violations": string[], "score": number}
     systemPrompt: "You are a brand voice auditor. Respond with valid JSON only.",
     jsonMode: true,
     temperature: 0.3,
+    orgId: (card?.organizationId ?? card?.org_id) as string | undefined,
+    operationType: "brand_voice_validate",
   });
 
   let parsed: Partial<BrandVoiceResult>;

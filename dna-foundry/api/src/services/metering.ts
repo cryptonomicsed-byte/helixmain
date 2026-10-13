@@ -22,6 +22,7 @@ export interface CreditAccount {
   balance: number;         // credits remaining
   tier: "free" | "pro" | "agency";
   usageLog: UsageEntry[];
+  stripeCustomerId?: string;
 }
 
 export interface UsageEntry {
@@ -396,6 +397,17 @@ export function upgradeTier(companyId: string, tier: CreditAccount["tier"]): voi
   if (!account) throw new Error(`cannot upgrade an unknown company: ${companyId}`);
   account.tier = tier;
   saveAccountStore().catch(() => {});
+}
+
+export function setStripeCustomerId(companyId: string, customerId: string): void {
+  const account = accountFor(companyId);
+  if (!account) return;
+  account.stripeCustomerId = customerId;
+  saveAccountStore().catch(() => {});
+}
+
+export function getStripeCustomerId(companyId: string): string | null {
+  return accountStore.get(companyId)?.stripeCustomerId ?? null;
 }
 
 // ---------------------------------------------------------------------------

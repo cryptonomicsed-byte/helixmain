@@ -170,6 +170,7 @@ Transcript: ${transcript.slice(0, 1000)}`;
     systemPrompt: "You are a call analytics engine. Return only valid JSON.",
     jsonMode: true,
     temperature: 0.3,
+    operationType: "analytics_topics",
   });
 
   type TopicsRaw = { topics: string[] };
@@ -209,6 +210,8 @@ Return JSON: {"insights":["insight 1","insight 2","insight 3"]}`;
       "You are a business analytics consultant. Return only valid JSON with exactly 3 concise, actionable insights.",
     jsonMode: true,
     temperature: 0.5,
+    orgId: (card?.companyId ?? card?.organizationId ?? card?.org_id) as string | undefined,
+    operationType: "analytics_insights",
   });
 
   type InsightsRaw = { insights: string[] };

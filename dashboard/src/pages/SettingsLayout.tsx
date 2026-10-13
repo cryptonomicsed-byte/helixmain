@@ -8,7 +8,8 @@ import { Icon } from '../components/Icon'
  * Settings — the account-level section. The sidebar's Control + Account groups
  * fold in here: AI & keys, Portfolio, Billing and Approvals are sub-tabs of one
  * page, reached from the Settings item at the right of the bottom bar. Sign out
- * lives here too (the old top-bar logout is gone).
+ * is a small tab at the RIGHT end of the sub-tab strip (the old top-bar logout is
+ * gone) — not a panel at the bottom of the page.
  */
 export function SettingsLayout() {
   const [pending, setPending] = useState<number | null>(null)
@@ -43,24 +44,15 @@ export function SettingsLayout() {
         </div>
       </div>
 
-      <SubNav tabs={tabs} />
+      <SubNav tabs={tabs} right={
+        <button className="subnav-action" disabled={signingOut}
+          title="End this session on this device"
+          onClick={() => { setSigningOut(true); void signOut() }}>
+          <Icon name="logout" size={14} /> {signingOut ? 'Signing out…' : 'Sign out'}
+        </button>
+      } />
 
       <Outlet />
-
-      <div className="glass" style={{
-        marginTop: '2rem', padding: '1rem 1.25rem',
-        display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap',
-      }}>
-        <div>
-          <div style={{ fontWeight: 600, fontSize: '.9rem' }}>Sign out</div>
-          <div className="sub">End this session on this device.</div>
-        </div>
-        <div style={{ flex: 1 }} />
-        <button className="btn btn-ghost" disabled={signingOut}
-          onClick={() => { setSigningOut(true); void signOut() }}>
-          <Icon name="logout" size={15} /> {signingOut ? 'Signing out…' : 'Sign out'}
-        </button>
-      </div>
     </div>
   )
 }

@@ -149,6 +149,8 @@ export async function generateBusinessPlan(
     prompt,
     jsonMode: true,
     maxTokens: 4096,
+    orgId: companyId,
+    operationType: "business_plan",
   });
 
   let sections: BusinessPlan["sections"] = {

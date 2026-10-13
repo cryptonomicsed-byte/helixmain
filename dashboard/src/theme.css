@@ -121,6 +121,18 @@ body {
 .btn-primary { background: linear-gradient(180deg, var(--brand), var(--brand-2)); border-color: transparent; color: #0b0d16; box-shadow: var(--glow); }
 .btn-ghost { background: transparent; }
 
+/* A tab-STYLED action parked at the right end of a SubNav strip (e.g. Sign out).
+   Matches the sub-tab metrics so it reads as just another tab, not a panel. */
+.subnav-action {
+  display:inline-flex; align-items:center; gap:.4rem; white-space:nowrap;
+  padding:.4rem .7rem; border-radius:9px; font-size:.83rem; font-weight:450;
+  color:var(--fg-3); background:transparent; border:1px solid transparent;
+  cursor:pointer; transition: background 160ms, color 160ms, border-color 160ms;
+}
+.subnav-action:hover { color:var(--fg); background:rgba(255,255,255,0.05); border-color:var(--line-2); }
+.subnav-action:active { transform: translateY(1px); }
+.subnav-action:disabled { opacity:.55; cursor:default; }
+
 /* ── progress / meter ────────────────────────────────────────── */
 .meter { height: 8px; border-radius: 999px; background: rgba(255,255,255,0.07); overflow: hidden; }
 .meter>i { display:block; height:100%; border-radius:999px; background: linear-gradient(90deg, var(--brand), var(--violet)); animation: grow 700ms var(--ease) both; }

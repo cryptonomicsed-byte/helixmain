@@ -17,9 +17,12 @@ export interface SubTab {
 export function SubNav({ tabs, right }: { tabs: SubTab[]; right?: ReactNode }) {
   return (
     <div style={{
-      display: 'flex', gap: '.25rem', overflowX: 'auto', paddingBottom: '.5rem',
-      marginBottom: '1rem', borderBottom: '1px solid var(--line)', alignItems: 'center',
+      display: 'flex', alignItems: 'center', gap: '.5rem', paddingBottom: '.5rem',
+      marginBottom: '1rem', borderBottom: '1px solid var(--line)',
     }}>
+      {/* the tabs scroll on their own; the `right` slot stays PINNED to the strip's
+          right edge, so a utility tab (Sign out / a selector) never scrolls off-screen. */}
+      <div style={{ display: 'flex', gap: '.25rem', alignItems: 'center', overflowX: 'auto', flex: 1, minWidth: 0 }}>
       {tabs.map((t) => (
         <NavLink key={t.to} to={t.to} end={t.end}
           style={({ isActive }) => ({
@@ -38,7 +41,8 @@ export function SubNav({ tabs, right }: { tabs: SubTab[]; right?: ReactNode }) {
           )}
         </NavLink>
       ))}
-      {right && <><div style={{ flex: 1 }} />{right}</>}
+      </div>
+      {right}
     </div>
   )
 }
