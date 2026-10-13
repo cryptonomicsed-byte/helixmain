@@ -192,9 +192,14 @@ export function DashboardPage() {
             {buildStatus?.sha ? <> · running <span className="mono">{buildStatus.sha.slice(0, 7)}</span></> : null}
           </div>
         </div>
-        <Link className="btn btn-primary" to="/onboard" style={{ textDecoration: 'none' }}>
-          <Icon name="onboard" size={15} /> Onboard a Business
-        </Link>
+        <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+          <Link className="btn btn-ghost" to="/leads" style={{ textDecoration: 'none' }}>
+            <Icon name="pin" size={15} /> Leads
+          </Link>
+          <Link className="btn btn-primary" to="/onboard" style={{ textDecoration: 'none' }}>
+            <Icon name="onboard" size={15} /> Onboard a Business
+          </Link>
+        </div>
       </div>
 
       {/* Bento metrics */}

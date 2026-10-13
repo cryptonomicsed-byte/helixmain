@@ -14,6 +14,7 @@ import { VoiceStudioPage }   from './pages/VoiceStudioPage'
 import { PortfolioPage }     from './pages/PortfolioPage'
 import { BillingPage }       from './pages/BillingPage'
 import { SettingsPage }      from './pages/SettingsPage'
+import { SettingsLayout }    from './pages/SettingsLayout'
 
 import { CardLayout }    from './pages/card/CardLayout'
 import { OverviewTab }   from './pages/card/OverviewTab'
@@ -46,10 +47,14 @@ export default function App() {
         {/* Global — the only things that are account-wide */}
         <Route index                   element={<DashboardPage />} />
         <Route path="onboard"          element={<OnboardPage />} />
-        <Route path="approvals"        element={<ApprovalsPage />} />
-        <Route path="settings"         element={<SettingsPage />} />
-        <Route path="portfolio"        element={<PortfolioPage />} />
-        <Route path="billing"          element={<BillingPage />} />
+
+        {/* Settings — the account section: AI & keys, Portfolio, Billing, Approvals. */}
+        <Route path="settings" element={<SettingsLayout />}>
+          <Route index            element={<SettingsPage />} />
+          <Route path="portfolio" element={<PortfolioPage />} />
+          <Route path="billing"   element={<BillingPage />} />
+          <Route path="approvals" element={<ApprovalsPage />} />
+        </Route>
 
         {/* Leads — the ACCOUNT OWNER's client acquisition. Deliberately NOT a
             card tab: a card is a business you already serve; leads are the
@@ -92,6 +97,9 @@ export default function App() {
 
         {/* Legacy routes from the tool-centric IA */}
         <Route path="company/:id" element={<LegacyCompany />} />
+        <Route path="portfolio"   element={<Navigate to="/settings/portfolio" replace />} />
+        <Route path="billing"     element={<Navigate to="/settings/billing" replace />} />
+        <Route path="approvals"   element={<Navigate to="/settings/approvals" replace />} />
         <Route path="leads"       element={<Navigate to="/leads" replace />} />
         <Route path="pipeline"    element={<Navigate to="/leads/pipeline" replace />} />
         <Route path="schedule"    element={<Navigate to="/leads/schedule" replace />} />

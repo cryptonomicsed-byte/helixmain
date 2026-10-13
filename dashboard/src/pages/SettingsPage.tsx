@@ -73,11 +73,9 @@ export function SettingsPage() {
 
   return (
     <div style={{ maxWidth: 820, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 18 }}>
-      <div className="reveal">
-        <div className="h1">Settings</div>
-        <div className="sub" style={{ marginTop: 4 }}>
-          Choose the model that powers extraction, campaigns and agents — and set provider API keys.
-        </div>
+      {/* No title here — SettingsLayout owns the section header. */}
+      <div className="reveal sub">
+        Choose the model that powers extraction, campaigns and agents — and set provider API keys.
       </div>
 
       {msg && (
