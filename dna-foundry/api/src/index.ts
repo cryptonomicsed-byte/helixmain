@@ -4210,7 +4210,15 @@ function buildCallPageHtml(opts: {
   const offers = (card.offerings ?? []).filter(Boolean).slice(0, 8);
   const hours = card.hours ?? "";
   const phone = card.phone ?? "";
-  const accent = /^#[0-9a-fA-F]{3,8}$/.test(card.accent ?? "") ? (card.accent as string) : "";
+  // Normalise to a 6-digit hex: the translucent variant is built as `${accent}22`,
+  // which is only a valid colour when the accent is exactly 6 digits. The old
+  // {3,8} test accepted lengths that produced invalid CSS (e.g. '#abc' -> '#abc22').
+  const rawAccent = (card.accent ?? "").replace(/^#/, "");
+  const accentHex = /^[0-9a-fA-F]{3}$/.test(rawAccent)
+    ? rawAccent.split("").map((c) => c + c).join("")
+    : /^[0-9a-fA-F]{6}$/.test(rawAccent) ? rawAccent
+    : /^[0-9a-fA-F]{8}$/.test(rawAccent) ? rawAccent.slice(0, 6) : "";
+  const accent = accentHex ? "#" + accentHex : "";
   const esc = (s: string) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c] as string));
   const apiBase = process.env.HELIX_API_BASE || "/api";
 
