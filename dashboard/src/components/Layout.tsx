@@ -8,8 +8,7 @@ import { useIsMobile } from '../hooks'
 
 const NAV: { group: string; items: { to: string; label: string; icon: string }[] }[] = [
   { group: 'Workspace', items: [
-    { to: '/',         label: 'Companies', icon: 'dashboard' },
-    { to: '/onboard',  label: 'Onboard',   icon: 'onboard' },
+    { to: '/', label: 'Companies', icon: 'dashboard' },
   ]},
   { group: 'Leads', items: [
     { to: '/leads', label: 'Leads', icon: 'pin' },
