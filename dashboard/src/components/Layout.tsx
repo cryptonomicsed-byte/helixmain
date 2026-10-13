@@ -11,6 +11,9 @@ const NAV: { group: string; items: { to: string; label: string; icon: string }[]
     { to: '/',         label: 'Companies', icon: 'dashboard' },
     { to: '/onboard',  label: 'Onboard',   icon: 'onboard' },
   ]},
+  { group: 'Leads', items: [
+    { to: '/leads', label: 'Leads', icon: 'pin' },
+  ]},
   { group: 'Control', items: [
     { to: '/approvals', label: 'Approvals', icon: 'approvals' },
     { to: '/settings',  label: 'Settings',  icon: 'settings' },
@@ -24,6 +27,7 @@ const NAV: { group: string; items: { to: string; label: string; icon: string }[]
 const TITLES: Record<string, string> = {
   '/': 'Companies', '/onboard': 'Onboard a Business', '/approvals': 'Approvals',
   '/settings': 'Settings', '/portfolio': 'Portfolio', '/billing': 'Billing',
+  '/leads': 'Leads', '/leads/pipeline': 'Leads — Pipeline', '/leads/schedule': 'Leads — Schedule',
 }
 
 const RAIL_W = 68

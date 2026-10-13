@@ -10,18 +10,12 @@ import { CardContext } from './CardContext'
 const TABS: { to: string; label: string; icon: string }[] = [
   { to: '',            label: 'Overview',   icon: 'dashboard' },
   { to: 'card',        label: 'Card',       icon: 'card' },
-  { to: 'voice',       label: 'Voice',      icon: 'mic' },
   { to: 'studio',      label: 'Studio',     icon: 'spark' },
   { to: 'site',        label: 'Site',       icon: 'globe' },
   { to: 'playground',  label: 'Playground', icon: 'flask' },
   { to: 'campaigns',   label: 'Campaigns',  icon: 'campaign' },
-  { to: 'leads',       label: 'Leads',      icon: 'pin' },
-  { to: 'pipeline',    label: 'Pipeline',   icon: 'pipeline' },
-  { to: 'schedule',    label: 'Schedule',   icon: 'calendar' },
   { to: 'intel',       label: 'Intel',      icon: 'intel' },
-  { to: 'approvals',   label: 'Approvals',  icon: 'approvals' },
-  { to: 'settings',    label: 'AI',         icon: 'settings' },
-  { to: 'history',     label: 'History',    icon: 'clock' },
+  { to: 'settings',    label: 'Settings',   icon: 'settings' },
 ]
 
 function healthTone(score: number): { color: string; label: string } {
@@ -124,7 +118,7 @@ export function CardLayout() {
                   {score}% · {tone.label}
                 </span>
                 <span className="pill">{status}</span>
-                <NavLink to="/history" className="pill mono" style={{ textDecoration: 'none' }} onClick={(e) => { e.preventDefault(); navigate(`/card/${id}/history`) }}>
+                <NavLink to={`/card/${id}/settings/history`} className="pill mono" style={{ textDecoration: 'none' }} onClick={(e) => { e.preventDefault(); navigate(`/card/${id}/settings/history`) }}>
                   v{version}{hash ? ` · ${hash.slice(0, 7)}` : ''}
                 </NavLink>
               </div>
@@ -139,7 +133,7 @@ export function CardLayout() {
                 style={{ opacity: hasSite ? 1 : .5 }}>
                 <Icon name="globe" size={15} /> Public page
               </button>
-              <button className="btn btn-ghost" onClick={() => navigate(`/card/${id}/voice`)}>
+              <button className="btn btn-ghost" onClick={() => navigate(`/card/${id}/studio`)}>
                 <Icon name="mic" size={15} /> Test call
               </button>
               <button className="btn btn-ghost" onClick={() => navigate(`/card/${id}/site`)}>
