@@ -1,14 +1,15 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../api'
-import type { PlaygroundSession, PlaygroundMessage, TestResult, Company } from '../api'
+import { useCard } from './card/CardContext'
+import type { PlaygroundSession, PlaygroundMessage, TestResult } from '../api'
 
 // ---------------------------------------------------------------------------
 // CSS injected once into the document head
 // ---------------------------------------------------------------------------
 
 const STYLES = `
-.playground{display:flex;gap:1.5rem;height:calc(100vh - 120px)}
-.play-sidebar{width:280px;flex-shrink:0;display:flex;flex-direction:column;gap:1rem}
+.playground{display:flex;gap:1.5rem;height:calc(100vh - 220px);min-height:420px}
+.play-sidebar{width:290px;flex-shrink:0;display:flex;flex-direction:column;gap:1rem;overflow-y:auto}
 .play-sidebar select,.play-sidebar button{width:100%;box-sizing:border-box}
 .play-chat{flex:1;display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden}
 .play-messages{flex:1;overflow-y:auto;padding:1rem;display:flex;flex-direction:column;gap:.75rem}
@@ -31,6 +32,12 @@ const STYLES = `
 .sidebar-label{font-size:.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.25rem}
 .sidebar-section{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:.75rem;display:flex;flex-direction:column;gap:.5rem}
 .session-badge{font-size:.7rem;color:var(--muted);background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:.15rem .4rem;display:inline-block}
+.chip{display:block;width:100%;text-align:left;font-size:.78rem;padding:.4rem .55rem;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);cursor:pointer}
+.chip:hover{border-color:var(--accent);color:var(--fg)}
+.chip:disabled{opacity:.45;cursor:not-allowed}
+.past-item{display:flex;justify-content:space-between;gap:.4rem;align-items:center;font-size:.74rem;padding:.3rem .1rem;border-bottom:1px solid var(--border)}
+.past-item:last-child{border-bottom:none}
+.past-item button{width:auto}
 `
 
 function injectStyles() {
@@ -52,32 +59,21 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
 }
 
 function Btn({
-  onClick,
-  disabled,
-  loading,
-  danger,
-  children,
+  onClick, disabled, loading, danger, title, children,
 }: {
-  onClick: () => void
-  disabled?: boolean
-  loading?: boolean
-  danger?: boolean
-  children: React.ReactNode
+  onClick: () => void; disabled?: boolean; loading?: boolean; danger?: boolean
+  title?: string; children: React.ReactNode
 }) {
   return (
     <button
-      onClick={onClick}
-      disabled={disabled || loading}
+      onClick={onClick} disabled={disabled || loading} title={title}
       style={{
-        padding: '.5rem .75rem',
-        borderRadius: 6,
+        padding: '.5rem .75rem', borderRadius: 6,
         border: danger ? '1px solid var(--bad)' : '1px solid var(--border)',
         background: danger ? '#7f1d1d22' : 'var(--surface)',
         color: danger ? 'var(--bad)' : 'var(--text)',
         cursor: disabled || loading ? 'not-allowed' : 'pointer',
-        fontSize: '.82rem',
-        fontWeight: 600,
-        opacity: disabled || loading ? 0.5 : 1,
+        fontSize: '.82rem', fontWeight: 600, opacity: disabled || loading ? 0.5 : 1,
       }}
     >
       {loading ? '...' : children}
@@ -85,7 +81,7 @@ function Btn({
   )
 }
 
-function MessageBubble({ msg }: { msg: PlaygroundMessage }) {
+function MessageBubble({ msg, latencyMs }: { msg: PlaygroundMessage; latencyMs?: number }) {
   const isCustomer = msg.role === 'customer'
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: isCustomer ? 'flex-end' : 'flex-start' }}>
@@ -94,15 +90,14 @@ function MessageBubble({ msg }: { msg: PlaygroundMessage }) {
       </div>
       {!isCustomer && (
         <>
-          {(msg.cardSectionsUsed?.length ?? 0) > 0 && (
-            <div className="msg-meta">
-              Used: {msg.cardSectionsUsed!.join(', ')}
-            </div>
-          )}
+          <div className="msg-meta">
+            {typeof latencyMs === 'number' && <>{latencyMs} ms</>}
+            {(msg.cardSectionsUsed?.length ?? 0) > 0 && (
+              <>{(typeof latencyMs === 'number' ? ' · ' : '')}Used: {msg.cardSectionsUsed!.join(', ')}</>
+            )}
+          </div>
           {msg.gateTriggered && (
-            <div className="gate-warn">
-              ⚠ Would trigger approval{msg.gateReason ? ` — ${msg.gateReason}` : ''}
-            </div>
+            <div className="gate-warn">⚠ Would trigger approval{msg.gateReason ? ` — ${msg.gateReason}` : ''}</div>
           )}
         </>
       )}
@@ -113,9 +108,7 @@ function MessageBubble({ msg }: { msg: PlaygroundMessage }) {
 function TestResultRow({ result }: { result: TestResult }) {
   return (
     <div className="test-result">
-      <span className={result.passed ? 'test-pass' : 'test-fail'}>
-        {result.passed ? '✓' : '✗'}
-      </span>
+      <span className={result.passed ? 'test-pass' : 'test-fail'}>{result.passed ? '✓' : '✗'}</span>
       <div>
         <div className="test-label">{result.test}</div>
         <div className="test-detail">{result.detail}</div>
@@ -125,137 +118,140 @@ function TestResultRow({ result }: { result: TestResult }) {
 }
 
 // ---------------------------------------------------------------------------
-// Main page
+// Main page — card-bound: the business/card IS the one you are looking at.
 // ---------------------------------------------------------------------------
 
 export function PlaygroundPage() {
   injectStyles()
 
-  const [companies, setCompanies]       = useState<Company[]>([])
-  const [selectedCompany, setSelectedCompany] = useState('')
-  const [selectedCard, setSelectedCard] = useState('')
+  const { id: cardId, card } = useCard() as { id: string; card: any }
+
   const [persona, setPersona]           = useState(PERSONAS[0])
   const [session, setSession]           = useState<PlaygroundSession | null>(null)
+  const [past, setPast]                 = useState<PlaygroundSession[]>([])
   const [input, setInput]               = useState('')
   const [starting, setStarting]         = useState(false)
   const [sending, setSending]           = useState(false)
   const [testing, setTesting]           = useState(false)
   const [testResults, setTestResults]   = useState<TestResult[]>([])
+  const [latency, setLatency]           = useState<Record<string, number>>({})
   const [error, setError]               = useState<string | null>(null)
 
   const bottomRef = useRef<HTMLDivElement | null>(null)
 
-  // Load company list
-  useEffect(() => {
-    api.listCompanies()
-      .then((list) => {
-        setCompanies(list)
-        if (list.length > 0) {
-          setSelectedCompany(list[0].id)
-          setSelectedCard(list[0].id)
-        }
-      })
-      .catch(() => setError('Could not load companies'))
-  }, [])
+  // Starter prompts grounded in THIS card, so the playground is useful at once.
+  const suggestions = useMemo(() => {
+    const out: string[] = []
+    if (card?.hours?.value) out.push('What are your opening hours?')
+    if (card?.phone?.value) out.push('What is your phone number?')
+    for (const o of (card?.offerings?.items ?? []).slice(0, 4)) out.push(`Tell me about ${o}`)
+    if (out.length === 0) out.push('What do you offer?', 'Where are you located?')
+    return out.slice(0, 6)
+  }, [card])
 
-  // Auto-scroll on new messages
+  const refreshPast = useCallback(() => {
+    if (!cardId) return
+    api.playgroundSessions(cardId).then((list) => setPast(Array.isArray(list) ? list : [])).catch(() => setPast([]))
+  }, [cardId])
+
+  useEffect(() => { refreshPast() }, [refreshPast])
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [session?.messages])
+  }, [session?.messages.length, sending])
 
   async function startSession() {
-    if (!selectedCompany || !selectedCard) return
-    setStarting(true)
-    setError(null)
-    setTestResults([])
+    if (!cardId || starting) return
+    setStarting(true); setError(null); setTestResults([]); setLatency({})
     try {
-      const s = await api.playgroundCreate(selectedCompany, selectedCard, persona)
-      setSession(s)
+      setSession(await api.playgroundCreate(cardId, cardId, persona))
+      refreshPast()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to start session')
-    } finally {
-      setStarting(false)
-    }
+    } finally { setStarting(false) }
   }
 
-  async function sendChat() {
-    if (!session || !input.trim() || sending) return
-    const text = input.trim()
-    setInput('')
-    setSending(true)
-    setError(null)
+  async function sendChat(prefill?: string) {
+    const text = (prefill ?? input).trim()
+    if (!session || !text || sending) return
+    setInput(''); setSending(true); setError(null)
 
-    // Optimistic customer bubble
     const optimisticMsg: PlaygroundMessage = {
-      id: `opt_${Date.now()}`,
-      role: 'customer',
-      content: text,
-      timestamp: new Date().toISOString(),
+      id: `opt_${Date.now()}`, role: 'customer', content: text, timestamp: new Date().toISOString(),
     }
     setSession((s) => s ? { ...s, messages: [...s.messages, optimisticMsg] } : s)
 
+    const t0 = performance.now()
     try {
-      const reply = await api.playgroundMessage(session.id, text)
-      // Replace optimistic + append real agent reply
+      // companyId is the billing principal. Without it the API bills "default"
+      // (body.companyId ?? "default"), an account with no credits → 402.
+      const reply = await api.playgroundMessage(session.id, text, cardId)
+      const ms = Math.round(performance.now() - t0)
       setSession((s) => {
         if (!s) return s
         const without = s.messages.filter((m) => m.id !== optimisticMsg.id)
         const customerMsg: PlaygroundMessage = { ...optimisticMsg, id: `c_${Date.now()}` }
         return { ...s, messages: [...without, customerMsg, reply] }
       })
+      setLatency((l) => ({ ...l, [reply.id]: ms }))
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Send failed')
-      // Remove optimistic bubble on error
       setSession((s) => s ? { ...s, messages: s.messages.filter((m) => m.id !== optimisticMsg.id) } : s)
-    } finally {
-      setSending(false)
-    }
+    } finally { setSending(false) }
   }
 
   async function runTests() {
     if (!session || testing) return
-    setTesting(true)
-    setError(null)
-    setTestResults([])
+    setTesting(true); setError(null); setTestResults([])
     try {
       const { results } = await api.playgroundTest(session.id)
       setTestResults(results)
       setSession((s) => s ? { ...s, testResults: results } : s)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Test suite failed')
-    } finally {
-      setTesting(false)
-    }
+    } finally { setTesting(false) }
   }
 
   async function clearCurrentSession() {
     if (!session) return
     await api.playgroundClear(session.id).catch(() => null)
-    setSession(null)
-    setTestResults([])
-    setError(null)
+    setSession(null); setTestResults([]); setLatency({}); setError(null)
+    refreshPast()
+  }
+
+  function resumePast(s: PlaygroundSession) {
+    setSession(s); setTestResults(s.testResults ?? []); setLatency({}); setError(null)
+  }
+
+  function exportTranscript() {
+    if (!session) return
+    const lines = [
+      `# Playground transcript — ${cardId}`,
+      `Persona: ${session.persona ?? persona}`,
+      `Session: ${session.id}  ·  card v${session.cardVersion}`,
+      '',
+    ]
+    for (const m of session.messages) {
+      lines.push(`**${m.role}:** ${m.content}`)
+      if (m.cardSectionsUsed?.length) lines.push(`_used: ${m.cardSectionsUsed.join(', ')}_`)
+      if (m.gateTriggered) lines.push(`_gate: ${m.gateReason || 'would require approval'}_`)
+      lines.push('')
+    }
+    const blob = new Blob([lines.join('\n')], { type: 'text/markdown' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = `playground-${cardId}.md`; a.click()
+    URL.revokeObjectURL(url)
   }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      sendChat()
-    }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat() }
   }
 
   const passCount = testResults.filter((r) => r.passed).length
 
   return (
     <div>
-      <div style={{ marginBottom: '1.25rem' }}>
-        <h1 style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--fg)', margin: 0 }}>
-          Agent Playground
-        </h1>
-        <p style={{ color: 'var(--fg-3)', fontSize: '0.875rem', marginTop: '0.35rem' }}>
-          Test your agent before going live — inspect routing, gates, and tone.
-        </p>
-      </div>
-
       {error && (
         <div style={{
           background: '#7f1d1d22', border: '1px solid var(--bad)', borderRadius: 6,
@@ -266,120 +262,92 @@ export function PlaygroundPage() {
       )}
 
       <div className="playground">
-        {/* ---------------------------------------------------------------- */}
-        {/* LEFT SIDEBAR                                                      */}
-        {/* ---------------------------------------------------------------- */}
+        {/* ── LEFT SIDEBAR ─────────────────────────────────────────────── */}
         <div className="play-sidebar">
-
-          {/* Company + persona selectors */}
           <div className="sidebar-section">
-            <SectionHeader>Business</SectionHeader>
-            <select
-              value={selectedCompany}
-              onChange={(e) => { setSelectedCompany(e.target.value); setSelectedCard(e.target.value) }}
-              disabled={!!session}
+            <SectionHeader>Session</SectionHeader>
+            <select value={persona} onChange={(e) => setPersona(e.target.value)} disabled={!!session}
               style={{
                 background: 'var(--bg)', border: '1px solid var(--border)',
                 color: 'var(--text)', padding: '.4rem .5rem', borderRadius: 6, fontSize: '.82rem',
-              }}
-            >
-              {companies.length === 0 && <option value="">Loading...</option>}
-              {companies.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-
-            <SectionHeader>Persona</SectionHeader>
-            <select
-              value={persona}
-              onChange={(e) => setPersona(e.target.value)}
-              disabled={!!session}
-              style={{
-                background: 'var(--bg)', border: '1px solid var(--border)',
-                color: 'var(--text)', padding: '.4rem .5rem', borderRadius: 6, fontSize: '.82rem',
-              }}
-            >
+              }}>
               {PERSONAS.map((p) => <option key={p} value={p}>{p}</option>)}
             </select>
 
             {!session ? (
-              <Btn onClick={startSession} loading={starting} disabled={companies.length === 0}>
-                Start Session
-              </Btn>
+              <Btn onClick={startSession} loading={starting} disabled={!cardId}>Start Session</Btn>
             ) : (
-              <Btn onClick={clearCurrentSession} danger>
-                Clear Session
-              </Btn>
+              <>
+                <Btn onClick={clearCurrentSession} danger>Clear Session</Btn>
+                <Btn onClick={exportTranscript}>↓ Export transcript</Btn>
+              </>
             )}
 
             {session && (
-              <span className="session-badge">
-                Session {session.id.slice(0, 12)}… · v{session.cardVersion}
-              </span>
+              <span className="session-badge">Session {session.id.slice(0, 12)}… · v{session.cardVersion}</span>
             )}
           </div>
 
-          {/* Test suite */}
+          <div className="sidebar-section">
+            <SectionHeader>Suggested prompts</SectionHeader>
+            {suggestions.map((s) => (
+              <button key={s} className="chip" disabled={!session || sending}
+                onClick={() => sendChat(s)} title={session ? undefined : 'Start a session first'}>
+                {s}
+              </button>
+            ))}
+          </div>
+
           <div className="sidebar-section">
             <SectionHeader>Automated Tests</SectionHeader>
-            <Btn
-              onClick={runTests}
-              loading={testing}
-              disabled={!session}
-            >
+            <Btn onClick={runTests} loading={testing} disabled={!session}>
               {testing ? 'Running…' : 'Run All Tests'}
             </Btn>
-
             {testResults.length > 0 && (
-              <div style={{ fontSize: '.75rem', color: 'var(--fg-3)', marginBottom: '.25rem' }}>
-                {passCount}/{testResults.length} passed
-              </div>
+              <div style={{ fontSize: '.75rem', color: 'var(--fg-3)' }}>{passCount}/{testResults.length} passed</div>
             )}
-
-            {testResults.map((r, i) => (
-              <TestResultRow key={i} result={r} />
-            ))}
-
+            {testResults.map((r, i) => <TestResultRow key={i} result={r} />)}
             {testResults.length === 0 && !testing && (
               <div style={{ fontSize: '.75rem', color: 'var(--muted)', textAlign: 'center', padding: '.5rem 0' }}>
                 No results yet
               </div>
             )}
           </div>
+
+          {past.length > 0 && (
+            <div className="sidebar-section">
+              <SectionHeader>Recent sessions ({past.length})</SectionHeader>
+              {past.slice(0, 6).map((s) => (
+                <div key={s.id} className="past-item">
+                  <span className="mono" style={{ color: 'var(--muted)' }}>{s.id.slice(0, 10)}…</span>
+                  <span style={{ color: 'var(--muted)' }}>{s.messages.length} msg</span>
+                  <button className="chip" style={{ width: 'auto' }} onClick={() => resumePast(s)}>open</button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
-        {/* ---------------------------------------------------------------- */}
-        {/* RIGHT: CHAT PANEL                                                 */}
-        {/* ---------------------------------------------------------------- */}
+        {/* ── RIGHT: CHAT PANEL ────────────────────────────────────────── */}
         <div className="play-chat">
-          {/* Message thread */}
           <div className="play-messages">
             {!session && (
               <div className="play-messages-empty">
-                Select a business and start a session to begin.
+                Start a session to test this card's agent.
               </div>
             )}
-
             {session && session.messages.length === 0 && (
-              <div className="play-messages-empty">
-                Send a message to begin the conversation.
-              </div>
+              <div className="play-messages-empty">Send a message — or pick a suggested prompt.</div>
             )}
-
-            {session?.messages.map((msg) => (
-              <MessageBubble key={msg.id} msg={msg} />
-            ))}
-
+            {session?.messages.map((msg) => <MessageBubble key={msg.id} msg={msg} latencyMs={latency[msg.id]} />)}
             {sending && (
               <div className="msg-agent" style={{ alignSelf: 'flex-start', opacity: 0.6 }}>
                 <div className="msg-text" style={{ color: 'var(--muted)' }}>Thinking…</div>
               </div>
             )}
-
             <div ref={bottomRef} />
           </div>
 
-          {/* Input bar */}
           <div className="play-input">
             <input
               type="text"
@@ -389,13 +357,7 @@ export function PlaygroundPage() {
               onKeyDown={onKeyDown}
               disabled={!session || sending}
             />
-            <Btn
-              onClick={sendChat}
-              disabled={!session || !input.trim()}
-              loading={sending}
-            >
-              Send
-            </Btn>
+            <Btn onClick={() => sendChat()} disabled={!session || !input.trim()} loading={sending}>Send</Btn>
           </div>
         </div>
       </div>

@@ -587,8 +587,8 @@ export const api = {
   playgroundCreate: (companyId: string, cardId: string, persona?: string) =>
     post<PlaygroundSession>('/playground/session', { companyId, cardId, persona }),
 
-  playgroundMessage: (sessionId: string, message: string) =>
-    post<PlaygroundMessage>('/playground/message', { sessionId, message }),
+  playgroundMessage: (sessionId: string, message: string, companyId?: string) =>
+    post<PlaygroundMessage>('/playground/message', { sessionId, message, companyId }),
 
   playgroundTest: (sessionId: string) =>
     post<{ ok: boolean; results: TestResult[] }>('/playground/test', { sessionId }),
