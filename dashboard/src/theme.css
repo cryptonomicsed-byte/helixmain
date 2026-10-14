@@ -173,6 +173,26 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
   outline-offset: 2px;
 }
 
+/* ── bottom bar: the glass chrome fades IN once scrolled ──────────
+   The landing header's concept (.hdr / .hdr.is-scrolled), mirrored to the bottom:
+   the bar is ALWAYS present and its content always legible — what fades in and out
+   is the backing, at a small scroll threshold. border-top stays 1px so turning the
+   colour on cannot shift the layout by a pixel. */
+.bottombar {
+  border-top: 1px solid transparent;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  transition: background 250ms ease, border-color 250ms ease,
+              backdrop-filter 250ms ease, -webkit-backdrop-filter 250ms ease;
+}
+.bottombar.is-scrolled {
+  background: linear-gradient(180deg, rgba(11,13,22,.74), rgba(11,13,22,.95));
+  border-top-color: var(--line);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
 /* ── phone refinements ───────────────────────────────────────── */
 @media (max-width: 860px){
   html, body { overflow-x: hidden; }

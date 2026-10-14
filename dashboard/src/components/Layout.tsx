@@ -1,6 +1,6 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import type { CSSProperties } from 'react'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useHelixStore } from '../store'
 import { api } from '../api'
 import { Icon } from './Icon'
@@ -27,6 +27,17 @@ export function Layout() {
 
   useEffect(() => { api.listCompanies().then(setCompanies).catch(() => {}) }, [setCompanies])
 
+  // Fade the bar's chrome in once scrolled, out again at the top — the landing
+  // header's `scrollY > 12` rule. Passive listener; no work when the page cannot
+  // scroll, since scrollY simply stays 0.
+  const [scrolled, setScrolled] = useState(false)
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 12)
+    onScroll()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
+
   const ok = !buildStatus || buildStatus.status === 'ok'
   const sha = buildStatus?.sha ? buildStatus.sha.slice(0, 7) : (buildStatus?.status ?? 'checking…')
 
@@ -47,12 +58,13 @@ export function Layout() {
         <Outlet />
       </main>
 
-      {/* ───── Bottom bar (icon only) ───── */}
-      <nav style={{
+      {/* ───── Bottom bar (icon only) ─────
+          background / border-top / backdrop-filter live in .bottombar (theme.css) so
+          they can be TRANSITIONED — an inline style would win over the class and the
+          fade could never happen. */}
+      <nav className={'bottombar' + (scrolled ? ' is-scrolled' : '')} style={{
         position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 40,
         height: 42, display: 'flex', alignItems: 'center', gap: '.4rem', padding: '0 10px',
-        background: 'linear-gradient(180deg, rgba(11,13,22,.74), rgba(11,13,22,.95))',
-        borderTop: '1px solid var(--line)', backdropFilter: 'blur(16px)',
       }}>
         {/* Left — the Helix mark is the main (Companies) tab */}
         <NavLink to="/" end style={({ isActive }) => icon(isActive)} title="Companies">
