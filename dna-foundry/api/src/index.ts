@@ -5139,7 +5139,11 @@ function pollStats() {
 function readCodec() {
   try {
     const sdp = (pc.localDescription && pc.localDescription.sdp) || '';
-    const m = /a=rtpmap:\d+\s+([A-Za-z0-9]+)\/(\d+)/.exec(sdp);
+    // NOTE: this regex lives inside a TypeScript template literal, so every
+    // backslash must be doubled — a single \d is consumed by TS (-> "d") and a
+    // single \/ becomes a real "/" that terminates the regex literal early,
+    // which ships a page whose module throws "Unexpected token ')'" and never boots.
+    const m = /a=rtpmap:\\d+\\s+([A-Za-z0-9]+)\\/(\\d+)/.exec(sdp);
     if (m) { statCodec.textContent = m[1].toUpperCase() + ' ' + Math.round(Number(m[2]) / 1000) + 'k'; }
   } catch (e) {}
 }
