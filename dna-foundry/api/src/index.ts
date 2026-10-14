@@ -4576,8 +4576,11 @@ function buildCallPageHtml(opts: {
     background: var(--primary); opacity: .6;
     transition: height .12s linear, background .3s ease;
   }
-  .thinking .bar { background: var(--amber); }
-  .listening .bar { background: var(--green); }
+  /* Scoped to .app[data-state] -- as `.listening .bar` these never matched, because the
+     state class lands on .orb, which is NOT an ancestor of the strip. Dead CSS, same
+     failure class as the thinking state that used to be unreachable. */
+  .app[data-state="thinking"] .bar { background: var(--amber); }
+  .app[data-state="listening"] .bar { background: var(--green); }
 
   /* ---- Text fallback ---- */
   .input-area {
@@ -4896,6 +4899,7 @@ const AGENT_NAME = ${JSON.stringify(agentName)};
 const VOICE      = ${JSON.stringify(voice)};
 const TURN_URL   = ${JSON.stringify(turnCredsUrl)};
 
+const app        = document.getElementById('app');
 const orb        = document.getElementById('orb');
 const wrapper    = document.getElementById('orbWrapper');
 const stage      = document.getElementById('stage');
@@ -4962,6 +4966,7 @@ function setState(s) {
   if (s === state) return;              // the rAF loop calls this every frame
   state = s;
   if (s === 'listening' || s === 'thinking' || s === 'speaking') startTimer();
+  app.setAttribute('data-state', s);   // state-driven CSS needs an ancestor of the strip
   orb.className = 'orb ' + s;
   wrapper.className = 'orb-wrapper ' + (s === 'idle' ? 'idle stale' : s);
   livePill.setAttribute('data-live', PILL_MODE[s] || 'idle');
@@ -5106,7 +5111,9 @@ function loop() {
   if (!pc) { drawFx(); return; }
   micLevel = loudness(micAn);
   agentLevel = loudness(remoteAn);
-  drawBars(remoteAn || micAn);
+  // Follow the ACTIVE channel: `remoteAn || micAn` always picked remote, so the strip
+  // sat flat while the caller was the one speaking.
+  drawBars(agentLevel >= micLevel ? remoteAn : micAn);
 
   const now = Date.now();
   if (micLevel > 0.035) lastSpeech = now;
