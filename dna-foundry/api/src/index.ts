@@ -4576,7 +4576,7 @@ function buildCallPageHtml(opts: {
     background: var(--primary); opacity: .6;
     transition: height .12s linear, background .3s ease;
   }
-  /* Scoped to .app[data-state] -- as `.listening .bar` these never matched, because the
+  /* Scoped to .app[data-state] -- as .listening .bar these never matched, because the
      state class lands on .orb, which is NOT an ancestor of the strip. Dead CSS, same
      failure class as the thinking state that used to be unreachable. */
   .app[data-state="thinking"] .bar { background: var(--amber); }
@@ -5111,7 +5111,7 @@ function loop() {
   if (!pc) { drawFx(); return; }
   micLevel = loudness(micAn);
   agentLevel = loudness(remoteAn);
-  // Follow the ACTIVE channel: `remoteAn || micAn` always picked remote, so the strip
+  // Follow the ACTIVE channel: remoteAn || micAn always picked remote, so the strip
   // sat flat while the caller was the one speaking.
   drawBars(agentLevel >= micLevel ? remoteAn : micAn);
 
