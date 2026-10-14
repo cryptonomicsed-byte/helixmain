@@ -3751,8 +3751,10 @@ const DIRECTORY_AGENT = "helix-directory";
  *  companies, so it is told which account this conversation belongs to; a card
  *  agent already knows its own company from its card. */
 function turnMessage(agent: string, companyId: string, message: string): string {
+  // `companyId` here is a COMPANY (the card page passes its card id), so do not
+  // label it "account" — that mislabelled which entity the turn is about.
   return agent === ACCOUNT_AGENT
-    ? `[dashboard chat — account "${companyId}"] ${message}`
+    ? `[dashboard chat — company "${companyId}"] ${message}`
     : message;
 }
 
@@ -3804,25 +3806,23 @@ async function streamAgentTurn(
 app.post("/agent/chat/:companyId", { preHandler: requireAuth }, async (req, reply) => {
   const { companyId } = req.params as { companyId: string };
   const auth = (req as AuthCarrier).auth;
-  if (auth && auth.level !== "operator" && auth.companyId !== companyId)
+
+  // The path names a COMPANY — the card page passes its card id here. An account
+  // session must be able to act on ANY company in its portfolio, not only the one
+  // it logs in as. This used a raw `auth.companyId !== companyId`, so opening a
+  // secondary card 403'd with "not your company" while every other card-scoped
+  // route (e.g. /landings) went through mayActOnCompany. Worked example: account
+  // helix-admin owns [helix-admin, walmart-com, mobilocard-com, target-com,
+  // github-com] — chatting from the walmart-com card failed even though the
+  // account plainly owns it.
+  if (!mayActOnCompany(auth, companyId))
     return reply.code(403).send({ ok: false, error: "not your company" });
 
-  const body = (req.body ?? {}) as { message?: string; cardId?: string };
+  const body = (req.body ?? {}) as { message?: string };
   const message = String(body.message ?? "").trim();
   if (!message) return reply.code(400).send({ ok: false, error: "message required" });
   if (message.length > 4000)
     return reply.code(400).send({ ok: false, error: "message too long (4000 chars max)" });
-
-  // The Account Agent runs the account by default and delegates business-specific
-  // work to the card agent, returning one unified answer. When the dashboard has a
-  // specific card in view it names it, and we route straight to that card's agent.
-  let agent = ACCOUNT_AGENT;
-  const cardId = String(body.cardId ?? "").trim();
-  if (cardId) {
-    if (auth && auth.level !== "operator" && cardId !== companyId)
-      return reply.code(403).send({ ok: false, error: "not your card" });
-    agent = agentNameFor(cardId);
-  }
 
   // OFFLINE must be a clean error, never a spinner that never ends.
   const st = await agentStatus();
@@ -3832,6 +3832,16 @@ app.post("/agent/chat/:companyId", { preHandler: requireAuth }, async (req, repl
       error: "agent_runtime_offline",
       message: "The agent runtime is unreachable.",
     });
+
+  // Prefer THIS card's own agent when one is actually running, else the Account
+  // Agent — which is told which company the turn belongs to and delegates card
+  // work itself. `agentNameFor(id)` is just the id, so naming it blindly asked
+  // ZeroClaw for an alias that usually does not exist (only companies with a
+  // dedicated agent have one) and the turn died as "The walmart-com agent is not
+  // running." The old `body.cardId` branch that did this was also unreachable:
+  // the only client (dashboard AgentChat) never sent it.
+  const ownAgent = agentNameFor(companyId);
+  const agent = st.channels[`nostr.${ownAgent}`] ? ownAgent : ACCOUNT_AGENT;
   if (st.channels[`nostr.${agent}`] === false)
     return reply.code(503).send({
       ok: false,
@@ -3839,11 +3849,19 @@ app.post("/agent/chat/:companyId", { preHandler: requireAuth }, async (req, repl
       message: `The ${agent} agent is not running.`,
     });
 
+  // The ACCOUNT pays for work done on its companies, not the card — the same rule
+  // /extract states in its own comment. Billing the company 402'd every card whose
+  // own balance is small: walmart-com holds 1 credit against a 5-credit turn, while
+  // the account that owns it holds 1000. An operator (companyId "*") has no account
+  // of its own, so it bills the company it named.
+  const accountId = auth?.companyId ?? "";
+  const billing = accountId && accountId !== "*" ? accountId : companyId;
+
   // Credits BEFORE the turn, refunded if the turn produces nothing — same rule
   // as /extract. playground_message is the reference cost.
   let usageEntry: UsageEntry | null = null;
   try {
-    usageEntry = await deductCredits(companyId, "playground_message");
+    usageEntry = await deductCredits(billing, "playground_message");
   } catch (e) {
     if (e instanceof QuotaExceeded) return reply.code(402).send({ ok: false, error: e.message });
     throw e;
