@@ -4563,13 +4563,15 @@ function buildCallPageHtml(opts: {
 
   /* ---- Level strips (harness reads .bar) ---- */
   .wave-bars {
-    display: flex; gap: 4px; align-items: flex-end; justify-content: space-between;
-    height: 34px; width: 100%; opacity: 0; transition: opacity .35s ease;
+    display: flex; gap: 3px; align-items: flex-end; justify-content: center;
+    height: 30px; width: 100%; max-width: 360px; margin: 0 auto;
+    padding-bottom: 2px; border-bottom: 1px solid var(--line);
+    opacity: 0; transition: opacity .35s ease;
   }
   .wave-bars.on { opacity: .9; }
   .bar {
-    flex: 1 1 0; max-width: 22px; min-height: 3px; border-radius: 3px;
-    background: var(--primary); opacity: .5;
+    flex: 1 1 0; max-width: 7px; min-height: 3px; border-radius: 3px;
+    background: var(--primary); opacity: .6;
     transition: height .12s linear, background .3s ease;
   }
   .thinking .bar { background: var(--amber); }
@@ -5127,10 +5129,10 @@ function loop() {
   valAgent.textContent = agentLevel > 0.035 ? 'speaking' : 'idle';
   meterYou.classList.toggle('act', micLevel > 0.035);
   meterAgent.classList.toggle('act', agentLevel > 0.035);
+  // The badge IS the affordance. Also logging here spammed the transcript: the
+  // looping fake mic barges in over and over, one row per episode.
   var both = micLevel > 0.035 && agentLevel > 0.035;
   bargeBadge.classList.toggle('on', both);
-  if (both && !bargeBadge.__n) { log('You spoke over the agent — it will stop and listen.', 'system'); bargeBadge.__n = 1; }
-  if (!both) bargeBadge.__n = 0;
 
   drawFx();
 }
