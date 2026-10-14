@@ -4562,15 +4562,17 @@ function buildCallPageHtml(opts: {
   .stat-v.bad { color: var(--red); }
 
   /* ---- Level strips (harness reads .bar) ---- */
+  /* fit-content so the baseline rule is exactly as wide as the bars — a 360px box
+     with the bars centred inside left the rule sticking out at both ends. */
   .wave-bars {
     display: flex; gap: 3px; align-items: flex-end; justify-content: center;
-    height: 30px; width: 100%; max-width: 360px; margin: 0 auto;
-    padding-bottom: 2px; border-bottom: 1px solid var(--line);
+    width: fit-content; max-width: 100%; margin: 0 auto;
+    height: 30px; padding-bottom: 2px; border-bottom: 1px solid var(--line);
     opacity: 0; transition: opacity .35s ease;
   }
   .wave-bars.on { opacity: .9; }
   .bar {
-    flex: 1 1 0; max-width: 7px; min-height: 3px; border-radius: 3px;
+    width: 7px; min-height: 3px; border-radius: 3px;
     background: var(--primary); opacity: .6;
     transition: height .12s linear, background .3s ease;
   }
