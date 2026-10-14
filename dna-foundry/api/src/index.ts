@@ -4563,13 +4563,13 @@ function buildCallPageHtml(opts: {
 
   /* ---- Level strips (harness reads .bar) ---- */
   .wave-bars {
-    display: flex; gap: 3px; align-items: flex-end; justify-content: center;
-    height: 26px; width: 100%; opacity: 0; transition: opacity .35s ease;
+    display: flex; gap: 4px; align-items: flex-end; justify-content: space-between;
+    height: 34px; width: 100%; opacity: 0; transition: opacity .35s ease;
   }
-  .wave-bars.on { opacity: 1; }
+  .wave-bars.on { opacity: .9; }
   .bar {
-    width: 3px; min-height: 3px; border-radius: 2px;
-    background: var(--primary); opacity: .55;
+    flex: 1 1 0; max-width: 22px; min-height: 3px; border-radius: 3px;
+    background: var(--primary); opacity: .5;
     transition: height .12s linear, background .3s ease;
   }
   .thinking .bar { background: var(--amber); }
@@ -4617,8 +4617,8 @@ function buildCallPageHtml(opts: {
                 align-self: flex-end; color: var(--text); }
   .msg.agent  { background: var(--surface); border-color: var(--line);
                 align-self: flex-start; color: var(--text); }
-  .msg.system { background: rgba(245,158,11,.08); border-color: rgba(245,158,11,.24);
-                align-self: center; color: var(--amber); font-size: .78rem;
+  .msg.system { background: rgba(255,255,255,.03); border-color: var(--line);
+                align-self: center; color: var(--muted-2); font-size: .75rem;
                 font-family: var(--mono); max-width: 100%; }
   @keyframes fadeUp { from { opacity: 0; transform: translateY(7px) } to { opacity: 1; transform: none } }
 
@@ -4798,6 +4798,21 @@ function buildCallPageHtml(opts: {
   </section>
 
   <div class="wave-bars" id="waveBars">
+    <div class="bar" style="height:4px"></div>
+    <div class="bar" style="height:4px"></div>
+    <div class="bar" style="height:4px"></div>
+    <div class="bar" style="height:4px"></div>
+    <div class="bar" style="height:4px"></div>
+    <div class="bar" style="height:4px"></div>
+    <div class="bar" style="height:4px"></div>
+    <div class="bar" style="height:4px"></div>
+    <div class="bar" style="height:4px"></div>
+    <div class="bar" style="height:4px"></div>
+    <div class="bar" style="height:4px"></div>
+    <div class="bar" style="height:4px"></div>
+    <div class="bar" style="height:4px"></div>
+    <div class="bar" style="height:4px"></div>
+    <div class="bar" style="height:4px"></div>
     <div class="bar" style="height:4px"></div>
     <div class="bar" style="height:4px"></div>
     <div class="bar" style="height:4px"></div>
@@ -5038,23 +5053,29 @@ function drawFx() {
   }
   ctx.globalAlpha = 1;
 
-  // radial spectrum — real frequency bins wrapped around the orb
+  // radial spectrum — real frequency bins, wrapped SYMMETRICALLY around the orb.
+  // The mirroring is load-bearing: speech energy sits in the low bins, so sweeping
+  // 0..2pi linearly lights only a ~90-degree wedge and reads as a broken arc. Folding
+  // the bins to either side of the vertical axis fills the ring and looks intended.
   if (freqBuf && state && state !== 'idle') {
-    const N = 64, span = Math.floor(freqBuf.length / N) || 1;
-    ctx.lineWidth = 2; ctx.lineCap = 'round';
+    const N = 48, span = Math.floor(freqBuf.length / N) || 1;
+    ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.strokeStyle = col;
+    const r0 = base + 11;
     for (let i = 0; i < N; i++) {
       let peak = 0;
       for (let q = 0; q < span; q++) peak = Math.max(peak, freqBuf[i * span + q] || 0);
-      const mag = (peak / 255) * (i % 2 ? 1 : 0.55);       // alternating keeps it legible
-      if (mag < 0.03) continue;
-      const a = (i / N) * Math.PI * 2 - Math.PI / 2;
-      const r0 = base + 12, r1 = r0 + 4 + mag * 30;
-      ctx.globalAlpha = 0.22 + mag * 0.55;
-      ctx.strokeStyle = col;
-      ctx.beginPath();
-      ctx.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0);
-      ctx.lineTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1);
-      ctx.stroke();
+      const mag = peak / 255;
+      if (mag < 0.02) continue;
+      const a = (i / N) * Math.PI - Math.PI / 2;   // top -> right -> bottom
+      const len = 3 + mag * 34;
+      ctx.globalAlpha = 0.18 + mag * 0.6;
+      for (let m = 0; m < 2; m++) {
+        const ang = m ? (-Math.PI - a) : a;         // fold onto the left half
+        ctx.beginPath();
+        ctx.moveTo(cx + Math.cos(ang) * r0, cy + Math.sin(ang) * r0);
+        ctx.lineTo(cx + Math.cos(ang) * (r0 + len), cy + Math.sin(ang) * (r0 + len));
+        ctx.stroke();
+      }
     }
     ctx.globalAlpha = 1;
   }
