@@ -4235,7 +4235,22 @@ app.post("/auth/enroll/token", { preHandler: [requireAuth, requireOwner] }, asyn
 // Voice Agent Call Page  (public — NO auth required)
 // ---------------------------------------------------------------------------
 
-/** Build the animated orb call page HTML from card data */
+/** Build the voice-agent call page HTML from card data.
+ *
+ * Single file, no build step, one CDN import (nostr-tools) which the head guard
+ * covers. The rule for this page: everything the caller sees is driven by REAL
+ * signal — the two AnalyserNodes (caller mic, remote track), the
+ * RTCPeerConnection's own getStats(), and the connection state machine. There
+ * are no decorative controls and no invented states; if something animates,
+ * something is actually happening.
+ *
+ * Harness contract (infra/call_e2e.py) — do not rename:
+ *   #remoteAudio        .srcObject bound to the inbound track
+ *   #orb                className CONTAINS 'listening' / 'speaking'
+ *   #transcript .msg    message nodes
+ *   .bar                level bars
+ *   #btnStart           stays hidden when the call auto-starts
+ */
 function buildCallPageHtml(opts: {
   companyId: string;
   companyName: string;
@@ -4264,544 +4279,562 @@ function buildCallPageHtml(opts: {
   const accent = accentHex ? "#" + accentHex : "";
   const esc = (s: string) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c] as string));
   const apiBase = process.env.HELIX_API_BASE || "/api";
+  // Monogram for the core + header mark. The orb used to carry a robot emoji,
+  // which is the single most "off-the-shelf robot" tell on the page.
+  const mono = (companyName.trim()[0] || "H").toUpperCase();
 
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="description" content="Talk to the AI agent for ${esc(companyName)}">
-<title>Talk to ${agentName} — ${esc(companyName)}</title>
+<meta name="theme-color" content="#05070d">
+<title>Talk to ${esc(agentName)} — ${esc(companyName)}</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   :root {
-    --bg: #080b14;
-    --surface: #0e1520;
-    --surface2: #141d2b;
-    --text: #e4eaf4;
-    --text-muted: #4a6080;
+    color-scheme: dark;                      /* native controls/scrollbars render dark */
+    --bg: #05070d;
+    --bg-2: #080d18;
+    --surface: #0d1420;
+    --surface-2: #131c2b;
+    --line: rgba(255,255,255,.08);
+    --line-2: rgba(255,255,255,.04);
+    --text: #e8eefb;
+    --muted: #5b7196;
+    --muted-2: #7f93b4;
     --primary: #4a9eff;
-    --primary-dim: rgba(74,158,255,0.15);
+    --primary-dim: rgba(74,158,255,.15);
     --green: #22c55e;
     --amber: #f59e0b;
-    --purple: #a855f7;
     --red: #ef4444;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
   }
 
   html, body {
-    height: 100%;
+    min-height: 100%;
     background: var(--bg);
     color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
     overflow-x: hidden;
   }
+  body { position: relative; }
 
-  /* ---- Particle canvas ---- */
-  #particles {
-    position: fixed;
-    inset: 0;
-    z-index: 0;
-    opacity: 0.35;
-    pointer-events: none;
+  /* ---- Ambient background: aurora + grid, both cheap (no JS) ---- */
+  .aurora {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background:
+      radial-gradient(60% 45% at 50% 0%,   var(--primary-dim) 0%, transparent 60%),
+      radial-gradient(45% 35% at 88% 18%,  rgba(124,106,255,.10) 0%, transparent 65%),
+      radial-gradient(45% 40% at 8% 30%,   rgba(34,197,94,.06) 0%, transparent 65%),
+      linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 55%, var(--bg) 100%);
   }
-
-  /* ---- Grid overlay ---- */
   .grid-overlay {
-    position: fixed;
-    inset: 0;
-    z-index: 0;
-    pointer-events: none;
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
     background-image:
-      linear-gradient(rgba(74,158,255,0.04) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(74,158,255,0.04) 1px, transparent 1px);
-    background-size: 40px 40px;
+      linear-gradient(var(--line-2) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line-2) 1px, transparent 1px);
+    background-size: 46px 46px;
+    mask-image: radial-gradient(75% 60% at 50% 38%, #000 0%, transparent 78%);
+    -webkit-mask-image: radial-gradient(75% 60% at 50% 38%, #000 0%, transparent 78%);
   }
 
-  /* ---- Main layout ---- */
+  /* ---- Layout ---- */
   .app {
-    position: relative;
-    z-index: 1;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 2rem 1rem 3rem;
-    gap: 1.5rem;
+    position: relative; z-index: 1;
+    width: min(620px, 100%);
+    margin: 0 auto;
+    min-height: 100dvh;
+    display: flex; flex-direction: column;
+    gap: 1.05rem;
+    padding: max(1.1rem, env(safe-area-inset-top)) 1rem max(1.4rem, env(safe-area-inset-bottom));
   }
 
   /* ---- Header ---- */
-  .header {
-    text-align: center;
-    max-width: 480px;
+  .hdr { display: flex; align-items: center; gap: .75rem; }
+  .brand { display: flex; align-items: center; gap: .7rem; min-width: 0; flex: 1; }
+  .brand-mark {
+    flex-shrink: 0;
+    width: 40px; height: 40px; border-radius: 12px;
+    display: grid; place-items: center;
+    font-weight: 700; font-size: 1.05rem; letter-spacing: -.02em;
+    color: var(--text);
+    background: linear-gradient(145deg, var(--primary-dim), rgba(255,255,255,.03));
+    border: 1px solid var(--line);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.06), 0 8px 22px -12px var(--primary);
   }
-  .header h1 {
-    font-size: clamp(1.4rem, 4vw, 2rem);
-    font-weight: 700;
-    letter-spacing: -0.02em;
-    background: linear-gradient(135deg, var(--text) 0%, var(--primary) 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+  .brand-txt { min-width: 0; }
+  .brand-txt h1 {
+    font-size: clamp(1.05rem, 3.6vw, 1.3rem);
+    font-weight: 650; letter-spacing: -.02em; line-height: 1.15;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
-  .header p {
-    font-size: .9rem;
-    color: var(--text-muted);
-    margin-top: .4rem;
+  .brand-txt p {
+    font-size: .82rem; color: var(--muted-2); margin-top: .12rem;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
 
-  /* ---- Orb container ---- */
-  .orb-wrapper {
+  /* Live pill — connection state, always truthful */
+  .live-pill {
+    flex-shrink: 0;
+    display: inline-flex; align-items: center; gap: .42rem;
+    padding: .34rem .62rem; border-radius: 999px;
+    border: 1px solid var(--line);
+    background: rgba(255,255,255,.02);
+    font-size: .7rem; letter-spacing: .09em; text-transform: uppercase;
+    color: var(--muted-2); font-weight: 650;
+    white-space: nowrap;
+  }
+  .live-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--muted); flex-shrink: 0;
+  }
+  .live-pill[data-live="connecting"] { color: var(--primary); border-color: var(--primary-dim); }
+  .live-pill[data-live="connecting"] .live-dot { background: var(--primary); animation: blink 1s steps(2,end) infinite; }
+  .live-pill[data-live="on"] { color: var(--green); border-color: rgba(34,197,94,.25); }
+  .live-pill[data-live="on"] .live-dot { background: var(--green); box-shadow: 0 0 9px var(--green); }
+  .live-pill[data-live="talk"] { color: var(--primary); border-color: var(--primary-dim); }
+  .live-pill[data-live="talk"] .live-dot { background: var(--primary); box-shadow: 0 0 9px var(--primary); animation: pulseDot 1.1s ease-in-out infinite; }
+  .live-pill[data-live="err"] { color: var(--red); border-color: rgba(239,68,68,.3); }
+  .live-pill[data-live="err"] .live-dot { background: var(--red); }
+  @keyframes blink { 50% { opacity: .25 } }
+  @keyframes pulseDot { 0%,100% { transform: scale(1); opacity: 1 } 50% { transform: scale(1.5); opacity: .5 } }
+
+  /* ---- Stage: canvas + orb ---- */
+  .stage {
     position: relative;
-    width: 220px;
-    height: 220px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    display: grid; place-items: center;
+    padding: .4rem 0 .1rem;
+    min-height: 268px;
+  }
+  #fx {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    pointer-events: none; z-index: 0;
+  }
+  .orb-wrapper {
+    position: relative; z-index: 1;
+    width: 208px; height: 208px;
+    display: grid; place-items: center;
     flex-shrink: 0;
   }
-
-  /* Spinning ring (connecting state) */
-  .ring-spin {
-    position: absolute;
-    inset: -8px;
-    border-radius: 50%;
-    border: 2px solid transparent;
-    border-top-color: var(--primary);
-    border-right-color: var(--primary);
-    opacity: 0;
-    transition: opacity 0.4s ease;
-  }
-
-  /* Ripple rings (speaking state) */
-  .ripple {
-    position: absolute;
-    border-radius: 50%;
-    border: 1.5px solid var(--primary);
-    opacity: 0;
-    pointer-events: none;
-  }
-  .ripple-1 { width: 240px; height: 240px; }
-  .ripple-2 { width: 280px; height: 280px; animation-delay: 0.4s; }
-  .ripple-3 { width: 320px; height: 320px; animation-delay: 0.8s; }
-
-  /* Core orb */
   .orb {
-    width: 180px;
-    height: 180px;
-    border-radius: 50%;
     position: relative;
+    width: 100%; height: 100%;
+    border-radius: 50%;
+    display: grid; place-items: center;
     cursor: pointer;
-    transition: transform 0.3s ease;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    transition: transform .35s cubic-bezier(.2,.8,.2,1);
+    will-change: transform;
   }
-  .orb:hover { transform: scale(1.05); }
-
-  /* Orb layers */
-  .orb-glow {
-    position: absolute;
-    inset: -20px;
+  .orb:hover { transform: scale(1.03); }
+  .orb-core {
+    position: absolute; inset: 12px;
     border-radius: 50%;
-    background: radial-gradient(circle, rgba(74,158,255,0.25) 0%, transparent 70%);
-    transition: background 0.5s ease, transform 0.5s ease;
-  }
-  .orb-body {
-    position: absolute;
-    inset: 0;
-    border-radius: 50%;
-    background: radial-gradient(circle at 35% 35%, rgba(74,158,255,0.4) 0%, rgba(26,62,128,0.9) 50%, rgba(8,11,20,0.95) 100%);
-    border: 1.5px solid rgba(74,158,255,0.3);
-    transition: background 0.5s ease, border-color 0.5s ease;
     overflow: hidden;
+    background:
+      radial-gradient(circle at 34% 30%, rgba(255,255,255,.16) 0%, transparent 42%),
+      radial-gradient(circle at 50% 50%, var(--primary-dim) 0%, rgba(8,11,20,.92) 62%, rgba(5,7,13,.98) 100%);
+    border: 1px solid var(--line);
+    box-shadow:
+      inset 0 0 40px -8px var(--primary-dim),
+      0 22px 60px -28px var(--primary);
+    transition: background .6s ease, border-color .6s ease, box-shadow .6s ease;
   }
-  .orb-inner-glow {
-    position: absolute;
-    inset: 15px;
-    border-radius: 50%;
-    background: radial-gradient(circle, rgba(74,158,255,0.15) 0%, transparent 60%);
-    transition: background 0.5s ease;
+  /* glass sheen sweeping the core — pure CSS, compositor-only */
+  .orb-core::after {
+    content: ""; position: absolute; inset: -40%;
+    background: conic-gradient(from 0deg, transparent 0deg, rgba(255,255,255,.10) 42deg, transparent 92deg);
+    animation: sheen 7s linear infinite;
   }
+  @keyframes sheen { to { transform: rotate(360deg) } }
+  .orb-mono {
+    position: relative; z-index: 2;
+    font-size: 2.5rem; font-weight: 700; letter-spacing: -.03em;
+    color: rgba(255,255,255,.14);
+    user-select: none; pointer-events: none;
+    transition: color .5s ease, opacity .5s ease;
+  }
+  .ring-spin {
+    position: absolute; inset: -6px; border-radius: 50%;
+    border: 1.5px solid transparent;
+    border-top-color: var(--primary); border-right-color: var(--primary);
+    opacity: 0; transition: opacity .4s ease;
+  }
+  .trace {
+    position: absolute; inset: -14px; border-radius: 50%;
+    border: 1px solid var(--line); opacity: .5;
+  }
+  .trace.t2 { inset: -26px; opacity: .25; }
 
-  /* Icon inside orb */
-  .orb-icon {
-    position: relative;
-    z-index: 2;
-    font-size: 2.8rem;
-    transition: opacity 0.3s ease;
-    user-select: none;
-  }
-
-  /* Waveform bars (thinking/speaking) */
-  .wave-bars {
-    position: absolute;
-    bottom: 40px;
-    left: 50%;
-    transform: translateX(-50%);
-    display: flex;
-    gap: 4px;
-    align-items: flex-end;
-    opacity: 0;
-    transition: opacity 0.3s ease;
-    z-index: 3;
-  }
-  .bar {
-    width: 4px;
-    border-radius: 2px;
-    background: var(--primary);
-    min-height: 6px;
-    transition: height 0.15s ease, background 0.3s ease;
-  }
-
-  /* ---- Status text ---- */
+  /* ---- Caption under the orb ---- */
+  .caption { text-align: center; display: flex; flex-direction: column; gap: .3rem; align-items: center; }
   .status-text {
-    font-size: 1rem;
-    color: var(--text-muted);
-    text-align: center;
-    min-height: 1.5rem;
-    transition: color 0.3s ease;
-    letter-spacing: .02em;
+    font-size: .97rem; color: var(--muted-2);
+    letter-spacing: .01em; min-height: 1.35rem;
+    transition: color .3s ease;
   }
-  .status-text.active { color: var(--primary); }
-
-  /* ---- Start button ---- */
-  .btn-start {
-    padding: .85rem 2.5rem;
-    border-radius: 50px;
-    border: none;
-    background: linear-gradient(135deg, var(--primary) 0%, #7c6aff 100%);
-    color: #fff;
-    font-size: 1.05rem;
-    font-weight: 600;
-    cursor: pointer;
-    box-shadow: 0 0 30px rgba(74,158,255,0.4);
-    transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.3s ease;
-    letter-spacing: .03em;
-  }
-  .btn-start:hover { transform: translateY(-2px); box-shadow: 0 0 45px rgba(74,158,255,0.6); }
-  .btn-start:active { transform: scale(0.97); }
-  .btn-start.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
-
-  /* ---- Input area ---- */
-  .input-area {
-    display: flex;
-    gap: .6rem;
-    width: 100%;
-    max-width: 500px;
-    opacity: 0;
-    visibility: hidden;
-    pointer-events: none;
-    transition: opacity 0.4s ease, visibility 0.4s ease;
-    flex-wrap: wrap;
-  }
-  .input-area.visible { opacity: 1; visibility: visible; pointer-events: all; }
-  .msg-input {
-    flex: 1;
-    min-width: 200px;
-    padding: .75rem 1rem;
-    border-radius: 12px;
-    border: 1.5px solid rgba(74,158,255,0.25);
-    background: var(--surface);
-    color: var(--text);
-    font-size: .95rem;
-    outline: none;
-    transition: border-color 0.2s ease;
-    font-family: inherit;
-  }
-  .msg-input:focus { border-color: var(--primary); }
-  .msg-input::placeholder { color: var(--text-muted); }
-  .btn-send {
-    padding: .75rem 1.4rem;
-    border-radius: 12px;
-    border: none;
-    background: var(--primary);
-    color: #fff;
-    font-size: .9rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background 0.2s ease, transform 0.15s ease;
-    font-family: inherit;
-  }
-  .btn-send:hover { background: #6cb4ff; transform: translateY(-1px); }
-  .btn-send:disabled { opacity: .5; cursor: not-allowed; transform: none; }
-
-  /* ---- Transcript / activity log ---- */
-  .transcript {
-    width: 100%;
-    max-width: 500px;
-    max-height: 280px;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-    gap: .5rem;
-    padding-right: .25rem;
-  }
-  .transcript::-webkit-scrollbar { width: 4px; }
-  .transcript::-webkit-scrollbar-track { background: transparent; }
-  .transcript::-webkit-scrollbar-thumb { background: rgba(74,158,255,0.2); border-radius: 4px; }
-
-  .msg {
-    padding: .65rem .9rem;
-    border-radius: 10px;
-    font-size: .88rem;
-    line-height: 1.5;
-    max-width: 90%;
-    animation: fadeUp 0.3s ease;
-  }
-  .msg.user {
-    background: rgba(74,158,255,0.12);
-    border: 1px solid rgba(74,158,255,0.2);
-    align-self: flex-end;
-    color: var(--text);
-  }
-  .msg.agent {
-    background: var(--surface);
-    border: 1px solid rgba(255,255,255,0.06);
-    align-self: flex-start;
-    color: var(--text);
-  }
-  .msg.system {
-    background: rgba(245,158,11,0.10);
-    border: 1px solid rgba(245,158,11,0.28);
-    align-self: flex-start;
-    color: var(--amber);
-  }
-  .msg .sender {
-    font-size: .72rem;
-    color: var(--text-muted);
-    margin-bottom: .2rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: .06em;
-  }
-  .msg.agent .sender { color: var(--primary); }
-
-  /* ---- Agent name badge ---- */
-  .agent-badge {
-    font-size: .8rem;
-    color: var(--text-muted);
-    text-align: center;
-    letter-spacing: .04em;
-  }
-  .agent-badge span {
-    color: var(--primary);
-    font-weight: 600;
-  }
-
-  /* ---- End call button ---- */
-  .btn-end {
-    padding: .55rem 1.3rem;
-    border-radius: 50px;
-    border: 1px solid rgba(239,68,68,0.4);
-    background: transparent;
-    color: #ef4444;
-    font-size: .82rem;
-    font-weight: 600;
-    cursor: pointer;
-    opacity: 0;
-    visibility: hidden;
-    pointer-events: none;
-    transition: opacity 0.3s ease, visibility 0.3s ease, background 0.2s ease;
-    letter-spacing: .03em;
-    font-family: inherit;
-  }
-  .btn-end.visible { opacity: 1; visibility: visible; pointer-events: all; }
-  .btn-end:hover { background: rgba(239,68,68,0.1); }
-
-  /* ---- State-based animations ---- */
-
-  /* Idle: slow gentle pulse */
-  @keyframes orbIdle {
-    0%, 100% { transform: scale(1); opacity: 1; }
-    50% { transform: scale(1.04); opacity: 0.92; }
-  }
-
-  /* Connecting: faster pulse */
-  @keyframes orbConnect {
-    0%, 100% { transform: scale(1); }
-    50% { transform: scale(1.08); }
-  }
-
-  /* Spin ring */
-  @keyframes spinRing {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
-  }
-
-  /* Listening: breathing */
-  @keyframes orbListen {
-    0%, 100% { transform: scale(1); }
-    40% { transform: scale(1.1); }
-    60% { transform: scale(0.97); }
-  }
-
-  /* Ripple out */
-  @keyframes rippleOut {
-    0% { transform: scale(0.85); opacity: 0.6; }
-    100% { transform: scale(1.4); opacity: 0; }
-  }
-
-  /* Fade up */
-  @keyframes fadeUp {
-    from { opacity: 0; transform: translateY(8px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-
-  /* State classes on .orb */
-  .orb.idle .orb-glow { animation: orbIdle 3s ease-in-out infinite; }
-
-  .orb.connecting .orb-glow { animation: orbConnect 1.2s ease-in-out infinite; }
-
-  .orb.listening .orb-body {
-    background: radial-gradient(circle at 35% 35%, rgba(34,197,94,0.4) 0%, rgba(15,60,30,0.9) 50%, rgba(8,11,20,0.95) 100%);
-    border-color: rgba(34,197,94,0.4);
-  }
-  .orb.listening .orb-glow {
-    background: radial-gradient(circle, rgba(34,197,94,0.2) 0%, transparent 70%);
-    animation: orbListen 2.5s ease-in-out infinite;
-  }
-
-  .orb.thinking .orb-body {
-    background: radial-gradient(circle at 35% 35%, rgba(245,158,11,0.4) 0%, rgba(60,40,10,0.9) 50%, rgba(8,11,20,0.95) 100%);
-    border-color: rgba(245,158,11,0.4);
-  }
-  .orb.thinking .orb-glow {
-    background: radial-gradient(circle, rgba(245,158,11,0.2) 0%, transparent 70%);
-    animation: orbListen 0.8s ease-in-out infinite;
-  }
-  .orb.thinking .bar { background: var(--amber); }
-
-  .orb.speaking .orb-body {
-    background: radial-gradient(circle at 35% 35%, rgba(74,158,255,0.5) 0%, rgba(15,30,80,0.9) 50%, rgba(8,11,20,0.95) 100%);
-    border-color: rgba(74,158,255,0.5);
-  }
-  .orb.speaking .orb-glow {
-    background: radial-gradient(circle, rgba(74,158,255,0.3) 0%, transparent 70%);
-    animation: orbIdle 1.2s ease-in-out infinite;
-  }
-
-  /* Ring spin active */
-  .connecting .ring-spin { opacity: 1; animation: spinRing 1s linear infinite; }
-
-  /* Ripples active */
-  .speaking .ripple { animation: rippleOut 2.4s ease-out infinite; }
-
-  @media (max-width: 480px) {
-    .orb-wrapper { width: 180px; height: 180px; }
-    .orb { width: 148px; height: 148px; }
-    .ripple-1 { width: 200px; height: 200px; }
-    .ripple-2 { width: 235px; height: 235px; }
-    .ripple-3 { width: 265px; height: 265px; }
-    .orb-icon { font-size: 2.2rem; }
-  }
-  /* ---- Business info panel (card-driven) ---- */
-  .biz-panel {
-    width: min(560px, 92vw);
-    background: var(--surface);
-    border: 1px solid var(--primary-dim);
-    border-radius: 14px;
-    padding: 1rem 1.1rem;
-    display: flex;
-    flex-wrap: wrap;
-    gap: .7rem;
-    justify-content: center;
-  }
-  .biz-row { display: flex; flex-wrap: wrap; gap: .5rem; justify-content: center; }
-  .biz-chip {
-    font-size: .78rem; color: var(--text);
-    background: var(--surface2);
-    border: 1px solid var(--primary-dim);
-    border-radius: 999px; padding: .35rem .7rem;
-    display: inline-flex; gap: .35rem; align-items: center;
-  }
-  .biz-label {
-    font-size: .68rem; text-transform: uppercase; letter-spacing: .08em;
-    color: var(--text-muted); font-weight: 700; text-align: center;
+  .status-text.active { color: var(--text); }
+  .sub-status {
+    font-family: var(--mono); font-size: .7rem; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--muted); min-height: .9rem;
   }
   .call-timer {
-    display: none; font-variant-numeric: tabular-nums; font-size: .82rem;
-    letter-spacing: .06em; color: var(--text-muted);
+    display: none; font-family: var(--mono); font-variant-numeric: tabular-nums;
+    font-size: .74rem; letter-spacing: .12em; color: var(--muted);
   }
   .call-timer.live { display: block; }
+
+  .barge {
+    align-self: center;
+    display: none;
+    font-family: var(--mono); font-size: .66rem; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--amber);
+    border: 1px solid rgba(245,158,11,.3); background: rgba(245,158,11,.08);
+    padding: .22rem .55rem; border-radius: 999px;
+  }
+  .barge.on { display: inline-block; }
+
+  /* ---- Dual meters: caller vs agent, real RMS ---- */
+  .meters {
+    display: grid; grid-template-columns: 1fr 1fr; gap: .55rem;
+    width: 100%;
+  }
+  .meter {
+    background: linear-gradient(180deg, rgba(255,255,255,.022), transparent);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: .55rem .65rem;
+    transition: border-color .35s ease, background .35s ease;
+  }
+  .meter.act { border-color: var(--primary-dim); background: rgba(74,158,255,.05); }
+  .meter-top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: .4rem; }
+  .meter-label { font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 650; }
+  .meter-val { font-family: var(--mono); font-size: .66rem; color: var(--muted-2); font-variant-numeric: tabular-nums; }
+  .meter-track { height: 4px; border-radius: 3px; background: rgba(255,255,255,.05); overflow: hidden; }
+  .meter-fill {
+    height: 100%; width: 0%; border-radius: 3px;
+    background: var(--primary);
+    transition: width .08s linear, background .3s ease;
+  }
+  #meterYou.act .meter-fill { background: var(--green); }
+  #meterAgent.act .meter-fill { background: var(--primary); }
+
+  /* ---- Phase rail ---- */
+  .phases {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: .3rem;
+    width: 100%;
+    padding: .5rem .35rem;
+    border: 1px solid var(--line); border-radius: 12px;
+    background: rgba(255,255,255,.014);
+  }
+  .phase {
+    display: flex; flex-direction: column; align-items: center; gap: .3rem;
+    font-size: .62rem; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--muted); font-weight: 650;
+    opacity: .5; transition: opacity .3s ease, color .3s ease;
+  }
+  .phase svg { width: 15px; height: 15px; display: block; }
+  .phase.on { opacity: 1; color: var(--primary); }
+  .phase.on[data-phase="listen"] { color: var(--green); }
+  .phase.on[data-phase="think"] { color: var(--amber); }
+  .phase-dot { width: 100%; height: 2px; border-radius: 2px; background: currentColor; opacity: .3; }
+  .phase.on .phase-dot { opacity: 1; box-shadow: 0 0 10px currentColor; }
+
+  /* ---- Link HUD: real getStats() telemetry ---- */
+  .link-hud {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: .4rem;
+    width: 100%;
+  }
+  .stat {
+    border: 1px solid var(--line); border-radius: 10px;
+    padding: .42rem .5rem;
+    background: rgba(255,255,255,.014);
+    display: flex; flex-direction: column; gap: .12rem;
+    min-width: 0;
+  }
+  .stat-k { font-size: .58rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); font-weight: 650; }
+  .stat-v { font-family: var(--mono); font-size: .78rem; color: var(--text); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .stat-v.warn { color: var(--amber); }
+  .stat-v.bad { color: var(--red); }
+
+  /* ---- Level strips (harness reads .bar) ---- */
+  .wave-bars {
+    display: flex; gap: 3px; align-items: flex-end; justify-content: center;
+    height: 26px; width: 100%; opacity: 0; transition: opacity .35s ease;
+  }
+  .wave-bars.on { opacity: 1; }
+  .bar {
+    width: 3px; min-height: 3px; border-radius: 2px;
+    background: var(--primary); opacity: .55;
+    transition: height .12s linear, background .3s ease;
+  }
+  .thinking .bar { background: var(--amber); }
+  .listening .bar { background: var(--green); }
+
+  /* ---- Text fallback ---- */
+  .input-area {
+    display: none; gap: .5rem; width: 100%;
+  }
+  .input-area.visible { display: flex; }
+  .msg-input {
+    flex: 1; min-width: 0;
+    padding: .7rem .9rem; border-radius: 11px;
+    border: 1px solid var(--line); background: var(--surface);
+    color: var(--text); font-size: .92rem; font-family: inherit; outline: none;
+    transition: border-color .2s ease, box-shadow .2s ease;
+  }
+  .msg-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-dim); }
+  .msg-input::placeholder { color: var(--muted); }
+  .btn-send {
+    padding: .7rem 1.1rem; border-radius: 11px; border: none;
+    background: var(--primary); color: #041020;
+    font-size: .88rem; font-weight: 700; cursor: pointer; font-family: inherit;
+    transition: filter .2s ease, transform .15s ease;
+  }
+  .btn-send:hover { filter: brightness(1.1); }
+  .btn-send:active { transform: scale(.97); }
+
+  .transcript {
+    width: 100%; max-height: 220px; overflow-y: auto;
+    display: flex; flex-direction: column; gap: .45rem;
+    padding-right: .2rem; scroll-behavior: smooth;
+  }
+  .transcript:empty { display: none; }
+  .transcript::-webkit-scrollbar { width: 3px; }
+  .transcript::-webkit-scrollbar-track { background: transparent; }
+  .transcript::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
+  .msg {
+    padding: .55rem .8rem; border-radius: 10px;
+    font-size: .85rem; line-height: 1.5; max-width: 92%;
+    animation: fadeUp .28s cubic-bezier(.2,.8,.2,1);
+    border: 1px solid transparent;
+  }
+  .msg.user   { background: rgba(74,158,255,.10); border-color: rgba(74,158,255,.20);
+                align-self: flex-end; color: var(--text); }
+  .msg.agent  { background: var(--surface); border-color: var(--line);
+                align-self: flex-start; color: var(--text); }
+  .msg.system { background: rgba(245,158,11,.08); border-color: rgba(245,158,11,.24);
+                align-self: center; color: var(--amber); font-size: .78rem;
+                font-family: var(--mono); max-width: 100%; }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(7px) } to { opacity: 1; transform: none } }
+
+  /* ---- Business card chips ---- */
+  .biz-panel {
+    width: 100%;
+    border: 1px solid var(--line); border-radius: 12px;
+    padding: .8rem .85rem;
+    display: flex; flex-direction: column; gap: .55rem;
+    background: rgba(255,255,255,.014);
+  }
+  .biz-label {
+    font-size: .6rem; text-transform: uppercase; letter-spacing: .14em;
+    color: var(--muted); font-weight: 700;
+  }
+  .biz-row { display: flex; flex-wrap: wrap; gap: .38rem; }
+  .biz-chip {
+    font-size: .76rem; color: var(--muted-2);
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: 999px; padding: .3rem .66rem;
+    display: inline-flex; gap: .35rem; align-items: center;
+  }
+  .biz-chip svg { width: 12px; height: 12px; opacity: .7; }
+
+  /* ---- Controls ---- */
+  .controls { display: flex; justify-content: center; margin-top: auto; padding-top: .3rem; }
+  .btn-start {
+    padding: .8rem 2.2rem; border-radius: 999px; border: none;
+    background: linear-gradient(135deg, var(--primary) 0%, #7c6aff 100%);
+    color: #041020; font-size: 1rem; font-weight: 700; cursor: pointer;
+    font-family: inherit; letter-spacing: .01em;
+    box-shadow: 0 12px 34px -12px var(--primary);
+    transition: transform .2s ease, box-shadow .2s ease;
+  }
+  .btn-start:hover { transform: translateY(-2px); box-shadow: 0 16px 40px -12px var(--primary); }
+  .btn-start:active { transform: scale(.97); }
+  .btn-start.hidden { display: none; }
+  .btn-end {
+    padding: .62rem 1.5rem; border-radius: 999px;
+    border: 1px solid rgba(239,68,68,.35); background: rgba(239,68,68,.06);
+    color: #f87171; font-size: .84rem; font-weight: 650; cursor: pointer;
+    font-family: inherit; letter-spacing: .02em;
+    display: none;
+    transition: background .2s ease, border-color .2s ease;
+  }
+  .btn-end.visible { display: inline-block; }
+  .btn-end:hover { background: rgba(239,68,68,.13); border-color: rgba(239,68,68,.5); }
+
+  .foot {
+    text-align: center; font-family: var(--mono); font-size: .62rem;
+    letter-spacing: .1em; text-transform: uppercase; color: #2c3a52;
+  }
+
+  /* ---- State-driven orb colour ---- */
+  .orb.listening .orb-core {
+    background:
+      radial-gradient(circle at 34% 30%, rgba(255,255,255,.16) 0%, transparent 42%),
+      radial-gradient(circle at 50% 50%, rgba(34,197,94,.18) 0%, rgba(8,20,14,.92) 62%, rgba(5,7,13,.98) 100%);
+    border-color: rgba(34,197,94,.32);
+    box-shadow: inset 0 0 46px -8px rgba(34,197,94,.28), 0 22px 60px -28px var(--green);
+  }
+  .orb.listening .orb-mono { color: rgba(34,197,94,.22); }
+  .orb.thinking .orb-core {
+    background:
+      radial-gradient(circle at 34% 30%, rgba(255,255,255,.16) 0%, transparent 42%),
+      radial-gradient(circle at 50% 50%, rgba(245,158,11,.18) 0%, rgba(22,16,6,.92) 62%, rgba(5,7,13,.98) 100%);
+    border-color: rgba(245,158,11,.32);
+    box-shadow: inset 0 0 46px -8px rgba(245,158,11,.28), 0 22px 60px -28px var(--amber);
+  }
+  .orb.thinking .orb-mono { color: rgba(245,158,11,.22); }
+  .orb.thinking .orb-core::after { animation-duration: 1.6s; }
+  .orb.speaking .orb-core {
+    background:
+      radial-gradient(circle at 34% 30%, rgba(255,255,255,.18) 0%, transparent 42%),
+      radial-gradient(circle at 50% 50%, rgba(74,158,255,.22) 0%, rgba(8,16,34,.92) 62%, rgba(5,7,13,.98) 100%);
+    border-color: rgba(74,158,255,.38);
+    box-shadow: inset 0 0 50px -8px var(--primary-dim), 0 22px 64px -26px var(--primary);
+  }
+  .orb.connecting .orb-core { animation: breathe 1.5s ease-in-out infinite; }
+  .orb.idle .orb-core { animation: breathe 3.4s ease-in-out infinite; }
+  .orb.error .orb-core { border-color: rgba(239,68,68,.35); }
+  .orb.error .orb-mono { color: rgba(239,68,68,.25); }
+  @keyframes breathe { 0%,100% { transform: scale(1) } 50% { transform: scale(1.028) } }
+  .connecting .ring-spin { opacity: 1; animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg) } }
+  .stale .trace { opacity: 0; }
+
+  @media (max-width: 430px) {
+    .orb-wrapper { width: 174px; height: 174px; }
+    .orb-mono { font-size: 2.1rem; }
+    .stage { min-height: 228px; }
+    .link-hud { grid-template-columns: repeat(2, 1fr); }
+    .phase { font-size: .56rem; letter-spacing: .06em; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .orb-core::after, .ring-spin, .orb-core, .live-dot { animation: none !important; }
+    .msg { animation: none !important; }
+  }
 </style>
-${accent ? `<style>:root{--primary:${accent};--primary-dim:${accent}22;}</style>` : ""}
 </head>
 <body>
-<canvas id="particles"></canvas>
+<div class="aurora"></div>
 <div class="grid-overlay"></div>
 
 <div class="app" id="app">
-  <div class="header">
-    <h1>${esc(companyName)}</h1>
-    <p>${esc(tagline || "Talk to our AI voice agent — available 24/7")}</p>
-  </div>
 
-  <div class="agent-badge">Powered by <span>${agentName}</span></div>
-
-  <div class="orb-wrapper" id="orbWrapper">
-    <!-- Ripple rings (speaking) -->
-    <div class="ripple ripple-1"></div>
-    <div class="ripple ripple-2"></div>
-    <div class="ripple ripple-3"></div>
-
-    <!-- Spinning ring (connecting) -->
-    <div class="ring-spin" id="ringSpin"></div>
-
-    <!-- Core orb -->
-    <div class="orb idle" id="orb">
-      <div class="orb-glow"></div>
-      <div class="orb-body">
-        <div class="orb-inner-glow"></div>
-        <!-- Waveform bars -->
-        <div class="wave-bars" id="waveBars">
-          <div class="bar" id="b1" style="height:12px"></div>
-          <div class="bar" id="b2" style="height:20px"></div>
-          <div class="bar" id="b3" style="height:28px"></div>
-          <div class="bar" id="b4" style="height:16px"></div>
-          <div class="bar" id="b5" style="height:24px"></div>
-          <div class="bar" id="b6" style="height:10px"></div>
-          <div class="bar" id="b7" style="height:20px"></div>
-        </div>
+  <header class="hdr">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">${esc(mono)}</div>
+      <div class="brand-txt">
+        <h1>${esc(companyName)}</h1>
+        <p>${esc(tagline || "AI voice agent — available 24/7")}</p>
       </div>
-      <div class="orb-icon" id="orbIcon">🤖</div>
     </div>
+    <div class="live-pill" id="livePill" data-live="idle">
+      <span class="live-dot" aria-hidden="true"></span><span id="liveText">Standby</span>
+    </div>
+  </header>
+
+  <section class="stage" id="stage">
+    <canvas id="fx" aria-hidden="true"></canvas>
+    <div class="orb-wrapper" id="orbWrapper">
+      <div class="trace t1" aria-hidden="true"></div>
+      <div class="trace t2" aria-hidden="true"></div>
+      <div class="ring-spin" aria-hidden="true"></div>
+      <div class="orb idle" id="orb" role="img" aria-label="Voice agent status">
+        <div class="orb-core"></div>
+        <div class="orb-mono" aria-hidden="true">${esc(mono)}</div>
+      </div>
+    </div>
+  </section>
+
+  <div class="caption">
+    <div class="status-text" id="statusText" aria-live="polite">Ready to connect</div>
+    <div class="sub-status" id="subStatus"></div>
+    <div class="call-timer" id="callTimer">00:00</div>
   </div>
 
-  <div class="status-text" id="statusText">Ready to connect</div>
+  <div class="barge" id="bargeBadge">Interrupting</div>
 
-  <div class="call-timer" id="callTimer">00:00</div>
+  <section class="meters" aria-label="Audio levels">
+    <div class="meter" id="meterYou">
+      <div class="meter-top"><span class="meter-label">You</span><span class="meter-val" id="valYou">idle</span></div>
+      <div class="meter-track"><div class="meter-fill" id="fillYou"></div></div>
+    </div>
+    <div class="meter" id="meterAgent">
+      <div class="meter-top"><span class="meter-label">${esc(agentName)}</span><span class="meter-val" id="valAgent">idle</span></div>
+      <div class="meter-track"><div class="meter-fill" id="fillAgent"></div></div>
+    </div>
+  </section>
 
-  <button class="btn-start hidden" id="btnStart" onclick="startCall()">✦ Start Call</button>
+  <section class="phases" id="phases" aria-label="Call phase">
+    <div class="phase" data-phase="connect">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v6"/><path d="M6.5 6.5a8 8 0 1 0 11 0"/></svg>
+      <span>Link</span><span class="phase-dot"></span>
+    </div>
+    <div class="phase" data-phase="listen">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3z"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg>
+      <span>Listen</span><span class="phase-dot"></span>
+    </div>
+    <div class="phase" data-phase="think">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg>
+      <span>Think</span><span class="phase-dot"></span>
+    </div>
+    <div class="phase" data-phase="speak">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 10v4M8 7v10M12 4v16M16 7v10M20 10v4"/></svg>
+      <span>Speak</span><span class="phase-dot"></span>
+    </div>
+  </section>
+
+  <section class="link-hud" id="linkHud" aria-label="Link telemetry">
+    <div class="stat"><span class="stat-k">RTT</span><span class="stat-v" id="statRtt">--</span></div>
+    <div class="stat"><span class="stat-k">Jitter</span><span class="stat-v" id="statJitter">--</span></div>
+    <div class="stat"><span class="stat-k">Loss</span><span class="stat-v" id="statLoss">--</span></div>
+    <div class="stat"><span class="stat-k">Codec</span><span class="stat-v" id="statCodec">--</span></div>
+  </section>
+
+  <div class="wave-bars" id="waveBars">
+    <div class="bar" style="height:4px"></div>
+    <div class="bar" style="height:4px"></div>
+    <div class="bar" style="height:4px"></div>
+    <div class="bar" style="height:4px"></div>
+    <div class="bar" style="height:4px"></div>
+    <div class="bar" style="height:4px"></div>
+    <div class="bar" style="height:4px"></div>
+    <div class="bar" style="height:4px"></div>
+    <div class="bar" style="height:4px"></div>
+  </div>
 
   <div class="input-area" id="inputArea">
-    <input
-      class="msg-input"
-      id="msgInput"
-      type="text"
-      placeholder="Type your message…"
-      maxlength="500"
-      onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault();sendMessage()}"
-    />
-    <button class="btn-send" id="btnSend" onclick="sendMessage()">Send →</button>
+    <input class="msg-input" id="msgInput" type="text" placeholder="Type your message…" maxlength="500"
+      onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage()}" />
+    <button class="btn-send" id="btnSend" onclick="sendMessage()">Send</button>
   </div>
 
   <div class="transcript" id="transcript"></div>
 
-  ${(hours || phone || offers.length) ? `<div class="biz-panel" id="bizPanel">
+  ${(hours || phone || offers.length) ? `<section class="biz-panel" id="bizPanel">
     ${(hours || phone) ? `<div class="biz-row">
-      ${hours ? `<span class="biz-chip">🕘 ${esc(hours)}</span>` : ""}
-      ${phone ? `<span class="biz-chip">📞 ${esc(phone)}</span>` : ""}
+      ${hours ? `<span class="biz-chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>${esc(hours)}</span>` : ""}
+      ${phone ? `<span class="biz-chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h3l2 5-2 1a12 12 0 0 0 6 6l1-2 5 2v3a2 2 0 0 1-2 2A17 17 0 0 1 4 5a2 2 0 0 1 2-2z"/></svg>${esc(phone)}</span>` : ""}
     </div>` : ""}
-    ${offers.length ? `<div style="width:100%">
+    ${offers.length ? `<div>
       <div class="biz-label">What we can help with</div>
-      <div class="biz-row" style="margin-top:.45rem">${offers.map((o) => `<span class="biz-chip">${esc(o)}</span>`).join("")}</div>
+      <div class="biz-row" style="margin-top:.4rem">${offers.map((o) => `<span class="biz-chip">${esc(o)}</span>`).join("")}</div>
     </div>` : ""}
-  </div>` : ""}
+  </section>` : ""}
 
-  <button class="btn-end" id="btnEnd" onclick="endCall()">✕ End Call</button>
+  <div class="controls">
+    <button class="btn-start hidden" id="btnStart" onclick="startCall()">Start call</button>
+    <button class="btn-end" id="btnEnd" onclick="endCall()">End call</button>
+  </div>
+
+  <div class="foot">Encrypted relay · no recording</div>
 </div>
-
 
 <audio id="remoteAudio" autoplay playsinline></audio>
 
@@ -4817,6 +4850,10 @@ setTimeout(function () {
   if (window.__callBooted) return;
   var s = document.getElementById('statusText');
   if (s) { s.textContent = 'Could not load the call agent. Check your connection and reload.'; s.className = 'status-text active'; }
+  var p = document.getElementById('livePill');
+  if (p) { p.setAttribute('data-live', 'err'); }
+  var lt = document.getElementById('liveText');
+  if (lt) { lt.textContent = 'Offline'; }
 }, 6000);
 </script>
 <script type="module">
@@ -4829,23 +4866,44 @@ window.__callBooted = true;
 // The business's agent-voice endpoint listens on the relay for a gift-wrapped
 // offer addressed to its npub. We wrap an offer the way /caller/index.html
 // does; the audio that comes back is the agent actually speaking.
+//
+// The UI is a readout of that call: two AnalyserNodes (the caller's mic and the
+// remote track) drive the meters, the orb and the canvas; getStats() drives the
+// link HUD; the connection state machine drives the phase rail. Nothing here
+// animates on a timer to look busy.
 // ---------------------------------------------------------------------------
-const COMPANY_ID   = ${JSON.stringify(companyId)};
-const AGENT_NAME   = ${JSON.stringify(agentName)};
-const VOICE        = ${JSON.stringify(voice)};
-const TURN_URL     = ${JSON.stringify(turnCredsUrl)};
+const COMPANY_ID = ${JSON.stringify(companyId)};
+const AGENT_NAME = ${JSON.stringify(agentName)};
+const VOICE      = ${JSON.stringify(voice)};
+const TURN_URL   = ${JSON.stringify(turnCredsUrl)};
 
-const orb         = document.getElementById('orb');
-const wrapper     = document.getElementById('orbWrapper');
-const orbIcon     = document.getElementById('orbIcon');
-const statusEl    = document.getElementById('statusText');
-const startBtn    = document.getElementById('btnStart');
-const inputArea   = document.getElementById('inputArea');
-const transcript  = document.getElementById('transcript');
-const endBtn      = document.getElementById('btnEnd');
-const waveBars    = document.getElementById('waveBars');
-const bars        = Array.from(document.querySelectorAll('.bar'));
+const orb        = document.getElementById('orb');
+const wrapper    = document.getElementById('orbWrapper');
+const stage      = document.getElementById('stage');
+const fx         = document.getElementById('fx');
+const statusEl   = document.getElementById('statusText');
+const subEl      = document.getElementById('subStatus');
+const startBtn   = document.getElementById('btnStart');
+const inputArea  = document.getElementById('inputArea');
+const transcript = document.getElementById('transcript');
+const endBtn     = document.getElementById('btnEnd');
+const waveBars   = document.getElementById('waveBars');
+const bars       = Array.from(document.querySelectorAll('.bar'));
 const remoteAudio = document.getElementById('remoteAudio');
+const livePill   = document.getElementById('livePill');
+const liveText   = document.getElementById('liveText');
+const bargeBadge = document.getElementById('bargeBadge');
+const fillYou    = document.getElementById('fillYou');
+const fillAgent  = document.getElementById('fillAgent');
+const valYou     = document.getElementById('valYou');
+const valAgent   = document.getElementById('valAgent');
+const meterYou   = document.getElementById('meterYou');
+const meterAgent = document.getElementById('meterAgent');
+const statRtt    = document.getElementById('statRtt');
+const statJitter = document.getElementById('statJitter');
+const statLoss   = document.getElementById('statLoss');
+const statCodec  = document.getElementById('statCodec');
+const phases     = Array.from(document.querySelectorAll('.phase'));
 
 let state = null, pc = null, sub = null, audioCtx = null;
 let playbackBlocked = false;
@@ -4856,29 +4914,45 @@ let bootOk = false;
 let everConnected = false;
 let micStream = null, micAn = null, remoteAn = null;
 let callId = null, pool = null, mySeckey = null, myPubkey = null, agentPubkey = null;
+let micLevel = 0, agentLevel = 0, lastSpeech = 0, statsInt = null;
 
-const ICONS = { idle: '\u{1F916}', connecting: '\u27F3', listening: '\u{1F3A4}', speaking: '\u{1F50A}', error: '\u26A0\uFE0F' };
 const STATUS = {
   idle:       'Ready to connect',
-  connecting: 'Connecting\u2026',
-  listening:  'Connected \u2014 go ahead and talk',
-  speaking:   AGENT_NAME + ' is speaking\u2026',
+  connecting: 'Connecting…',
+  listening:  'Connected — go ahead and talk',
+  thinking:   AGENT_NAME + ' is thinking…',
+  speaking:   AGENT_NAME + ' is speaking…',
   error:      'Voice is unavailable right now'
+};
+// Short mono label for the live pill (never invent a state that is not real).
+const PILL = {
+  idle: 'Standby', connecting: 'Linking', listening: 'Live',
+  thinking: 'Thinking', speaking: 'Speaking', error: 'Offline'
+};
+const PILL_MODE = {
+  idle: 'idle', connecting: 'connecting', listening: 'on',
+  thinking: 'talk', speaking: 'talk', error: 'err'
+};
+const PHASE = { idle: null, connecting: 'connect', listening: 'listen', thinking: 'think', speaking: 'speak', error: null };
+const PAL = {
+  idle: '#4a9eff', connecting: '#4a9eff', listening: '#22c55e',
+  thinking: '#f59e0b', speaking: '#4a9eff', error: '#ef4444'
 };
 
 function setState(s) {
   if (s === state) return;              // the rAF loop calls this every frame
   state = s;
-  if (s === 'listening') startTimer();
+  if (s === 'listening' || s === 'thinking' || s === 'speaking') startTimer();
   orb.className = 'orb ' + s;
-  wrapper.className = 'orb-wrapper ' + s;
-  orbIcon.textContent = ICONS[s] || ICONS.idle;
-  statusEl.textContent = playbackBlocked
-    ? ('Tap anywhere to hear ' + AGENT_NAME)
-    : (STATUS[s] || '');
+  wrapper.className = 'orb-wrapper ' + (s === 'idle' ? 'idle stale' : s);
+  livePill.setAttribute('data-live', PILL_MODE[s] || 'idle');
+  liveText.textContent = PILL[s] || '';
+  statusEl.textContent = playbackBlocked ? ('Tap anywhere to hear ' + AGENT_NAME) : (STATUS[s] || '');
   statusEl.className = 'status-text' + (s !== 'idle' ? ' active' : '');
-  waveBars.style.opacity = (s === 'listening' || s === 'speaking') ? '1' : '0';
-  if (s === 'idle') { endBtn.classList.remove('visible'); }
+  waveBars.className = 'wave-bars' + ((s === 'listening' || s === 'speaking' || s === 'thinking') ? ' on' : '');
+  var ph = PHASE[s];
+  phases.forEach(function (p) { p.classList.toggle('on', p.getAttribute('data-phase') === ph); });
+  if (s === 'idle') { endBtn.classList.remove('visible'); stopStats(); }
   else { endBtn.classList.add('visible'); }
 }
 
@@ -4895,7 +4969,7 @@ function analyserFor(stream) {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   const an = audioCtx.createAnalyser();
   an.fftSize = 512;
-  an.smoothingTimeConstant = 0.7;
+  an.smoothingTimeConstant = 0.72;
   audioCtx.createMediaStreamSource(stream).connect(an);
   return an;
 }
@@ -4915,17 +4989,159 @@ function drawBars(an) {
   for (let i = 0; i < n; i++) {
     let peak = 0;
     for (let q = 0; q < span; q++) peak = Math.max(peak, freqBuf[i * span + q] || 0);
-    bars[i].style.height = (6 + (peak / 255) * 46) + 'px';
+    bars[i].style.height = (3 + (peak / 255) * 22) + 'px';
   }
 }
-function loop() {
-  if (!pc) return;
-  const lv = loudness(remoteAn);
-  drawBars(remoteAn || micAn);
-  if (pc.connectionState === 'connected') {
-    setState(lv > 0.035 ? 'speaking' : 'listening');
+
+// ---- Canvas: particle field + radial spectrum + dual activity arcs ----
+// 2D context on purpose: no WebGL dependency, so this renders identically on a
+// cheap Android, an iPhone and a desktop. Cheap by construction — ~44 particles,
+// no per-frame allocation, and it stops drawing entirely when reduced-motion is on.
+const ctx = fx ? fx.getContext('2d') : null;
+const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+let W = 0, H = 0, DPR = Math.min(2, window.devicePixelRatio || 1);
+let parts = [];
+function seedParts() {
+  parts = [];
+  const n = reduce ? 0 : 44;
+  for (let i = 0; i < n; i++) {
+    parts.push({ a: Math.random() * Math.PI * 2, r: 78 + Math.random() * 120,
+                 s: (Math.random() * 0.5 + 0.12) * (Math.random() < 0.5 ? -1 : 1),
+                 z: Math.random() * 0.7 + 0.3 });
   }
+}
+function sizeFx() {
+  if (!fx || !stage) return;
+  const r = stage.getBoundingClientRect();
+  W = r.width; H = r.height;
+  fx.width = Math.max(1, W * DPR); fx.height = Math.max(1, H * DPR);
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+function drawFx() {
+  if (!ctx) return;
+  ctx.clearRect(0, 0, W, H);
+  const cx = W / 2, cy = H / 2;
+  const base = Math.max(84, wrapper.getBoundingClientRect().width / 2 + 6);
+  const col = PAL[state] || PAL.idle;
+
+  // particle field — drifts on a ring, pushed outward by whichever channel is hot
+  const energy = Math.max(micLevel, agentLevel);
+  for (let i = 0; i < parts.length; i++) {
+    const p = parts[i];
+    p.a += p.s * 0.0032;
+    const rr = p.r + energy * 34 * p.z;
+    const x = cx + Math.cos(p.a) * rr, y = cy + Math.sin(p.a) * rr;
+    const sz = 0.7 + p.z * 1.5;
+    ctx.globalAlpha = (0.10 + p.z * 0.30) * (0.5 + energy * 2.4);
+    ctx.fillStyle = col;
+    ctx.beginPath(); ctx.arc(x, y, sz, 0, 6.2832); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // radial spectrum — real frequency bins wrapped around the orb
+  if (freqBuf && state && state !== 'idle') {
+    const N = 64, span = Math.floor(freqBuf.length / N) || 1;
+    ctx.lineWidth = 2; ctx.lineCap = 'round';
+    for (let i = 0; i < N; i++) {
+      let peak = 0;
+      for (let q = 0; q < span; q++) peak = Math.max(peak, freqBuf[i * span + q] || 0);
+      const mag = (peak / 255) * (i % 2 ? 1 : 0.55);       // alternating keeps it legible
+      if (mag < 0.03) continue;
+      const a = (i / N) * Math.PI * 2 - Math.PI / 2;
+      const r0 = base + 12, r1 = r0 + 4 + mag * 30;
+      ctx.globalAlpha = 0.22 + mag * 0.55;
+      ctx.strokeStyle = col;
+      ctx.beginPath();
+      ctx.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0);
+      ctx.lineTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // dual activity arcs — inner = you (mic), outer = the agent (remote)
+  arc(cx, cy, base - 4, micLevel, '#22c55e', 2);
+  arc(cx, cy, base + 6, agentLevel, '#4a9eff', 2);
+}
+function arc(cx, cy, r, level, colour, lw) {
+  if (!level || level < 0.012) return;
+  const sweep = Math.min(1, level * 3.2) * Math.PI * 1.5;
+  ctx.globalAlpha = 0.75;
+  ctx.strokeStyle = colour;
+  ctx.lineWidth = lw;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + sweep);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+}
+
+function loop() {
   requestAnimationFrame(loop);
+  if (!pc) { drawFx(); return; }
+  micLevel = loudness(micAn);
+  agentLevel = loudness(remoteAn);
+  drawBars(remoteAn || micAn);
+
+  const now = Date.now();
+  if (micLevel > 0.035) lastSpeech = now;
+
+  // Phase inference. The server does not send a "thinking" event, but the
+  // pipeline genuinely IS thinking between the caller stopping and the reply
+  // starting — so infer it from the two levels rather than leaving the amber
+  // thinking styling unreachable (which is what it used to be: styled, dead).
+  let next;
+  if (pc.connectionState !== 'connected') next = 'connecting';
+  else if (agentLevel > 0.035) next = 'speaking';
+  else if (micLevel > 0.035) next = 'listening';
+  else if (now - lastSpeech < 1700) next = 'thinking';
+  else next = 'listening';
+  setState(next);
+
+  // Real meters + the barge-in affordance (the caller talking over the agent).
+  const pct = function (v) { return Math.min(100, Math.round(v * 320)) + '%'; };
+  fillYou.style.width = pct(micLevel);
+  fillAgent.style.width = pct(agentLevel);
+  valYou.textContent = micLevel > 0.035 ? 'speaking' : 'idle';
+  valAgent.textContent = agentLevel > 0.035 ? 'speaking' : 'idle';
+  meterYou.classList.toggle('act', micLevel > 0.035);
+  meterAgent.classList.toggle('act', agentLevel > 0.035);
+  var both = micLevel > 0.035 && agentLevel > 0.035;
+  bargeBadge.classList.toggle('on', both);
+  if (both && !bargeBadge.__n) { log('You spoke over the agent — it will stop and listen.', 'system'); bargeBadge.__n = 1; }
+  if (!both) bargeBadge.__n = 0;
+
+  drawFx();
+}
+
+// ---- Link telemetry: the connection's own numbers, not guesses ----
+function startStats() { if (!statsInt) statsInt = setInterval(pollStats, 1000); }
+function stopStats() { if (statsInt) { clearInterval(statsInt); statsInt = null; } }
+function pollStats() {
+  if (!pc || !pc.getStats) return;
+  let p;
+  try { p = pc.getStats(); } catch (e) { return; }
+  p.then(function (rep) {
+    var rtt = null, jit = null, loss = null;
+    rep.forEach(function (s) {
+      if (s.type === 'candidate-pair' && (s.nominated || s.state === 'succeeded') && s.currentRoundTripTime != null) rtt = s.currentRoundTripTime;
+      if (s.type === 'remote-inbound-rtp' && s.kind === 'audio') {
+        if (s.jitter != null) jit = s.jitter;
+        if (s.packetsLost != null) loss = s.packetsLost;
+      }
+      if (s.type === 'inbound-rtp' && s.kind === 'audio' && jit == null && s.jitter != null) jit = s.jitter;
+    });
+    if (rtt != null) { statRtt.textContent = Math.round(rtt * 1000) + ' ms'; statRtt.className = 'stat-v' + (rtt > 0.3 ? ' warn' : rtt > 0.15 ? '' : ''); }
+    if (jit != null) { statJitter.textContent = (jit * 1000).toFixed(1) + ' ms'; statJitter.className = 'stat-v' + (jit > 0.05 ? ' warn' : ''); }
+    if (loss != null) { statLoss.textContent = loss + (loss === 1 ? ' pkt' : ' pkts'); statLoss.className = 'stat-v' + (loss > 5 ? ' bad' : loss > 0 ? ' warn' : ''); }
+  }).catch(function () {});
+}
+function readCodec() {
+  try {
+    const sdp = (pc.localDescription && pc.localDescription.sdp) || '';
+    const m = /a=rtpmap:\d+\s+([A-Za-z0-9]+)\/(\d+)/.exec(sdp);
+    if (m) { statCodec.textContent = m[1].toUpperCase() + ' ' + Math.round(Number(m[2]) / 1000) + 'k'; }
+  } catch (e) {}
 }
 
 // ---- Signaling: gift-wrapped events over the relay (NIP-44 / kind:1059) ----
@@ -4959,7 +5175,7 @@ function subscribeAnswer() {
           if (pc && pc.signalingState !== 'stable') {
             pc.setRemoteDescription({ type: 'answer', sdp: sig.sdp })
               .then(function () {
-                log('Agent answered.');
+                readCodec();
                 while (pc && pendingIce.length) {
                   pc.addIceCandidate(new RTCIceCandidate(pendingIce.shift())).catch(function () {});
                 }
@@ -4974,7 +5190,7 @@ function subscribeAnswer() {
           if (pc && pc.remoteDescription) pc.addIceCandidate(new RTCIceCandidate(sig.candidate)).catch(function () {});
           else pendingIce.push(sig.candidate);
         } else if (sig.type === 'hangup') {
-          log('The agent ended the call.');
+          log('The agent ended the call.', 'system');
           endCall();
         }
       } });
@@ -5008,7 +5224,6 @@ window.startCall = async function () {
   setState('connecting');
   startBtn.classList.add('hidden');
   try {
-    log('Requesting microphone\u2026');
     micStream = await navigator.mediaDevices.getUserMedia({
       audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
     });
@@ -5018,7 +5233,6 @@ window.startCall = async function () {
     // here is what unlocks the agent's audio on desktop Chrome / Android. On WebKit
     // this is a no-op; the first-gesture fallback below is what recovers sound there.
     try { if (audioCtx && audioCtx.state === 'suspended') await audioCtx.resume(); } catch (e) {}
-    log('Microphone ready.');
 
     callId = Array.from(crypto.getRandomValues(new Uint8Array(8)))
       .map(function (b) { return b.toString(16).padStart(2, '0'); }).join('');
@@ -5033,8 +5247,7 @@ window.startCall = async function () {
       (Array.isArray(c.urls) ? c.urls : [c.urls]).forEach(function (u) {
         iceServers.push({ urls: u, username: c.username, credential: c.credential });
       });
-      log('Relay credentials acquired.');
-    } catch (e) { log('No TURN relay \u2014 trying a direct path.'); }
+    } catch (e) { log('No relay credentials — trying a direct path.', 'system'); }
 
     // Relay-only ICE. The default policy also gathers host + srflx candidates,
     // which from a NAT'd caller mostly fail — and the srflx gather waits on a
@@ -5059,8 +5272,13 @@ window.startCall = async function () {
     pc.onconnectionstatechange = function () {
       if (!pc) return;                       // a teardown below nulls pc
       const s = pc.connectionState;
-      log('Connection: ' + s);
-      if (s === 'connected') { everConnected = true; setState('listening'); return; }
+      if (s === 'connected') {
+        everConnected = true;
+        setState('listening');
+        readCodec();
+        startStats();
+        return;
+      }
       if (s === 'failed' || s === 'closed') {
         // Terminal: release the mic, the PC and the pool rather than leaving them
         // open behind an error state -- otherwise a failed call keeps the mic hot
@@ -5077,8 +5295,9 @@ window.startCall = async function () {
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
     await sendSignal('offer', { sdp: offer.sdp });
-    log('Ringing ' + AGENT_NAME + '\u2026');
     subscribeAnswer();
+    sizeFx();
+    requestAnimationFrame(loop);
     // A business can not answer two ways: no endpoint at all (the no-voice branch
     // below), or an endpoint that exists but is down. The first is handled at boot;
     // this is the second -- if no answer arrives, stop leaving the caller ringing
@@ -5086,12 +5305,11 @@ window.startCall = async function () {
     ringTimeout = setTimeout(function () {
       ringTimeout = null;
       if (pc && pc.connectionState === 'connected') return;
-      log('Nobody picked up just yet - you can type instead.', 'system');
+      log('Nobody picked up just yet — you can type instead.', 'system');
       setState('error');
       inputArea.classList.add('visible');
       startBtn.classList.remove('hidden');
     }, 25000);
-    requestAnimationFrame(loop);
   } catch (e) {
     setState('error');
     log('Could not start the call: ' + (e && e.message ? e.message : e), 'system');
@@ -5107,13 +5325,14 @@ window.endCall = function () {
   cleanup();
   setState('idle');
   startBtn.classList.remove('hidden');
-  log('Call ended.');
+  log('Call ended.', 'system');
 };
 
 function cleanup() {
   if (autoStartTimer) { clearTimeout(autoStartTimer); autoStartTimer = null; }
   if (ringTimeout) { clearTimeout(ringTimeout); ringTimeout = null; }
   stopTimer();
+  stopStats();
   if (sub) { try { sub.close(); } catch (e) {} sub = null; }
   if (pc) { try { pc.close(); } catch (e) {} pc = null; }
   // The pool owns a WebSocket per relay and is created fresh on every startCall.
@@ -5129,10 +5348,19 @@ function cleanup() {
   }
   if (remoteAudio.srcObject) remoteAudio.srcObject = null;
   micAn = null; remoteAn = null;
-  if (waveBars) waveBars.style.opacity = '0';
+  micLevel = 0; agentLevel = 0; lastSpeech = 0;
+  fillYou.style.width = '0%'; fillAgent.style.width = '0%';
+  valYou.textContent = 'idle'; valAgent.textContent = 'idle';
+  meterYou.classList.remove('act'); meterAgent.classList.remove('act');
+  bargeBadge.classList.remove('on');
+  statRtt.textContent = '--'; statJitter.textContent = '--';
+  statLoss.textContent = '--'; statCodec.textContent = '--';
+  statRtt.className = 'stat-v'; statJitter.className = 'stat-v'; statLoss.className = 'stat-v';
+  if (waveBars) waveBars.className = 'wave-bars';
   playbackBlocked = false;
   callId = null; mySeckey = null; myPubkey = null;
   agentPubkey = VOICE.enabled ? agentPubkey : null;
+  drawFx();
 }
 
 // ---- Text assistant: only for a business with no voice endpoint ----
@@ -5160,6 +5388,7 @@ window.sendMessage = async function () {
 // signalling library happens before this runs, so the guard in the document
 // head catches that instead (and stops a dead button being shown).
 try {
+  if (fx) { seedParts(); sizeFx(); window.addEventListener('resize', sizeFx); drawFx(); }
   if (VOICE.enabled) {
     agentPubkey = nip19.decode(VOICE.npub).data;
     // Entering the page IS the intent to call — no redundant button. Start the
@@ -5179,7 +5408,7 @@ try {
     inputArea.classList.add('visible');
     statusEl.textContent = 'Text assistant (voice not enabled for this business yet)';
     statusEl.className = 'status-text active';
-    log('Voice is not enabled for this business yet \u2014 you can still type.');
+    log('Voice is not enabled for this business yet — you can still type.', 'system');
   }
   bootOk = true;
 } catch (e) {
@@ -5190,7 +5419,7 @@ try {
 }
 
 if (VOICE.enabled && bootOk) {
-  log('Connecting you to ' + AGENT_NAME + '\u2026');
+  log('Connecting you to ' + AGENT_NAME + '…', 'system');
   autoStartTimer = setTimeout(function () { autoStartTimer = null; startCall().catch(function () {}); }, 250);
   // Some browsers gate playback until the first gesture. The first tap anywhere
   // resumes audio and, if the auto-start was blocked, (re)starts the call.
