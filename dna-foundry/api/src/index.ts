@@ -237,6 +237,18 @@ const ROOT = path.resolve(__dirname, "..", "..");
 const DATA = path.join(ROOT, "api", "data");
 const CARDS = path.join(DATA, "cards");
 const HELIX_COMPANIES = process.env.HELIX_CARD_ROOT || "/etc/helix/companies";
+
+// AGENT_VOICE_ROUTES — JSON map of companyId → agent-voice HTTP base URL.
+// Example: {"santinos":"http://localhost:31001","demo-barber":"http://localhost:31002"}
+// When a company has an entry, call-message proxies to agent-voice instead of aiGateway.
+const AGENT_VOICE_ROUTES: Record<string, string> = (() => {
+  try {
+    const raw = process.env.AGENT_VOICE_ROUTES?.trim();
+    return raw ? (JSON.parse(raw) as Record<string, string>) : {};
+  } catch {
+    return {};
+  }
+})();
 const JOBS = path.join(DATA, "jobs");
 const COMPILED = path.join(ROOT, "compiled");
 const COMPILER_CLI = path.join(ROOT, "compiler", "dist", "cli.js");
@@ -874,6 +886,8 @@ app.post("/extract", { preHandler: requireAuth }, async (req, reply) => {
       });
     }
     await ensureDirs();
+    // Tag format so agent-voice validates cleanly instead of logging a warning.
+    (card as unknown as Record<string, unknown>).format = "business-card/0.1";
     const cardFile = path.join(CARDS, `${card.id}.json`);
     await fs.writeFile(cardFile, JSON.stringify(card, null, 2));
 
@@ -5591,18 +5605,61 @@ app.post("/call-session/:companyId", async (req, reply) => {
   return reply.code(200).send({ ok: true, sessionId });
 });
 
+/** Build a rich card-grounded system prompt (mirrors agent-voice pipeline.py). */
+function buildCallSystemPrompt(card: Record<string, unknown>): string {
+  const ident = (card.identity ?? {}) as Record<string, unknown>;
+  const voice = (card.voice ?? {}) as Record<string, unknown>;
+  const offerings = (card.offerings as unknown[]) ?? [];
+  const policies = (card.policies as unknown[]) ?? [];
+  const handoff = (card.handoff ?? {}) as Record<string, unknown>;
+
+  const name = String(ident.name ?? "this business");
+  const tagline = String(ident.tagline ?? ident.elevatorPitch ?? ident.elevator_pitch ?? "").trim();
+  const tones = Array.isArray(voice.tone) ? (voice.tone as string[]).join(", ") : String(voice.tone ?? "");
+  const personality = String(voice.personality ?? "").trim();
+
+  const lines: string[] = [];
+  lines.push(`You are the AI phone agent for **${name}**.`);
+  if (tagline) lines.push(`About the business: ${tagline.replace(/\.$/, "")}`);
+  lines.push("Keep every reply to one or two short spoken sentences. No lists, no markdown, no emojis.");
+  if (tones) lines.push(`Tone: ${tones}.`);
+  if (personality) lines.push(`Personality: ${personality}`);
+
+  if (offerings.length > 0) {
+    lines.push("", "What the business offers:");
+    for (const o of offerings) {
+      const off = o as Record<string, unknown>;
+      const oName = String(off.name ?? "").trim();
+      if (!oName) continue;
+      const price = off.price;
+      const priceTag = price == null
+        ? " (price: NOT CONFIRMED — do not quote)"
+        : ` ($${price})`;
+      lines.push(`- ${oName}${off.description ? ` — ${off.description}` : ""}${priceTag}`);
+    }
+    lines.push("", "PRICE RULE: If asked about anything marked NOT CONFIRMED, say \"I don't have that price confirmed right now — can I take your number for a callback?\" Do NOT invent a price.");
+  }
+
+  for (const p of policies) {
+    const pol = p as Record<string, unknown>;
+    if (pol.topic && pol.rule) lines.push(`Policy — ${pol.topic}: ${pol.rule}`);
+  }
+
+  const handoffInfo = String(handoff.open_hours ?? handoff.channel ?? handoff.instruction ?? "").trim();
+  if (handoffInfo) lines.push(``, `Human handoff: ${handoffInfo}. Offer this if you cannot help or the caller requests a person.`);
+
+  return lines.join("\n");
+}
+
 // POST /call-message/:companyId — public: a visitor talks to the business's agent.
 //
-// UNAUTHENTICATED and LLM-backed, so it is the platform's own spend at risk, not
-// the company's — nothing deducts credits here. It shipped with no limiter and no
-// length cap at all, which made it a free, unmetered LLM proxy on the account key.
+// Routes to the card-grounded agent-voice HTTP bridge when AGENT_VOICE_ROUTES
+// includes an entry for this companyId; falls back to aiGateway otherwise.
+// Conversation history is threaded via callSessionStore so replies are contextual.
 app.post("/call-message/:companyId", async (req, reply) => {
   const { companyId } = req.params as { companyId: string };
   const body = (req.body ?? {}) as { sessionId?: string; message?: string };
 
-  // FIRST, before any parsing, lookup or LLM work: the limiter must count every
-  // attempt, not only well-formed ones. A limiter that runs after validation is a
-  // limiter an abuser steps around by sending junk.
   const ip = (req.headers["x-real-ip"] as string) || req.ip || "unknown";
   if (!anonLlmAllow(ip)) {
     return reply.code(429).send({ ok: false, error: "too many messages — please slow down" });
@@ -5612,28 +5669,73 @@ app.post("/call-message/:companyId", async (req, reply) => {
   if (String(body.message).length > 1000)
     return reply.code(400).send({ ok: false, error: "message too long (1000 chars max)" });
 
+  const sessionId = body.sessionId;
+  const session = sessionId ? callSessionStore.get(sessionId) : undefined;
+  const history = session?.history ?? [];
+
+  // ── Path A: agent-voice HTTP bridge ─────────────────────────────────────
+  const avBase = AGENT_VOICE_ROUTES[companyId];
+  if (avBase) {
+    try {
+      const avRes = await fetch(`${avBase}/chat`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          message: body.message,
+          session_id: sessionId,
+          history: history.map((h) => {
+            const [role, content] = h.split(/^(user|assistant): /i).filter(Boolean);
+            return { role: role ?? "user", content: content ?? h };
+          }),
+        }),
+        signal: AbortSignal.timeout(20_000),
+      });
+      if (avRes.ok) {
+        const data = (await avRes.json()) as { reply: string; session_id: string };
+        if (session) {
+          session.history.push(`user: ${body.message}`, `assistant: ${data.reply}`);
+          session.history = session.history.slice(-20);
+        }
+        return reply.code(200).send({ ok: true, reply: data.reply });
+      }
+    } catch (e) {
+      app.log.warn({ err: e, companyId }, "agent-voice HTTP bridge unreachable; falling back to aiGateway");
+    }
+  }
+
+  // ── Path B: aiGateway fallback with card-grounded prompt + history ───────
   const cardPath = await findCard(companyId);
-  let agentContext = `You are a helpful AI assistant for a business. Be friendly, concise, and helpful.`;
+  let systemPrompt = "You are a helpful AI assistant for a business. Be friendly, concise, and helpful.";
   if (cardPath) {
     try {
-      const card = JSON.parse(await fs.readFile(cardPath, "utf8"));
-      const name = card?.identity?.name ?? "this business";
-      const pitch = card?.identity?.elevatorPitch ?? "";
-      agentContext = `You are Helix AI, the virtual assistant for ${name}. ${pitch} Be friendly, helpful, and concise. Answer questions about the business and help customers.`;
-    } catch { /* use default */ }
+      const card = JSON.parse(await fs.readFile(cardPath, "utf8")) as Record<string, unknown>;
+      systemPrompt = buildCallSystemPrompt(card);
+    } catch { /* keep default */ }
+  }
+
+  // Prepend recent history as context block
+  let userMessage = String(body.message);
+  if (history.length > 0) {
+    const prior = history.slice(-6).join("\n");
+    userMessage = `[Prior conversation]\n${prior}\n\nCALLER: ${body.message}`;
   }
 
   try {
     const res = await aiGateway.call({
-      prompt: body.message,
-      systemPrompt: agentContext,
+      prompt: userMessage,
+      systemPrompt,
       jsonMode: false,
       temperature: 0.7,
       maxTokens: 300,
       orgId: companyId,
       operationType: "call_message",
     });
-    return reply.code(200).send({ ok: true, reply: res.text.trim() });
+    const replyText = res.text.trim();
+    if (session) {
+      session.history.push(`user: ${body.message}`, `assistant: ${replyText}`);
+      session.history = session.history.slice(-20);
+    }
+    return reply.code(200).send({ ok: true, reply: replyText });
   } catch {
     return reply.code(200).send({ ok: true, reply: "I'm here to help! Could you please repeat that?" });
   }
