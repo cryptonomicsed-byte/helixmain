@@ -5673,44 +5673,37 @@ app.post("/call-message/:companyId", async (req, reply) => {
   const session = sessionId ? callSessionStore.get(sessionId) : undefined;
   const history = session?.history ?? [];
 
-  // ── Path A: agent-voice HTTP bridge ─────────────────────────────────────
+  // ── System prompt: prefer agent-voice /prompt (compiled from full card),
+  //    fall back to inline buildCallSystemPrompt from the local card file.
+  let systemPrompt = "You are a helpful AI assistant for a business. Be friendly, concise, and helpful.";
+
   const avBase = AGENT_VOICE_ROUTES[companyId];
+  let promptFromAv = false;
   if (avBase) {
     try {
-      const avRes = await fetch(`${avBase}/chat`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          message: body.message,
-          session_id: sessionId,
-          history: history.map((h) => {
-            const [role, content] = h.split(/^(user|assistant): /i).filter(Boolean);
-            return { role: role ?? "user", content: content ?? h };
-          }),
-        }),
-        signal: AbortSignal.timeout(45_000),
+      const avRes = await fetch(`${avBase}/prompt`, {
+        signal: AbortSignal.timeout(5_000),
       });
       if (avRes.ok) {
-        const data = (await avRes.json()) as { reply: string; session_id: string };
-        if (session) {
-          session.history.push(`user: ${body.message}`, `assistant: ${data.reply}`);
-          session.history = session.history.slice(-20);
+        const data = (await avRes.json()) as { system_prompt?: string };
+        if (data.system_prompt) {
+          systemPrompt = data.system_prompt;
+          promptFromAv = true;
         }
-        return reply.code(200).send({ ok: true, reply: data.reply });
       }
-    } catch (e) {
-      app.log.warn({ err: e, companyId }, "agent-voice HTTP bridge unreachable; falling back to aiGateway");
+    } catch {
+      // agent-voice not reachable — will use local card fallback below
     }
   }
 
-  // ── Path B: aiGateway fallback with card-grounded prompt + history ───────
-  const cardPath = await findCard(companyId);
-  let systemPrompt = "You are a helpful AI assistant for a business. Be friendly, concise, and helpful.";
-  if (cardPath) {
-    try {
-      const card = JSON.parse(await fs.readFile(cardPath, "utf8")) as Record<string, unknown>;
-      systemPrompt = buildCallSystemPrompt(card);
-    } catch { /* keep default */ }
+  if (!promptFromAv) {
+    const cardPath = await findCard(companyId);
+    if (cardPath) {
+      try {
+        const card = JSON.parse(await fs.readFile(cardPath, "utf8")) as Record<string, unknown>;
+        systemPrompt = buildCallSystemPrompt(card);
+      } catch { /* keep default */ }
+    }
   }
 
   // Prepend recent history as context block
