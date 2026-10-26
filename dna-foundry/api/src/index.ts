@@ -5688,7 +5688,7 @@ app.post("/call-message/:companyId", async (req, reply) => {
             return { role: role ?? "user", content: content ?? h };
           }),
         }),
-        signal: AbortSignal.timeout(20_000),
+        signal: AbortSignal.timeout(45_000),
       });
       if (avRes.ok) {
         const data = (await avRes.json()) as { reply: string; session_id: string };
