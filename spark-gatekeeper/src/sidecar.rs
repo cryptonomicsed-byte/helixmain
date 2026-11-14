@@ -163,6 +163,6 @@ mod tests {
         let resp = dispatch(&gk, &ctx);
         assert!(matches!(resp, SidecarResponse::Held { .. }), "high risk must hold, got {resp:?}");
         // Verify it's actually in the queue.
-        assert_eq!(gk.hold_queue.pending().unwrap().len(), 1);
+        assert_eq!(gk.hold_queue.pending(None).unwrap().len(), 1);
     }
 }

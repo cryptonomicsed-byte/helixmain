@@ -135,7 +135,7 @@ fn refund_escalates_approve_releases_with_receipt() {
     };
 
     // Hold queue must have exactly one pending entry.
-    let pending = gk.hold_queue.pending().expect("pending");
+    let pending = gk.hold_queue.pending(None).expect("pending");
     assert_eq!(pending.len(), 1);
     assert_eq!(pending[0].action_id, "act_refund_integration");
 
@@ -151,7 +151,7 @@ fn refund_escalates_approve_releases_with_receipt() {
     assert!(!receipt.id.is_empty(), "receipt id must be set");
 
     // After approval, queue is empty.
-    assert_eq!(gk.hold_queue.pending().unwrap().len(), 0);
+    assert_eq!(gk.hold_queue.pending(None).unwrap().len(), 0);
 }
 
 // ── Demo 3: Null-price refusal ────────────────────────────────────────────────
