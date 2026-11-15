@@ -198,6 +198,10 @@ message VerifyIdentityRequest {
   // A sid/0.2 certificate and, optionally, a sid-runtime/0.2 statement, as JSON.
   string certificate_json = 2;
   string runtime_json = 3;
+  // Record the verified identity in this tenant's registry so the agent can
+  // act. Only a SERVICE principal may register; registration requires a
+  // trusted result and a version newer than the one already held.
+  bool register = 4;
 }
 
 message VerifyIdentityResponse {
@@ -207,6 +211,7 @@ message VerifyIdentityResponse {
   repeated string untrusted = 4;
   string sid = 5;
   string acting_hash = 6;
+  bool registered = 7;
 }
 
 message HealthRequest {}
@@ -217,6 +222,9 @@ message HealthResponse {
   // false when the policy service cannot be reached: privileged actions are
   // then denied.
   bool policy_available = 3;
+  // Number of entries in the audit chain and the hash of the newest one.
+  int64 audit_entries = 4;
+  string audit_head = 5;
 }
 
 service Kernel {
