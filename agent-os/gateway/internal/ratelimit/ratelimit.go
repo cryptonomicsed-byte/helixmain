@@ -1,4 +1,4 @@
-package api
+package ratelimit
 
 import (
 	"sync"
@@ -21,8 +21,15 @@ type bucket struct {
 	last   time.Time
 }
 
-func NewLimiter(ratePerSecond float64, burst int) *Limiter {
+func New(ratePerSecond float64, burst int) *Limiter {
 	return &Limiter{rate: ratePerSecond, burst: float64(burst), now: time.Now, buckets: map[string]*bucket{}}
+}
+
+// SetClock replaces the time source (tests).
+func (l *Limiter) SetClock(now func() time.Time) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.now = now
 }
 
 // Allow takes one token for key. When there is none it returns how long to wait.

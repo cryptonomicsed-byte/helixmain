@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/cryptonomicsed-byte/helixmain/agent-os/gateway/internal/auth"
+	"github.com/cryptonomicsed-byte/helixmain/agent-os/gateway/internal/ratelimit"
 
 	kernelv1 "github.com/cryptonomicsed-byte/helixmain/agent-os/gateway/gen/helix/kernel/v1"
 	"google.golang.org/grpc"
@@ -670,8 +671,8 @@ func TestReadyzFollowsTheKernel(t *testing.T) {
 
 func TestOneCallerCannotMonopoliseTheKernel(t *testing.T) {
 	w := newWorld(t)
-	w.srv.limiter = NewLimiter(1, 3)
-	w.srv.limiter.now = func() time.Time { return w.now }
+	w.srv.limiter = ratelimit.New(1, 3)
+	w.srv.limiter.SetClock(func() time.Time { return w.now })
 	codes := []int{}
 	for i := 0; i < 5; i++ {
 		codes = append(codes, w.do("agent", "GET", "/v1/health", "").Code)

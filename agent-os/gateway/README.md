@@ -102,6 +102,27 @@ Limits: 1 MiB bodies; 20 requests/s (burst 40) per principal; 256 requests in fl
 
 Breaking the ownership check on purpose fails both the unit and the end-to-end tests.
 
+## The QR contact resolver (`helix-resolver`)
+
+A second, **public** binary in this module, separate from the authenticated gateway: it serves signed QR contact
+resolutions (`helix-qr/1`, spec in the `sid` repo `spec/helix-qr-1.md`). It holds **no signing key and is untrusted for
+content**: it stores resolutions the issuer signed and serves them only after verifying them; clients verify again. A
+compromised resolver can withhold or serve stale data (clients reject stale by `fresh_until`), not forge a contact.
+
+| | |
+|---|---|
+| `GET /q/{payload}` | the reference must verify under the trust anchors, name *this* resolver, and have been requested at *this* host (421 otherwise); expired is 410; an unknown issuer, or a key outside its window, is 404; then the stored resolution is re-verified (answers this reference, signed by its issuer, current) before it is served byte-for-byte as signed. A stored document that does not verify is **never** served (503). A revoked/suspended/superseded contact is 410 with the signed document so the client can say why, `no-store`. |
+| `PUT /v1/publish` `{reference, resolution}` | a bearer token **and** a valid issuer signature. Resolutions only move forward in time; revocation wins a tie; a revoked or superseded contact **never becomes active again**. |
+
+Config: `HELIX_RESOLVER_ORIGIN`, `_TRUST_FILE` (sid/0.2 trust anchors), `_STORE_DIR`, `_PUBLISH_TOKEN_SHA256`, `_LISTEN`
+(off loopback it refuses to start without TLS), `_TLS_CERT`/`_KEY`. Per-address rate limit (`X-Forwarded-For` is a claim, not a fact).
+
+`internal/qr` is the Go implementation: it passes the shared conformance vectors for references (57 of 59) and resolution
+envelopes (24 of 24), vendored with a pinned hash; it lists by name what it does not run (the `resolution` vectors need
+sid/0.2 certificate verification, which a resolver deliberately does not do; one vector needs a BIP-340 issuer, which
+this verifier reports as untrusted, never trusted). Mutation checks: no Host check, a revocable revocation, serving
+unverified stored documents, and an unchecked publish token each fail the tests.
+
 ## Not done / limits
 
 - **Static bearer tokens in a file.** No OIDC/JWT/SSO, no token scopes beyond roles, no per-token network binding. Fine for services and agents; a staff or customer login needs an identity provider in front.
@@ -109,4 +130,5 @@ Breaking the ownership check on purpose fails both the unit and the end-to-end t
 - **No "list the hold queue" endpoint.** The kernel has no list RPC yet; a reviewer needs the `pending_id`. The operator app needs `ListPending` (additive to the proto).
 - The rate limiter is in memory, per process.
 - No metrics endpoint yet (the operations workstream).
+- **The resolver has no issuer tooling yet** (an operator CLI that signs references and resolutions and calls `PUT /v1/publish`; the Python and TypeScript `make_reference` / `make_resolution` do the signing), **no camera scanner** (HLX3-05-07) and no LAN/offline contact advertisement.
 - The HTTP side's own TLS is optional by design; production should terminate TLS at the ingress or set the cert and key.

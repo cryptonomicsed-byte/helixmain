@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/cryptonomicsed-byte/helixmain/agent-os/gateway/internal/auth"
+	"github.com/cryptonomicsed-byte/helixmain/agent-os/gateway/internal/ratelimit"
 
 	kernelv1 "github.com/cryptonomicsed-byte/helixmain/agent-os/gateway/gen/helix/kernel/v1"
 	"google.golang.org/grpc/codes"
@@ -52,7 +53,7 @@ type Server struct {
 	auth    *auth.Holder
 	log     *slog.Logger
 	now     func() time.Time
-	limiter *Limiter
+	limiter *ratelimit.Limiter
 	live    chan struct{}
 }
 
@@ -74,8 +75,8 @@ func New(c Config) *Server {
 	if live <= 0 {
 		live = defaultMaxLive
 	}
-	s.limiter = NewLimiter(rate, burst)
-	s.limiter.now = s.now
+	s.limiter = ratelimit.New(rate, burst)
+	s.limiter.SetClock(s.now)
 	s.live = make(chan struct{}, live)
 	return s
 }
