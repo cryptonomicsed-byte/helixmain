@@ -164,6 +164,19 @@ fn a_tool_that_proposes_an_order_cannot_place_it() {
 }
 
 #[test]
+fn two_proposals_never_share_an_id_or_an_idempotency_key() {
+    let e = env();
+    install_pricing(&e, ORG);
+    let basket = json!({"currency": "USD", "items": [{"sku": "latte", "qty": 3, "unit_price_minor": 450}]});
+    // the same basket, back to back, within one second: two honest, separate purchases
+    let a = e.call("acme.pricing", "checkout", basket.clone());
+    let b = e.call("acme.pricing", "checkout", basket);
+    let (ia, ib) = (&a.proposed_intents[0], &b.proposed_intents[0]);
+    assert_ne!(ia["id"], ib["id"]);
+    assert_ne!(ia["idempotency_key"], ib["idempotency_key"], "a key shared between two purchases would make the second a refused replay of the first");
+}
+
+#[test]
 fn a_tool_error_is_the_tools_own_answer() {
     let e = env();
     install_pricing(&e, ORG);

@@ -357,6 +357,13 @@ fn verify_manifest(raw: &Value, component: &[u8], trust: &Value, now: &str, c: &
     })
 }
 
+fn random_hex(n: usize) -> String {
+    use rand::RngCore;
+    let mut b = vec![0u8; n];
+    rand::rngs::OsRng.fill_bytes(&mut b);
+    hex::encode(b)
+}
+
 fn sha256_hex_bytes(b: &[u8]) -> String {
     hex::encode(Sha256::digest(b))
 }
@@ -800,8 +807,12 @@ impl PluginHost {
             }
             m.insert("organization_id".into(), json!(org));
             m.insert("agent_id".into(), json!(agent));
-            m.entry("id").or_insert_with(|| json!(format!("plint_{}_{i}", &nonce[..16])));
-            m.entry("idempotency_key").or_insert_with(|| json!(format!("plkey_{}_{i}", &nonce[..24])));
+            // Ids that are unique per proposal, never derived from the content or the time: two honest
+            // proposals of the same basket in the same second must not share an idempotency key, or the
+            // second purchase is refused as a replay of the first. The CALLER owns the key that guards an
+            // effect (the orchestrator derives it from the run and the step); this is only a default.
+            m.entry("id").or_insert_with(|| json!(format!("plint_{}", random_hex(12))));
+            m.entry("idempotency_key").or_insert_with(|| json!(format!("plkey_{}", random_hex(16))));
             out.push(Value::Object(m));
         }
         Ok(out)

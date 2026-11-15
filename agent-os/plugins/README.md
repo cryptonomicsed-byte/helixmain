@@ -68,7 +68,7 @@ bit-reproducible, so `test.sh` checks that **rebuilt** components pass the same 
 The `conformance` plugin has one tool per way to misbehave: loop forever, allocate 200 MiB, recurse without end, panic, sleep
 30 s, flood stdout, flood logs, return a huge or non-JSON result, propose 17 intents, propose for another tenant or agent, read
 `/etc/passwd`, read the environment, write storage then panic, exceed the storage quota, use storage without the permission.
-`../kernel/tests/plugins.rs` (28 tests) runs every one and asserts the sandbox held; breaking the signature check, the storage
+`../kernel/tests/plugins.rs` (29 tests) runs every one and asserts the sandbox held; breaking the signature check, the storage
 permission, the tenant pinning or the no-sleep clock on purpose each fails tests.
 
 ## Writing a plugin

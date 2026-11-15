@@ -90,7 +90,7 @@ environment, real clock or real randomness, no way to wait; fuel, wall-clock, me
 a fresh instance per call; storage writes commit only if the call succeeds. Installing needs a manifest signed by a trust
 anchor naming the exact component. Running a tool needs a live agent that declared `plugin.<id>.<tool>`; a proposed intent
 comes back with tenant and agent pinned by the kernel and still goes through `AuthorizeAction`. Installs are re-verified at
-every restart. Tests: `tests/plugins.rs` (28, real components) and `tests/plugin_rpc.rs` (9).
+every restart. Tests: `tests/plugins.rs` (29, real components) and `tests/plugin_rpc.rs` (9).
 
 ## Against the real policy service
 
