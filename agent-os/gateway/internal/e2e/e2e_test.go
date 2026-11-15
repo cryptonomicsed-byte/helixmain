@@ -181,6 +181,7 @@ func startStack(t *testing.T) *stack {
 		{"exec", executor, "service", `"executor"`},
 		{"reg", "svc:registry", "service", `"registrar"`},
 		{"deploy", "svc:deploy", "service", `"plugin_admin"`},
+		{"orch", "svc:orchestrator", "service", `"proposer"`},
 	} {
 		token, sha, err := auth.NewToken()
 		if err != nil {
@@ -362,6 +363,14 @@ func TestTheWholeChain(t *testing.T) {
 		}
 		if c, r := answer("alice"); c != 409 {
 			t.Fatalf("a held action cannot be answered twice: %d %v", c, r)
+		}
+		// the service that proposed it collects the grant the person's approval produced; a person is not handed it again
+		c, collected := s.call("orch", "GET", "/v1/actions/"+id, nil)
+		if c != 200 || collected["state"] != "approved" || collected["grant"] == nil || collected["grant"].(map[string]any)["id"] != yes["grant"].(map[string]any)["id"] {
+			t.Fatalf("collecting the approved grant: %d %v", c, collected)
+		}
+		if c, mine := s.call("alice", "GET", "/v1/actions/"+id, nil); c != 200 || mine["grant"] != nil {
+			t.Fatalf("a person must not be handed the grant by GET: %d %v", c, mine)
 		}
 		// the released grant runs the purchase, once
 		code, b := s.call("exec", "POST", "/v1/executions/begin", map[string]any{"grant": yes["grant"], "intent": i})

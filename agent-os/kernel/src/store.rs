@@ -99,7 +99,7 @@ CREATE TABLE IF NOT EXISTS agents (
 CREATE TABLE IF NOT EXISTS pending (
     id TEXT PRIMARY KEY, org TEXT NOT NULL, kind TEXT NOT NULL, intent TEXT NOT NULL,
     intent_hash TEXT NOT NULL, policy TEXT NOT NULL, state TEXT NOT NULL,
-    created_at TEXT NOT NULL, expires_at TEXT NOT NULL, resolved_by TEXT, resolved_at TEXT
+    created_at TEXT NOT NULL, expires_at TEXT NOT NULL, resolved_by TEXT, resolved_at TEXT, grant_json TEXT
 );
 CREATE TABLE IF NOT EXISTS grants (
     id TEXT PRIMARY KEY, org TEXT NOT NULL, subject TEXT NOT NULL, issued_at TEXT NOT NULL,
@@ -140,7 +140,17 @@ impl Store {
         conn.pragma_update(None, "journal_mode", "WAL")?;
         conn.pragma_update(None, "synchronous", "FULL")?;
         conn.execute_batch(SCHEMA)?;
+        Self::migrate(&conn)?;
         Ok(Self { conn: Mutex::new(conn) })
+    }
+
+    /// Add columns introduced after a database was first created.
+    fn migrate(conn: &Connection) -> Result<(), StoreError> {
+        let has_grant_json = conn.prepare("SELECT 1 FROM pragma_table_info('pending') WHERE name='grant_json'")?.exists([])?;
+        if !has_grant_json {
+            conn.execute_batch("ALTER TABLE pending ADD COLUMN grant_json TEXT")?;
+        }
+        Ok(())
     }
 
     pub fn in_memory() -> Result<Self, StoreError> {
@@ -170,6 +180,19 @@ impl Store {
 
     /// Record an event that has no other state change.
     // ── plugins ─────────────────────────────────────────────────────────────
+    /// Remember the grant issued when a person approved a pending request, so the
+    /// service that proposed the action can collect it.
+    pub fn put_pending_grant(&self, org: &str, id: &str, grant_json: &str) -> Result<(), StoreError> {
+        self.with(|c| {
+            c.execute("UPDATE pending SET grant_json=?3 WHERE org=?1 AND id=?2 AND state='approved'", params![org, id, grant_json])?;
+            Ok(())
+        })
+    }
+
+    pub fn pending_grant(&self, org: &str, id: &str) -> Result<Option<String>, StoreError> {
+        self.with(|c| Ok(c.query_row("SELECT grant_json FROM pending WHERE org=?1 AND id=?2", params![org, id], |r| r.get::<_, Option<String>>(0)).optional()?.flatten()))
+    }
+
     pub fn put_plugin(&self, ts: &str, org: &str, id: &str, version: &str, manifest: &str, component: &[u8]) -> Result<(), StoreError> {
         self.with(|c| {
             c.execute(

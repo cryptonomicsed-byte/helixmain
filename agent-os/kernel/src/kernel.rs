@@ -99,6 +99,26 @@ fn intent_to_json(i: &pb::ActionIntent) -> Value {
     })
 }
 
+fn grant_to_json(g: &pb::Grant) -> Value {
+    json!({
+        "format": g.format, "id": g.id, "issuer_kid": g.issuer_kid, "organization_id": g.organization_id, "subject": g.subject,
+        "audience": g.audience, "operation": g.operation, "target": g.target, "max_amount_minor": g.max_amount_minor,
+        "currency": g.currency, "intent_hash": g.intent_hash, "not_before": g.not_before, "expires_at": g.expires_at,
+        "single_use": g.single_use, "parent_id": g.parent_id, "signature": g.signature,
+    })
+}
+
+fn grant_from_json(v: &Value) -> pb::Grant {
+    let s = |k: &str| v.get(k).and_then(Value::as_str).unwrap_or("").to_string();
+    pb::Grant {
+        format: s("format"), id: s("id"), issuer_kid: s("issuer_kid"), organization_id: s("organization_id"), subject: s("subject"),
+        audience: s("audience"), operation: s("operation"), target: s("target"),
+        max_amount_minor: v.get("max_amount_minor").and_then(Value::as_i64).unwrap_or(0), currency: s("currency"),
+        intent_hash: s("intent_hash"), not_before: s("not_before"), expires_at: s("expires_at"),
+        single_use: v.get("single_use").and_then(Value::as_bool).unwrap_or(false), parent_id: s("parent_id"), signature: s("signature"),
+    }
+}
+
 fn intent_from_json(v: &Value) -> pb::ActionIntent {
     let s = |k: &str| v.get(k).and_then(Value::as_str).unwrap_or("").to_string();
     pb::ActionIntent {
@@ -385,6 +405,7 @@ impl Kernel {
             return Err(KernelError::Precondition("this request has already been answered".into()));
         }
         let grant = self.issue_grant(org, &intent, &pending.intent_hash, now_t)?;
+        self.store.put_pending_grant(org, &pending.id, &grant_to_json(&grant).to_string())?;
         let mut record = self.decision_record(org, &intent.id, pb::Decision::Allow, &answer, &[], &now);
         record.reason_codes.push(format!("confirmed_by:{}", ctx.principal));
         Ok(pb::AuthorizeActionResponse {
@@ -510,7 +531,16 @@ impl Kernel {
         let state = if p.state == "pending" && p.expires_at.as_str() <= now.as_str() { "expired".to_string() } else { p.state.clone() };
         let reason_codes = p.policy.get("reason_codes").and_then(Value::as_array)
             .map(|a| a.iter().filter_map(Value::as_str).map(String::from).collect()).unwrap_or_default();
+        // The grant a person's approval produced goes to the SERVICE that proposed the action, never to anyone else.
+        let grant = if state == "approved" && kind_of(ctx) == pb::PrincipalKind::Service {
+            self.store.pending_grant(&ctx.organization_id, &p.id)?
+                .and_then(|j| serde_json::from_str::<Value>(&j).ok())
+                .map(|v| grant_from_json(&v))
+        } else {
+            None
+        };
         Ok(pb::GetPendingResponse {
+            grant,
             pending_id: p.id, kind: p.kind, state,
             intent: Some(intent_from_json(&p.intent)),
             created_at: p.created_at, expires_at: p.expires_at, reason_codes,

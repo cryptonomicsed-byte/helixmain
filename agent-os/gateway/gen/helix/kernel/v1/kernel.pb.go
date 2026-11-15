@@ -1021,11 +1021,17 @@ type GetPendingResponse struct {
 	// "user_confirmation" or "human_review".
 	Kind string `protobuf:"bytes,2,opt,name=kind,proto3" json:"kind,omitempty"`
 	// "pending", "approved", "denied", "withdrawn", or "expired" (pending but past its deadline).
-	State         string        `protobuf:"bytes,3,opt,name=state,proto3" json:"state,omitempty"`
-	Intent        *ActionIntent `protobuf:"bytes,4,opt,name=intent,proto3" json:"intent,omitempty"`
-	CreatedAt     string        `protobuf:"bytes,5,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	ExpiresAt     string        `protobuf:"bytes,6,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
-	ReasonCodes   []string      `protobuf:"bytes,7,rep,name=reason_codes,json=reasonCodes,proto3" json:"reason_codes,omitempty"`
+	State       string        `protobuf:"bytes,3,opt,name=state,proto3" json:"state,omitempty"`
+	Intent      *ActionIntent `protobuf:"bytes,4,opt,name=intent,proto3" json:"intent,omitempty"`
+	CreatedAt   string        `protobuf:"bytes,5,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	ExpiresAt   string        `protobuf:"bytes,6,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
+	ReasonCodes []string      `protobuf:"bytes,7,rep,name=reason_codes,json=reasonCodes,proto3" json:"reason_codes,omitempty"`
+	// The grant issued when a person approved this request. Present only when the
+	// state is "approved" AND the caller is a SERVICE (the orchestrator that proposed
+	// the action, which hands it to the executor). A person's own copy came back in
+	// their ConfirmAction response; the grant is bound to one executor and one
+	// exact intent, so holding it proves nothing to anyone else.
+	Grant         *Grant `protobuf:"bytes,8,opt,name=grant,proto3" json:"grant,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1105,6 +1111,13 @@ func (x *GetPendingResponse) GetExpiresAt() string {
 func (x *GetPendingResponse) GetReasonCodes() []string {
 	if x != nil {
 		return x.ReasonCodes
+	}
+	return nil
+}
+
+func (x *GetPendingResponse) GetGrant() *Grant {
+	if x != nil {
+		return x.Grant
 	}
 	return nil
 }
@@ -2470,7 +2483,7 @@ const file_helix_kernel_v1_kernel_proto_rawDesc = "" +
 	"\x11GetPendingRequest\x129\n" +
 	"\acontext\x18\x01 \x01(\v2\x1f.helix.kernel.v1.RequestContextR\acontext\x12\x1d\n" +
 	"\n" +
-	"pending_id\x18\x02 \x01(\tR\tpendingId\"\xf5\x01\n" +
+	"pending_id\x18\x02 \x01(\tR\tpendingId\"\xa3\x02\n" +
 	"\x12GetPendingResponse\x12\x1d\n" +
 	"\n" +
 	"pending_id\x18\x01 \x01(\tR\tpendingId\x12\x12\n" +
@@ -2481,7 +2494,8 @@ const file_helix_kernel_v1_kernel_proto_rawDesc = "" +
 	"created_at\x18\x05 \x01(\tR\tcreatedAt\x12\x1d\n" +
 	"\n" +
 	"expires_at\x18\x06 \x01(\tR\texpiresAt\x12!\n" +
-	"\freason_codes\x18\a \x03(\tR\vreasonCodes\"\xb7\x01\n" +
+	"\freason_codes\x18\a \x03(\tR\vreasonCodes\x12,\n" +
+	"\x05grant\x18\b \x01(\v2\x16.helix.kernel.v1.GrantR\x05grant\"\xb7\x01\n" +
 	"\x15BeginExecutionRequest\x129\n" +
 	"\acontext\x18\x01 \x01(\v2\x1f.helix.kernel.v1.RequestContextR\acontext\x12,\n" +
 	"\x05grant\x18\x02 \x01(\v2\x16.helix.kernel.v1.GrantR\x05grant\x125\n" +
@@ -2680,51 +2694,52 @@ var file_helix_kernel_v1_kernel_proto_depIdxs = []int32{
 	4,  // 8: helix.kernel.v1.ConfirmActionRequest.context:type_name -> helix.kernel.v1.RequestContext
 	4,  // 9: helix.kernel.v1.GetPendingRequest.context:type_name -> helix.kernel.v1.RequestContext
 	5,  // 10: helix.kernel.v1.GetPendingResponse.intent:type_name -> helix.kernel.v1.ActionIntent
-	4,  // 11: helix.kernel.v1.BeginExecutionRequest.context:type_name -> helix.kernel.v1.RequestContext
-	7,  // 12: helix.kernel.v1.BeginExecutionRequest.grant:type_name -> helix.kernel.v1.Grant
-	5,  // 13: helix.kernel.v1.BeginExecutionRequest.intent:type_name -> helix.kernel.v1.ActionIntent
-	3,  // 14: helix.kernel.v1.BeginExecutionResponse.state:type_name -> helix.kernel.v1.ExecutionState
-	4,  // 15: helix.kernel.v1.RecordResultRequest.context:type_name -> helix.kernel.v1.RequestContext
-	3,  // 16: helix.kernel.v1.RecordResultRequest.state:type_name -> helix.kernel.v1.ExecutionState
-	3,  // 17: helix.kernel.v1.RecordResultResponse.state:type_name -> helix.kernel.v1.ExecutionState
-	4,  // 18: helix.kernel.v1.RevokeGrantRequest.context:type_name -> helix.kernel.v1.RequestContext
-	4,  // 19: helix.kernel.v1.VerifyIdentityRequest.context:type_name -> helix.kernel.v1.RequestContext
-	23, // 20: helix.kernel.v1.PluginInfo.tools:type_name -> helix.kernel.v1.PluginTool
-	4,  // 21: helix.kernel.v1.InstallPluginRequest.context:type_name -> helix.kernel.v1.RequestContext
-	24, // 22: helix.kernel.v1.InstallPluginResponse.plugin:type_name -> helix.kernel.v1.PluginInfo
-	4,  // 23: helix.kernel.v1.RemovePluginRequest.context:type_name -> helix.kernel.v1.RequestContext
-	4,  // 24: helix.kernel.v1.ListPluginsRequest.context:type_name -> helix.kernel.v1.RequestContext
-	24, // 25: helix.kernel.v1.ListPluginsResponse.plugins:type_name -> helix.kernel.v1.PluginInfo
-	4,  // 26: helix.kernel.v1.InvokePluginRequest.context:type_name -> helix.kernel.v1.RequestContext
-	8,  // 27: helix.kernel.v1.Kernel.AuthorizeAction:input_type -> helix.kernel.v1.AuthorizeActionRequest
-	10, // 28: helix.kernel.v1.Kernel.ConfirmAction:input_type -> helix.kernel.v1.ConfirmActionRequest
-	13, // 29: helix.kernel.v1.Kernel.BeginExecution:input_type -> helix.kernel.v1.BeginExecutionRequest
-	15, // 30: helix.kernel.v1.Kernel.RecordResult:input_type -> helix.kernel.v1.RecordResultRequest
-	11, // 31: helix.kernel.v1.Kernel.GetPending:input_type -> helix.kernel.v1.GetPendingRequest
-	17, // 32: helix.kernel.v1.Kernel.RevokeGrant:input_type -> helix.kernel.v1.RevokeGrantRequest
-	25, // 33: helix.kernel.v1.Kernel.InstallPlugin:input_type -> helix.kernel.v1.InstallPluginRequest
-	27, // 34: helix.kernel.v1.Kernel.RemovePlugin:input_type -> helix.kernel.v1.RemovePluginRequest
-	29, // 35: helix.kernel.v1.Kernel.ListPlugins:input_type -> helix.kernel.v1.ListPluginsRequest
-	31, // 36: helix.kernel.v1.Kernel.InvokePlugin:input_type -> helix.kernel.v1.InvokePluginRequest
-	19, // 37: helix.kernel.v1.Kernel.VerifyIdentity:input_type -> helix.kernel.v1.VerifyIdentityRequest
-	21, // 38: helix.kernel.v1.Kernel.Health:input_type -> helix.kernel.v1.HealthRequest
-	9,  // 39: helix.kernel.v1.Kernel.AuthorizeAction:output_type -> helix.kernel.v1.AuthorizeActionResponse
-	9,  // 40: helix.kernel.v1.Kernel.ConfirmAction:output_type -> helix.kernel.v1.AuthorizeActionResponse
-	14, // 41: helix.kernel.v1.Kernel.BeginExecution:output_type -> helix.kernel.v1.BeginExecutionResponse
-	16, // 42: helix.kernel.v1.Kernel.RecordResult:output_type -> helix.kernel.v1.RecordResultResponse
-	12, // 43: helix.kernel.v1.Kernel.GetPending:output_type -> helix.kernel.v1.GetPendingResponse
-	18, // 44: helix.kernel.v1.Kernel.RevokeGrant:output_type -> helix.kernel.v1.RevokeGrantResponse
-	26, // 45: helix.kernel.v1.Kernel.InstallPlugin:output_type -> helix.kernel.v1.InstallPluginResponse
-	28, // 46: helix.kernel.v1.Kernel.RemovePlugin:output_type -> helix.kernel.v1.RemovePluginResponse
-	30, // 47: helix.kernel.v1.Kernel.ListPlugins:output_type -> helix.kernel.v1.ListPluginsResponse
-	32, // 48: helix.kernel.v1.Kernel.InvokePlugin:output_type -> helix.kernel.v1.InvokePluginResponse
-	20, // 49: helix.kernel.v1.Kernel.VerifyIdentity:output_type -> helix.kernel.v1.VerifyIdentityResponse
-	22, // 50: helix.kernel.v1.Kernel.Health:output_type -> helix.kernel.v1.HealthResponse
-	39, // [39:51] is the sub-list for method output_type
-	27, // [27:39] is the sub-list for method input_type
-	27, // [27:27] is the sub-list for extension type_name
-	27, // [27:27] is the sub-list for extension extendee
-	0,  // [0:27] is the sub-list for field type_name
+	7,  // 11: helix.kernel.v1.GetPendingResponse.grant:type_name -> helix.kernel.v1.Grant
+	4,  // 12: helix.kernel.v1.BeginExecutionRequest.context:type_name -> helix.kernel.v1.RequestContext
+	7,  // 13: helix.kernel.v1.BeginExecutionRequest.grant:type_name -> helix.kernel.v1.Grant
+	5,  // 14: helix.kernel.v1.BeginExecutionRequest.intent:type_name -> helix.kernel.v1.ActionIntent
+	3,  // 15: helix.kernel.v1.BeginExecutionResponse.state:type_name -> helix.kernel.v1.ExecutionState
+	4,  // 16: helix.kernel.v1.RecordResultRequest.context:type_name -> helix.kernel.v1.RequestContext
+	3,  // 17: helix.kernel.v1.RecordResultRequest.state:type_name -> helix.kernel.v1.ExecutionState
+	3,  // 18: helix.kernel.v1.RecordResultResponse.state:type_name -> helix.kernel.v1.ExecutionState
+	4,  // 19: helix.kernel.v1.RevokeGrantRequest.context:type_name -> helix.kernel.v1.RequestContext
+	4,  // 20: helix.kernel.v1.VerifyIdentityRequest.context:type_name -> helix.kernel.v1.RequestContext
+	23, // 21: helix.kernel.v1.PluginInfo.tools:type_name -> helix.kernel.v1.PluginTool
+	4,  // 22: helix.kernel.v1.InstallPluginRequest.context:type_name -> helix.kernel.v1.RequestContext
+	24, // 23: helix.kernel.v1.InstallPluginResponse.plugin:type_name -> helix.kernel.v1.PluginInfo
+	4,  // 24: helix.kernel.v1.RemovePluginRequest.context:type_name -> helix.kernel.v1.RequestContext
+	4,  // 25: helix.kernel.v1.ListPluginsRequest.context:type_name -> helix.kernel.v1.RequestContext
+	24, // 26: helix.kernel.v1.ListPluginsResponse.plugins:type_name -> helix.kernel.v1.PluginInfo
+	4,  // 27: helix.kernel.v1.InvokePluginRequest.context:type_name -> helix.kernel.v1.RequestContext
+	8,  // 28: helix.kernel.v1.Kernel.AuthorizeAction:input_type -> helix.kernel.v1.AuthorizeActionRequest
+	10, // 29: helix.kernel.v1.Kernel.ConfirmAction:input_type -> helix.kernel.v1.ConfirmActionRequest
+	13, // 30: helix.kernel.v1.Kernel.BeginExecution:input_type -> helix.kernel.v1.BeginExecutionRequest
+	15, // 31: helix.kernel.v1.Kernel.RecordResult:input_type -> helix.kernel.v1.RecordResultRequest
+	11, // 32: helix.kernel.v1.Kernel.GetPending:input_type -> helix.kernel.v1.GetPendingRequest
+	17, // 33: helix.kernel.v1.Kernel.RevokeGrant:input_type -> helix.kernel.v1.RevokeGrantRequest
+	25, // 34: helix.kernel.v1.Kernel.InstallPlugin:input_type -> helix.kernel.v1.InstallPluginRequest
+	27, // 35: helix.kernel.v1.Kernel.RemovePlugin:input_type -> helix.kernel.v1.RemovePluginRequest
+	29, // 36: helix.kernel.v1.Kernel.ListPlugins:input_type -> helix.kernel.v1.ListPluginsRequest
+	31, // 37: helix.kernel.v1.Kernel.InvokePlugin:input_type -> helix.kernel.v1.InvokePluginRequest
+	19, // 38: helix.kernel.v1.Kernel.VerifyIdentity:input_type -> helix.kernel.v1.VerifyIdentityRequest
+	21, // 39: helix.kernel.v1.Kernel.Health:input_type -> helix.kernel.v1.HealthRequest
+	9,  // 40: helix.kernel.v1.Kernel.AuthorizeAction:output_type -> helix.kernel.v1.AuthorizeActionResponse
+	9,  // 41: helix.kernel.v1.Kernel.ConfirmAction:output_type -> helix.kernel.v1.AuthorizeActionResponse
+	14, // 42: helix.kernel.v1.Kernel.BeginExecution:output_type -> helix.kernel.v1.BeginExecutionResponse
+	16, // 43: helix.kernel.v1.Kernel.RecordResult:output_type -> helix.kernel.v1.RecordResultResponse
+	12, // 44: helix.kernel.v1.Kernel.GetPending:output_type -> helix.kernel.v1.GetPendingResponse
+	18, // 45: helix.kernel.v1.Kernel.RevokeGrant:output_type -> helix.kernel.v1.RevokeGrantResponse
+	26, // 46: helix.kernel.v1.Kernel.InstallPlugin:output_type -> helix.kernel.v1.InstallPluginResponse
+	28, // 47: helix.kernel.v1.Kernel.RemovePlugin:output_type -> helix.kernel.v1.RemovePluginResponse
+	30, // 48: helix.kernel.v1.Kernel.ListPlugins:output_type -> helix.kernel.v1.ListPluginsResponse
+	32, // 49: helix.kernel.v1.Kernel.InvokePlugin:output_type -> helix.kernel.v1.InvokePluginResponse
+	20, // 50: helix.kernel.v1.Kernel.VerifyIdentity:output_type -> helix.kernel.v1.VerifyIdentityResponse
+	22, // 51: helix.kernel.v1.Kernel.Health:output_type -> helix.kernel.v1.HealthResponse
+	40, // [40:52] is the sub-list for method output_type
+	28, // [28:40] is the sub-list for method input_type
+	28, // [28:28] is the sub-list for extension type_name
+	28, // [28:28] is the sub-list for extension extendee
+	0,  // [0:28] is the sub-list for field type_name
 }
 
 func init() { file_helix_kernel_v1_kernel_proto_init() }

@@ -161,6 +161,12 @@ message GetPendingResponse {
   string created_at = 5;
   string expires_at = 6;
   repeated string reason_codes = 7;
+  // The grant issued when a person approved this request. Present only when the
+  // state is "approved" AND the caller is a SERVICE (the orchestrator that proposed
+  // the action, which hands it to the executor). A person's own copy came back in
+  // their ConfirmAction response; the grant is bound to one executor and one
+  // exact intent, so holding it proves nothing to anyone else.
+  Grant grant = 8;
 }
 
 message BeginExecutionRequest {

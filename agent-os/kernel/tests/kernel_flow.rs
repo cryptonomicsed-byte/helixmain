@@ -674,3 +674,37 @@ fn an_answered_decision_reads_as_answered() {
     e.kernel.confirm_action(&pb::ConfirmActionRequest { context: user(ORG), pending_id: held.pending_id.clone(), approve: true }).unwrap();
     assert_eq!(get().state, "approved");
 }
+
+#[test]
+fn the_service_that_proposed_an_action_can_collect_the_grant_a_person_approved() {
+    let e = env();
+    registered_agent(&e, ORG);
+    e.policy.set(Decision::RequireUserConfirmation);
+    let i = order(ORG);
+    let held = authorize(&e, ORG, &i);
+    let get = |ctx: Option<pb::RequestContext>| e.kernel.get_pending(&pb::GetPendingRequest { context: ctx, pending_id: held.pending_id.clone() }).unwrap();
+    assert!(get(svc(ORG)).grant.is_none(), "nothing to collect before a person answers");
+
+    e.policy.set(Decision::Allow);
+    let yes = e.kernel.confirm_action(&pb::ConfirmActionRequest { context: user(ORG), pending_id: held.pending_id.clone(), approve: true }).unwrap();
+    let given = yes.grant.unwrap();
+
+    let collected = get(svc(ORG)).grant.expect("a service sees the approved grant");
+    assert_eq!(collected, given, "it is the very grant the person's approval produced");
+    assert!(get(user(ORG)).grant.is_none(), "a person's own copy came back from ConfirmAction; GetPending does not hand it out again");
+    // and it works for the executor
+    let begun = begin(&e, ORG, &collected, &i);
+    assert_eq!(state(&begun), ES::Permitted);
+}
+
+#[test]
+fn a_declined_request_has_no_grant_to_collect() {
+    let e = env();
+    registered_agent(&e, ORG);
+    e.policy.set(Decision::RequireUserConfirmation);
+    let held = authorize(&e, ORG, &order(ORG));
+    e.kernel.confirm_action(&pb::ConfirmActionRequest { context: user(ORG), pending_id: held.pending_id.clone(), approve: false }).unwrap();
+    let got = e.kernel.get_pending(&pb::GetPendingRequest { context: svc(ORG), pending_id: held.pending_id }).unwrap();
+    assert_eq!(got.state, "withdrawn");
+    assert!(got.grant.is_none());
+}

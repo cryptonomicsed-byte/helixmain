@@ -101,6 +101,8 @@ type pendingResponse struct {
 	CreatedAt   string      `json:"created_at"`
 	ExpiresAt   string      `json:"expires_at"`
 	ReasonCodes []string    `json:"reason_codes"`
+	// Set only when a person approved it AND the caller is the service that proposed the action.
+	Grant *grantJSON `json:"grant,omitempty"`
 }
 
 func (s *Server) readPending(ctx context.Context, kctx *kernelv1.RequestContext, id string) (*kernelv1.GetPendingResponse, error) {
@@ -161,7 +163,7 @@ func (s *Server) getPending(w http.ResponseWriter, r *http.Request, c caller) {
 	}
 	writeJSON(w, http.StatusOK, pendingResponse{
 		PendingID: p.PendingId, Kind: p.Kind, State: p.State, Intent: intentFromPB(p.Intent),
-		CreatedAt: p.CreatedAt, ExpiresAt: p.ExpiresAt, ReasonCodes: nonNil(p.ReasonCodes),
+		CreatedAt: p.CreatedAt, ExpiresAt: p.ExpiresAt, ReasonCodes: nonNil(p.ReasonCodes), Grant: grantFromPB(p.Grant),
 	})
 }
 
