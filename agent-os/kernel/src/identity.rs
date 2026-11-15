@@ -262,6 +262,30 @@ fn issuer_check(doc: &Value, trust: Option<&Value>, signed_at: Option<&Value>) -
     r
 }
 
+/// The outcome of checking a signed document that is not a certificate.
+pub struct SignedCheck {
+    pub errors: Vec<String>,
+    pub untrusted: Vec<String>,
+}
+
+/// Check any document that follows the sid signing scheme (a `hash` over the
+/// canonical body without `hash`/`proof`, and an issuer `proof` over
+/// `<format>\nissue\n<hash>`) against the trust anchors, at the document's own
+/// `issued_at`. Used for plugin manifests. Errors mean tampered or malformed;
+/// `untrusted` means well formed but not anchored, or anchored under a key that
+/// was not valid when it was signed.
+pub fn check_signed_document(doc: &Value, trust: Option<&Value>) -> SignedCheck {
+    let mut out = SignedCheck { errors: vec![], untrusted: vec![] };
+    if gstr(doc, "hash") != Some(sid_hash(doc).as_str()) {
+        out.errors.push("hash does not match the document".into());
+        return out;
+    }
+    let r = issuer_check(doc, trust, get(doc, "issued_at"));
+    out.errors = r.errors;
+    out.untrusted = r.untrusted;
+    out
+}
+
 // ── the certificate ──────────────────────────────────────────────────────────
 pub fn verify_sid(cert: &Value, opts: &VerifyOptions) -> Verdict {
     let mut errors: Vec<String> = vec![];

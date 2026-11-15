@@ -21,6 +21,8 @@ tonic = { version = "0.12", features = ["tls"] }
 prost = "0.13"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal", "time"] }
 ureq = { version = "2", features = ["json"] }
+wasmtime = { version = "50.0.1", default-features = false, features = ["cranelift", "component-model", "runtime", "std", "anyhow", "backtrace", "parallel-compilation"] }
+wasmtime-wasi = { version = "50.0.1", default-features = false, features = ["p2"] }
 
 [build-dependencies]
 protox = "0.7"

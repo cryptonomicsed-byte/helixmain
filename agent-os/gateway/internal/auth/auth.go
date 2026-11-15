@@ -47,11 +47,13 @@ const (
 	RoleExecutor Role = "executor"
 	// RoleRegistrar (service) may register agent identities.
 	RoleRegistrar Role = "registrar"
+	// RolePluginAdmin (service) may install, upgrade and remove plugins.
+	RolePluginAdmin Role = "plugin_admin"
 )
 
 var rolesForKind = map[Kind]map[Role]bool{
 	KindUser:    {RoleReviewer: true, RoleGrantAdmin: true},
-	KindService: {RoleProposer: true, RoleExecutor: true, RoleRegistrar: true, RoleGrantAdmin: true},
+	KindService: {RoleProposer: true, RoleExecutor: true, RoleRegistrar: true, RoleGrantAdmin: true, RolePluginAdmin: true},
 	KindAgent:   {},
 }
 

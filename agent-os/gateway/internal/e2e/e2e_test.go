@@ -12,6 +12,9 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -137,6 +140,7 @@ func startStack(t *testing.T) *stack {
 		"HELIX_KERNEL_DB="+filepath.Join(dir, "kernel.sqlite"),
 		"HELIX_KERNEL_LISTEN="+fmt.Sprintf("127.0.0.1:%d", kport),
 		"HELIX_POLICY_URL="+policyURL,
+		"HELIX_KERNEL_PLUGINS=on",
 	)
 	kernel.Stderr = io.Discard
 	if err := kernel.Start(); err != nil {
@@ -176,6 +180,7 @@ func startStack(t *testing.T) *stack {
 		{"admin", "user:admin", "user", `"grant_admin"`},
 		{"exec", executor, "service", `"executor"`},
 		{"reg", "svc:registry", "service", `"registrar"`},
+		{"deploy", "svc:deploy", "service", `"plugin_admin"`},
 	} {
 		token, sha, err := auth.NewToken()
 		if err != nil {
@@ -198,7 +203,7 @@ func startStack(t *testing.T) *stack {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cert, err := testsid.Cert(agentSID, []string{"kb.search", "merchant.order", "policy.update"}, "live", secret)
+	cert, err := testsid.Cert(agentSID, []string{"kb.search", "merchant.order", "policy.update", "plugin.acme.pricing.quote", "plugin.acme.pricing.checkout"}, "live", secret)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -466,6 +471,102 @@ func TestTheWholeChain(t *testing.T) {
 		res, err := http.Get(s.gw.URL + "/readyz")
 		if err != nil || res.StatusCode != 200 {
 			t.Fatalf("readyz: %v %v", res, err)
+		}
+	})
+
+	t.Run("a plugin computes and proposes, and the proposal is authorized like anything else", func(t *testing.T) {
+		pricing, err := os.ReadFile(root(t, "plugins", "dist", "pricing.wasm"))
+		if err != nil {
+			t.Fatalf("build the plugins first (agent-os/plugins/build.sh): %v", err)
+		}
+		secret, err := testsid.IssuerSecret(root(t, "kernel", "tests", "fixtures", "sid-0.2"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		manifest := func(component []byte) map[string]any {
+			sum := sha256.Sum256(component)
+			m, err := testsid.SignDoc(map[string]any{
+				"format": "helix-plugin/1", "id": "acme.pricing", "version": "1.0.0",
+				"component":   map[string]any{"sha256": hex.EncodeToString(sum[:]), "size": len(component)},
+				"tools":       []any{map[string]any{"name": "quote", "description": "price"}, map[string]any{"name": "checkout", "description": "price and propose"}},
+				"permissions": []any{"storage"},
+				"issuer":      map[string]any{"id": "issuer:helix-test-root", "kid": "root-1"},
+				"issued_at":   "2026-11-10T00:00:00Z", "expires_at": "2027-11-10T00:00:00Z",
+			}, secret)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return m
+		}
+		b64 := base64.StdEncoding.EncodeToString(pricing)
+
+		// who may install, and what the kernel refuses
+		if c, _ := s.call("agent", "POST", "/v1/plugins", map[string]any{"manifest": manifest(pricing), "component_base64": b64}); c != 403 {
+			t.Fatalf("an agent installing a plugin: %d", c)
+		}
+		tampered := manifest(pricing)
+		tampered["version"] = "9.9.9"
+		code, r := s.call("deploy", "POST", "/v1/plugins", map[string]any{"manifest": tampered, "component_base64": b64})
+		if code != 200 || r["installed"] != false || !strings.Contains(fmt.Sprint(r["problems"]), "hash does not match") {
+			t.Fatalf("a tampered manifest: %d %v", code, r)
+		}
+		other := append([]byte{}, pricing...)
+		other = append(other, 0)
+		code, r = s.call("deploy", "POST", "/v1/plugins", map[string]any{"manifest": manifest(pricing), "component_base64": base64.StdEncoding.EncodeToString(other)})
+		if code != 200 || r["installed"] != false || !strings.Contains(fmt.Sprint(r["problems"]), "not the one the manifest names") {
+			t.Fatalf("a swapped component: %d %v", code, r)
+		}
+		code, r = s.call("deploy", "POST", "/v1/plugins", map[string]any{"manifest": manifest(pricing), "component_base64": b64})
+		if code != 200 || r["installed"] != true {
+			t.Fatalf("the signed plugin: %d %v", code, r)
+		}
+		if c, l := s.call("alice", "GET", "/v1/plugins", nil); c != 200 || len(l["plugins"].([]any)) != 1 {
+			t.Fatalf("%d %v", c, l)
+		}
+
+		// a person cannot run a tool; the agent can
+		if c, _ := s.call("alice", "POST", "/v1/plugins/acme.pricing/tools/quote/invoke", map[string]any{"input": map[string]any{}}); c != 403 {
+			t.Fatalf("%d", c)
+		}
+		basket := map[string]any{"currency": "USD", "items": []any{map[string]any{"sku": "latte", "qty": 3, "unit_price_minor": 450}}}
+		code, q := s.call("agent", "POST", "/v1/plugins/acme.pricing/tools/quote/invoke", map[string]any{"input": basket})
+		if code != 200 || q["status"] != "ok" || q["result"].(map[string]any)["total_minor"].(float64) != 1350 {
+			t.Fatalf("%d %v", code, q)
+		}
+
+		// the checkout tool PROPOSES an order. Nothing has been bought.
+		code, co := s.call("agent", "POST", "/v1/plugins/acme.pricing/tools/checkout/invoke", map[string]any{"input": basket})
+		if code != 200 || co["status"] != "ok" || len(co["proposed_intents"].([]any)) != 1 {
+			t.Fatalf("%d %v", code, co)
+		}
+		proposed := co["proposed_intents"].([]any)[0].(map[string]any)
+		if proposed["organization_id"] != org || proposed["agent_id"] != agentSID {
+			t.Fatalf("the kernel must pin tenant and agent: %v", proposed)
+		}
+		// The orchestrator completes the proposal (it chooses the executor) and sends it through the normal path.
+		proposed["audience"], proposed["task_id"] = executor, "task-1"
+		code, held := s.authorize("agent", proposed)
+		if code != 200 || decision(held) != "require_user_confirmation" || held["grant"] != nil || !contains(codes(held), "money_requires_confirmation") {
+			t.Fatalf("a plugin's proposal to spend money must be held for the person: %d %v", code, held)
+		}
+		code, yes := s.call("alice", "POST", "/v1/actions/"+held["pending_id"].(string)+"/confirm", map[string]any{"approve": true})
+		if code != 200 || decision(yes) != "allow" || yes["grant"] == nil {
+			t.Fatalf("%d %v", code, yes)
+		}
+		code, b := s.call("exec", "POST", "/v1/executions/begin", map[string]any{"grant": yes["grant"], "intent": proposed})
+		if code != 200 || b["state"] != "permitted" {
+			t.Fatalf("%d %v", code, b)
+		}
+
+		// removing it takes it away
+		if c, _ := s.call("alice", "DELETE", "/v1/plugins/acme.pricing", nil); c != 403 {
+			t.Fatalf("%d", c)
+		}
+		if c, out := s.call("deploy", "DELETE", "/v1/plugins/acme.pricing", nil); c != 200 || out["removed"] != true {
+			t.Fatalf("%d %v", c, out)
+		}
+		if c, _ := s.call("agent", "POST", "/v1/plugins/acme.pricing/tools/quote/invoke", map[string]any{"input": basket}); c != 404 {
+			t.Fatalf("a removed plugin: %d", c)
 		}
 	})
 

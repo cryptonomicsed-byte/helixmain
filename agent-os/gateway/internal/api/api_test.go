@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -30,12 +31,16 @@ type fakeKernel struct {
 	contexts []*kernelv1.RequestContext // every RequestContext received, in order
 	calls    []string
 
-	authorize func(*kernelv1.AuthorizeActionRequest) (*kernelv1.AuthorizeActionResponse, error)
-	pending   *kernelv1.GetPendingResponse
-	confirm   func(*kernelv1.ConfirmActionRequest) (*kernelv1.AuthorizeActionResponse, error)
-	begin     func(*kernelv1.BeginExecutionRequest) (*kernelv1.BeginExecutionResponse, error)
-	err       error // returned by every call when set
-	delay     time.Duration
+	authorize     func(*kernelv1.AuthorizeActionRequest) (*kernelv1.AuthorizeActionResponse, error)
+	pending       *kernelv1.GetPendingResponse
+	confirm       func(*kernelv1.ConfirmActionRequest) (*kernelv1.AuthorizeActionResponse, error)
+	begin         func(*kernelv1.BeginExecutionRequest) (*kernelv1.BeginExecutionResponse, error)
+	invoke        func(*kernelv1.InvokePluginRequest) (*kernelv1.InvokePluginResponse, error)
+	lastInvoke    *kernelv1.InvokePluginRequest
+	lastComponent []byte
+	lastManifest  string
+	err           error // returned by every call when set
+	delay         time.Duration
 }
 
 func (f *fakeKernel) note(name string, ctx *kernelv1.RequestContext) {
@@ -132,6 +137,44 @@ func (f *fakeKernel) GetPending(_ context.Context, in *kernelv1.GetPendingReques
 	return f.pending, nil
 }
 
+func (f *fakeKernel) InstallPlugin(_ context.Context, in *kernelv1.InstallPluginRequest, _ ...grpc.CallOption) (*kernelv1.InstallPluginResponse, error) {
+	f.note("install_plugin", in.Context)
+	f.lastComponent = in.Component
+	f.lastManifest = in.ManifestJson
+	if f.err != nil {
+		return nil, f.err
+	}
+	return &kernelv1.InstallPluginResponse{Installed: true, Plugin: &kernelv1.PluginInfo{Id: "acme.pricing", Version: "1.0.0", Tools: []*kernelv1.PluginTool{{Name: "quote"}}}}, nil
+}
+
+func (f *fakeKernel) RemovePlugin(_ context.Context, in *kernelv1.RemovePluginRequest, _ ...grpc.CallOption) (*kernelv1.RemovePluginResponse, error) {
+	f.note("remove_plugin", in.Context)
+	if f.err != nil {
+		return nil, f.err
+	}
+	return &kernelv1.RemovePluginResponse{Removed: true}, nil
+}
+
+func (f *fakeKernel) ListPlugins(_ context.Context, in *kernelv1.ListPluginsRequest, _ ...grpc.CallOption) (*kernelv1.ListPluginsResponse, error) {
+	f.note("list_plugins", in.Context)
+	if f.err != nil {
+		return nil, f.err
+	}
+	return &kernelv1.ListPluginsResponse{Plugins: []*kernelv1.PluginInfo{{Id: "acme.pricing", Version: "1.0.0"}}}, nil
+}
+
+func (f *fakeKernel) InvokePlugin(_ context.Context, in *kernelv1.InvokePluginRequest, _ ...grpc.CallOption) (*kernelv1.InvokePluginResponse, error) {
+	f.note("invoke_plugin", in.Context)
+	f.lastInvoke = in
+	if f.err != nil {
+		return nil, f.err
+	}
+	if f.invoke != nil {
+		return f.invoke(in)
+	}
+	return &kernelv1.InvokePluginResponse{Status: "ok", ResultJson: `{"total_minor":1350}`, ProposedIntentsJson: []string{`{"capability":"merchant.order","organization_id":"org_a"}`}}, nil
+}
+
 func (f *fakeKernel) Health(_ context.Context, _ *kernelv1.HealthRequest, _ ...grpc.CallOption) (*kernelv1.HealthResponse, error) {
 	if f.err != nil {
 		return nil, f.err
@@ -167,6 +210,7 @@ func newWorld(t *testing.T) *world {
 		{"exec", "org_a", "svc:merchant-adapter", "service", `"executor"`},
 		{"reg", "org_a", "svc:registry", "service", `"registrar"`},
 		{"plain", "org_a", "svc:plain", "service", ``},
+		{"deploy", "org_a", "svc:deploy", "service", `"plugin_admin"`},
 		{"zed", "org_b", "user:zed", "user", `"reviewer"`},
 	} {
 		token, sha, err := auth.NewToken()
@@ -732,5 +776,117 @@ func TestAPanicIsAGenericFiveHundred(t *testing.T) {
 	r := w.do("agent", "POST", "/v1/actions/authorize", intentBody("sid_front-desk", ""))
 	if r.Code != 500 || strings.Contains(r.Raw, "boom") || strings.Contains(r.Raw, "secret") {
 		t.Fatalf("%d %s", r.Code, r.Raw)
+	}
+}
+
+// ── plugins ──────────────────────────────────────────────────────────────────
+
+func TestOnlyAPluginAdminServiceInstallsOrRemovesPlugins(t *testing.T) {
+	body := `{"manifest":{"format":"helix-plugin/1"},"component_base64":"AGFzbQEAAAA="}`
+	for as, want := range map[string]int{"deploy": 200, "alice": 403, "rita": 403, "admin": 403, "agent": 403, "orch": 403, "exec": 403, "plain": 403} {
+		w := newWorld(t)
+		if r := w.do(as, "POST", "/v1/plugins", body); r.Code != want {
+			t.Errorf("%s install: %d, want %d (%s)", as, r.Code, want, r.Raw)
+		}
+		wantRemove := map[bool]int{true: 200, false: 403}[want == 200]
+		if r := w.do(as, "DELETE", "/v1/plugins/acme.pricing", ""); r.Code != wantRemove {
+			t.Errorf("%s remove: %d, want %d", as, r.Code, wantRemove)
+		}
+	}
+}
+
+func TestInstallPassesTheBytesExactlyAndTakesBigComponents(t *testing.T) {
+	w := newWorld(t)
+	comp := make([]byte, 6<<20) // bigger than any ordinary request body
+	for i := range comp {
+		comp[i] = byte(i * 7)
+	}
+	body := `{"manifest":{"format":"helix-plugin/1","id":"big"},"component_base64":"` + base64.StdEncoding.EncodeToString(comp) + `"}`
+	r := w.do("deploy", "POST", "/v1/plugins", body)
+	if r.Code != 200 || r.Body["installed"] != true {
+		t.Fatalf("%d %s", r.Code, r.Raw[:min(200, len(r.Raw))])
+	}
+	if !bytes.Equal(w.k.lastComponent, comp) {
+		t.Fatal("the component must reach the kernel byte for byte")
+	}
+	if !strings.Contains(w.k.lastManifest, `"id":"big"`) {
+		t.Fatalf("manifest %q", w.k.lastManifest)
+	}
+	// but not without limit
+	huge := `{"manifest":{},"component_base64":"` + strings.Repeat("A", 13<<20) + `"}`
+	if r := w.do("deploy", "POST", "/v1/plugins", huge); r.Code != 413 {
+		t.Fatalf("an oversized upload: %d", r.Code)
+	}
+	for name, bad := range map[string]string{
+		"no component":  `{"manifest":{}}`,
+		"not base64":    `{"manifest":{},"component_base64":"!!!"}`,
+		"no manifest":   `{"component_base64":"AAAA"}`,
+		"unknown field": `{"manifest":{},"component_base64":"AAAA","url":"https://evil.example/x.wasm"}`,
+	} {
+		if r := w.do("deploy", "POST", "/v1/plugins", bad); r.Code != 400 {
+			t.Errorf("%s: %d", name, r.Code)
+		}
+	}
+}
+
+func TestAnyoneAuthenticatedCanListPlugins(t *testing.T) {
+	w := newWorld(t)
+	for _, as := range []string{"agent", "alice", "exec", "deploy"} {
+		r := w.do(as, "GET", "/v1/plugins", "")
+		if r.Code != 200 || len(r.Body["plugins"].([]any)) != 1 {
+			t.Errorf("%s: %d %s", as, r.Code, r.Raw)
+		}
+	}
+}
+
+func TestWhoMayRunAPluginTool(t *testing.T) {
+	for _, tc := range []struct {
+		as, agent string
+		want      int
+	}{
+		{"agent", "", 200}, {"agent", "sid_front-desk", 200}, {"agent", "sid_rival", 403},
+		{"rival", "sid_front-desk", 403},
+		{"orch", "sid_front-desk", 200},
+		{"alice", "sid_front-desk", 403}, {"rita", "sid_front-desk", 403}, {"exec", "sid_front-desk", 403}, {"deploy", "sid_front-desk", 403}, {"plain", "sid_front-desk", 403},
+	} {
+		w := newWorld(t)
+		body := `{"input":{"currency":"USD"}`
+		if tc.agent != "" {
+			body += `,"agent_id":"` + tc.agent + `"`
+		}
+		r := w.do(tc.as, "POST", "/v1/plugins/acme.pricing/tools/quote/invoke", body+"}")
+		if r.Code != tc.want {
+			t.Errorf("%s as %q: %d, want %d (%s)", tc.as, tc.agent, r.Code, tc.want, r.Raw)
+		}
+	}
+}
+
+func TestAPluginAnswerIsPassedOnAsProposalsNotDecisions(t *testing.T) {
+	w := newWorld(t)
+	r := w.do("agent", "POST", "/v1/plugins/acme.pricing/tools/checkout/invoke", `{"input":{"currency":"USD"}}`)
+	if r.Code != 200 || r.Body["status"] != "ok" {
+		t.Fatalf("%d %s", r.Code, r.Raw)
+	}
+	if r.Body["result"].(map[string]any)["total_minor"].(float64) != 1350 {
+		t.Fatal(r.Raw)
+	}
+	intents := r.Body["proposed_intents"].([]any)
+	if len(intents) != 1 || intents[0].(map[string]any)["capability"] != "merchant.order" {
+		t.Fatal(r.Raw)
+	}
+	if _, has := r.Body["grant"]; has {
+		t.Fatal("a plugin's answer never carries a grant")
+	}
+	// the kernel saw the plugin id and tool from the PATH, the caller from the TOKEN
+	if w.k.lastInvoke.PluginId != "acme.pricing" || w.k.lastInvoke.Tool != "checkout" || w.k.last().Principal != "sid_front-desk" {
+		t.Fatalf("%+v %+v", w.k.lastInvoke, w.k.last())
+	}
+	// when a limit stopped the tool nothing but the reason is passed on
+	w.k.invoke = func(*kernelv1.InvokePluginRequest) (*kernelv1.InvokePluginResponse, error) {
+		return &kernelv1.InvokePluginResponse{Status: "limit_exceeded", Limit: "fuel", Error: "the plugin ran out of fuel", ResultJson: `{"leak":1}`, ProposedIntentsJson: []string{`{"capability":"x"}`}}, nil
+	}
+	r = w.do("agent", "POST", "/v1/plugins/acme.pricing/tools/quote/invoke", `{"input":1}`)
+	if r.Body["status"] != "limit_exceeded" || r.Body["limit"] != "fuel" || r.Body["result"] != nil || r.Body["proposed_intents"] != nil {
+		t.Fatalf("%s", r.Raw)
 	}
 }

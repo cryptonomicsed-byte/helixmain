@@ -19,7 +19,8 @@ impl KernelService {
     }
 
     pub fn into_server(self) -> pb::kernel_server::KernelServer<Self> {
-        pb::kernel_server::KernelServer::new(self)
+        // Plugin components are uploaded whole: allow up to the host's component ceiling plus headroom.
+        pb::kernel_server::KernelServer::new(self).max_decoding_message_size(12 << 20)
     }
 }
 
@@ -50,6 +51,18 @@ impl KernelApi for KernelService {
     }
     async fn get_pending(&self, request: Request<pb::GetPendingRequest>) -> Result<Response<pb::GetPendingResponse>, Status> {
         blocking!(self, request, get_pending)
+    }
+    async fn install_plugin(&self, request: Request<pb::InstallPluginRequest>) -> Result<Response<pb::InstallPluginResponse>, Status> {
+        blocking!(self, request, install_plugin)
+    }
+    async fn remove_plugin(&self, request: Request<pb::RemovePluginRequest>) -> Result<Response<pb::RemovePluginResponse>, Status> {
+        blocking!(self, request, remove_plugin)
+    }
+    async fn list_plugins(&self, request: Request<pb::ListPluginsRequest>) -> Result<Response<pb::ListPluginsResponse>, Status> {
+        blocking!(self, request, list_plugins)
+    }
+    async fn invoke_plugin(&self, request: Request<pb::InvokePluginRequest>) -> Result<Response<pb::InvokePluginResponse>, Status> {
+        blocking!(self, request, invoke_plugin)
     }
     async fn revoke_grant(&self, request: Request<pb::RevokeGrantRequest>) -> Result<Response<pb::RevokeGrantResponse>, Status> {
         blocking!(self, request, revoke_grant)

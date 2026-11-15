@@ -82,6 +82,16 @@ helix-kernel serve
 - The sid reference signers used by tests are not constant-time; production
   issuer keys must sign in hardened code.
 
+## Wasm plugins
+
+`HELIX_KERNEL_PLUGINS=on` turns on the plugin host (`src/plugins.rs`, Wasmtime, WIT; see `../plugins/README.md`).
+A plugin is a signed WebAssembly component that **computes and proposes; it cannot act**: no network, filesystem,
+environment, real clock or real randomness, no way to wait; fuel, wall-clock, memory, stack, output and storage limits;
+a fresh instance per call; storage writes commit only if the call succeeds. Installing needs a manifest signed by a trust
+anchor naming the exact component. Running a tool needs a live agent that declared `plugin.<id>.<tool>`; a proposed intent
+comes back with tenant and agent pinned by the kernel and still goes through `AuthorizeAction`. Installs are re-verified at
+every restart. Tests: `tests/plugins.rs` (28, real components) and `tests/plugin_rpc.rs` (9).
+
 ## Against the real policy service
 
 `cargo test --test policy_clojure -- --ignored --test-threads=1` starts the Clojure

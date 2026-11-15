@@ -81,3 +81,27 @@ func Cert(sid string, permissions []string, status, issuerSecretHex string) (map
 	doc["proof"] = map[string]any{"alg": "ed25519", "signature": hex.EncodeToString(sig)}
 	return doc, nil
 }
+
+// SignDoc adds hash and proof to any document that follows the sid signing
+// scheme (a plugin manifest, for instance), with the test issuer's key.
+func SignDoc(doc map[string]any, issuerSecretHex string) (map[string]any, error) {
+	out := map[string]any{}
+	for k, v := range doc {
+		if k != "hash" && k != "proof" {
+			out[k] = v
+		}
+	}
+	hash, err := canonical.HashWithout(out, "hash", "proof")
+	if err != nil {
+		return nil, err
+	}
+	out["hash"] = hash
+	seed, err := hex.DecodeString(issuerSecretHex)
+	if err != nil || len(seed) != ed25519.SeedSize {
+		return nil, fmt.Errorf("issuer secret must be 32 bytes of hex")
+	}
+	format, _ := doc["format"].(string)
+	sig := ed25519.Sign(ed25519.NewKeyFromSeed(seed), []byte(format+"\nissue\n"+hash))
+	out["proof"] = map[string]any{"alg": "ed25519", "signature": hex.EncodeToString(sig)}
+	return out, nil
+}

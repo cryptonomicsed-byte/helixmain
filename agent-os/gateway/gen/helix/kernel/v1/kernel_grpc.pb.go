@@ -40,6 +40,10 @@ const (
 	Kernel_RecordResult_FullMethodName    = "/helix.kernel.v1.Kernel/RecordResult"
 	Kernel_GetPending_FullMethodName      = "/helix.kernel.v1.Kernel/GetPending"
 	Kernel_RevokeGrant_FullMethodName     = "/helix.kernel.v1.Kernel/RevokeGrant"
+	Kernel_InstallPlugin_FullMethodName   = "/helix.kernel.v1.Kernel/InstallPlugin"
+	Kernel_RemovePlugin_FullMethodName    = "/helix.kernel.v1.Kernel/RemovePlugin"
+	Kernel_ListPlugins_FullMethodName     = "/helix.kernel.v1.Kernel/ListPlugins"
+	Kernel_InvokePlugin_FullMethodName    = "/helix.kernel.v1.Kernel/InvokePlugin"
 	Kernel_VerifyIdentity_FullMethodName  = "/helix.kernel.v1.Kernel/VerifyIdentity"
 	Kernel_Health_FullMethodName          = "/helix.kernel.v1.Kernel/Health"
 )
@@ -61,6 +65,11 @@ type KernelClient interface {
 	// inside its own tenant.
 	GetPending(ctx context.Context, in *GetPendingRequest, opts ...grpc.CallOption) (*GetPendingResponse, error)
 	RevokeGrant(ctx context.Context, in *RevokeGrantRequest, opts ...grpc.CallOption) (*RevokeGrantResponse, error)
+	// Install, upgrade, list, remove and run signed Wasm plugins.
+	InstallPlugin(ctx context.Context, in *InstallPluginRequest, opts ...grpc.CallOption) (*InstallPluginResponse, error)
+	RemovePlugin(ctx context.Context, in *RemovePluginRequest, opts ...grpc.CallOption) (*RemovePluginResponse, error)
+	ListPlugins(ctx context.Context, in *ListPluginsRequest, opts ...grpc.CallOption) (*ListPluginsResponse, error)
+	InvokePlugin(ctx context.Context, in *InvokePluginRequest, opts ...grpc.CallOption) (*InvokePluginResponse, error)
 	VerifyIdentity(ctx context.Context, in *VerifyIdentityRequest, opts ...grpc.CallOption) (*VerifyIdentityResponse, error)
 	Health(ctx context.Context, in *HealthRequest, opts ...grpc.CallOption) (*HealthResponse, error)
 }
@@ -133,6 +142,46 @@ func (c *kernelClient) RevokeGrant(ctx context.Context, in *RevokeGrantRequest, 
 	return out, nil
 }
 
+func (c *kernelClient) InstallPlugin(ctx context.Context, in *InstallPluginRequest, opts ...grpc.CallOption) (*InstallPluginResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(InstallPluginResponse)
+	err := c.cc.Invoke(ctx, Kernel_InstallPlugin_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *kernelClient) RemovePlugin(ctx context.Context, in *RemovePluginRequest, opts ...grpc.CallOption) (*RemovePluginResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RemovePluginResponse)
+	err := c.cc.Invoke(ctx, Kernel_RemovePlugin_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *kernelClient) ListPlugins(ctx context.Context, in *ListPluginsRequest, opts ...grpc.CallOption) (*ListPluginsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListPluginsResponse)
+	err := c.cc.Invoke(ctx, Kernel_ListPlugins_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *kernelClient) InvokePlugin(ctx context.Context, in *InvokePluginRequest, opts ...grpc.CallOption) (*InvokePluginResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(InvokePluginResponse)
+	err := c.cc.Invoke(ctx, Kernel_InvokePlugin_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *kernelClient) VerifyIdentity(ctx context.Context, in *VerifyIdentityRequest, opts ...grpc.CallOption) (*VerifyIdentityResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(VerifyIdentityResponse)
@@ -170,6 +219,11 @@ type KernelServer interface {
 	// inside its own tenant.
 	GetPending(context.Context, *GetPendingRequest) (*GetPendingResponse, error)
 	RevokeGrant(context.Context, *RevokeGrantRequest) (*RevokeGrantResponse, error)
+	// Install, upgrade, list, remove and run signed Wasm plugins.
+	InstallPlugin(context.Context, *InstallPluginRequest) (*InstallPluginResponse, error)
+	RemovePlugin(context.Context, *RemovePluginRequest) (*RemovePluginResponse, error)
+	ListPlugins(context.Context, *ListPluginsRequest) (*ListPluginsResponse, error)
+	InvokePlugin(context.Context, *InvokePluginRequest) (*InvokePluginResponse, error)
 	VerifyIdentity(context.Context, *VerifyIdentityRequest) (*VerifyIdentityResponse, error)
 	Health(context.Context, *HealthRequest) (*HealthResponse, error)
 	mustEmbedUnimplementedKernelServer()
@@ -199,6 +253,18 @@ func (UnimplementedKernelServer) GetPending(context.Context, *GetPendingRequest)
 }
 func (UnimplementedKernelServer) RevokeGrant(context.Context, *RevokeGrantRequest) (*RevokeGrantResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RevokeGrant not implemented")
+}
+func (UnimplementedKernelServer) InstallPlugin(context.Context, *InstallPluginRequest) (*InstallPluginResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method InstallPlugin not implemented")
+}
+func (UnimplementedKernelServer) RemovePlugin(context.Context, *RemovePluginRequest) (*RemovePluginResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RemovePlugin not implemented")
+}
+func (UnimplementedKernelServer) ListPlugins(context.Context, *ListPluginsRequest) (*ListPluginsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListPlugins not implemented")
+}
+func (UnimplementedKernelServer) InvokePlugin(context.Context, *InvokePluginRequest) (*InvokePluginResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method InvokePlugin not implemented")
 }
 func (UnimplementedKernelServer) VerifyIdentity(context.Context, *VerifyIdentityRequest) (*VerifyIdentityResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method VerifyIdentity not implemented")
@@ -335,6 +401,78 @@ func _Kernel_RevokeGrant_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Kernel_InstallPlugin_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(InstallPluginRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(KernelServer).InstallPlugin(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Kernel_InstallPlugin_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(KernelServer).InstallPlugin(ctx, req.(*InstallPluginRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Kernel_RemovePlugin_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemovePluginRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(KernelServer).RemovePlugin(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Kernel_RemovePlugin_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(KernelServer).RemovePlugin(ctx, req.(*RemovePluginRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Kernel_ListPlugins_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListPluginsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(KernelServer).ListPlugins(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Kernel_ListPlugins_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(KernelServer).ListPlugins(ctx, req.(*ListPluginsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Kernel_InvokePlugin_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(InvokePluginRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(KernelServer).InvokePlugin(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Kernel_InvokePlugin_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(KernelServer).InvokePlugin(ctx, req.(*InvokePluginRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Kernel_VerifyIdentity_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(VerifyIdentityRequest)
 	if err := dec(in); err != nil {
@@ -401,6 +539,22 @@ var Kernel_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RevokeGrant",
 			Handler:    _Kernel_RevokeGrant_Handler,
+		},
+		{
+			MethodName: "InstallPlugin",
+			Handler:    _Kernel_InstallPlugin_Handler,
+		},
+		{
+			MethodName: "RemovePlugin",
+			Handler:    _Kernel_RemovePlugin_Handler,
+		},
+		{
+			MethodName: "ListPlugins",
+			Handler:    _Kernel_ListPlugins_Handler,
+		},
+		{
+			MethodName: "InvokePlugin",
+			Handler:    _Kernel_InvokePlugin_Handler,
 		},
 		{
 			MethodName: "VerifyIdentity",

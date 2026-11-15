@@ -10,6 +10,7 @@ pub mod error;
 pub mod grants;
 pub mod identity;
 pub mod kernel;
+pub mod plugins;
 pub mod policy;
 pub mod service;
 pub mod sigs;

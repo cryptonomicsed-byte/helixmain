@@ -13,6 +13,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"mime"
@@ -94,6 +95,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/executions/{execution_id}/result", s.authed(s.recordResult))
 	mux.HandleFunc("POST /v1/grants/{grant_id}/revoke", s.authed(s.revokeGrant))
 	mux.HandleFunc("POST /v1/identities/verify", s.authed(s.verifyIdentity))
+	mux.HandleFunc("GET /v1/plugins", s.authed(s.listPlugins))
+	mux.HandleFunc("POST /v1/plugins", s.authed(s.installPlugin))
+	mux.HandleFunc("DELETE /v1/plugins/{plugin_id}", s.authed(s.removePlugin))
+	mux.HandleFunc("POST /v1/plugins/{plugin_id}/tools/{tool}/invoke", s.authed(s.invokePlugin))
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "no such endpoint")
 	})
@@ -255,16 +260,22 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 // unknown fields. It writes the error response itself and reports whether the
 // caller may continue.
 func decode(w http.ResponseWriter, r *http.Request, dst any) bool {
+	return decodeLimit(w, r, dst, maxBody)
+}
+
+// decodeLimit is decode with a body limit of the route's choosing (plugin
+// components are uploaded whole).
+func decodeLimit(w http.ResponseWriter, r *http.Request, dst any, limit int64) bool {
 	if mt, _, err := mime.ParseMediaType(r.Header.Get("Content-Type")); err != nil || mt != "application/json" {
 		writeError(w, http.StatusUnsupportedMediaType, "unsupported_media_type", "Content-Type must be application/json")
 		return false
 	}
-	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBody))
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, limit))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(dst); err != nil {
 		var tooBig *http.MaxBytesError
 		if errors.As(err, &tooBig) {
-			writeError(w, http.StatusRequestEntityTooLarge, "too_large", "body is larger than 1 MiB")
+			writeError(w, http.StatusRequestEntityTooLarge, "too_large", fmt.Sprintf("body is larger than %d bytes", limit))
 		} else {
 			writeError(w, http.StatusBadRequest, "invalid_request", "body is not the expected JSON: "+cleanJSONError(err))
 		}

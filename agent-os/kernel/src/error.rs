@@ -14,6 +14,8 @@ pub enum KernelError {
     NotFound,
     #[error("failed precondition: {0}")]
     Precondition(String),
+    #[error("busy: {0}")]
+    Busy(String),
     #[error("internal error: {0}")]
     Internal(String),
 }
@@ -34,6 +36,7 @@ impl From<KernelError> for tonic::Status {
             KernelError::Forbidden(m) => tonic::Status::permission_denied(m),
             KernelError::NotFound => tonic::Status::not_found("not found"),
             KernelError::Precondition(m) => tonic::Status::failed_precondition(m),
+            KernelError::Busy(m) => tonic::Status::resource_exhausted(m),
             // Internal detail stays in the log, not on the wire.
             KernelError::Internal(m) => {
                 eprintln!("kernel internal error: {m}");

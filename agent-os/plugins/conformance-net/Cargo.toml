@@ -1,0 +1,13 @@
+[package]
+name = "helix-plugin-conformance-net"
+version = "1.0.0"
+edition = "2021"
+description = "Test plugin that imports the network. The host must refuse to load it."
+license = "MIT"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wit-bindgen = { workspace = true }

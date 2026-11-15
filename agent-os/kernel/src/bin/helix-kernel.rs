@@ -96,7 +96,12 @@ async fn main() {
         auto_allow_max_amount_minor: num("HELIX_KERNEL_AUTO_ALLOW_MAX_AMOUNT_MINOR", 0),
     };
     eprintln!("helix-kernel: grant key {} ({} previous key(s) honoured)", signer.kid(), previous.len());
-    let kernel = Arc::new(Kernel::new(store, signer, &previous, trust, policy, Arc::new(SystemClock), cfg).unwrap_or_else(|e| fail(&e)));
+    let mut kernel = Kernel::new(store, signer, &previous, trust, policy, Arc::new(SystemClock), cfg).unwrap_or_else(|e| fail(&e));
+    if env("HELIX_KERNEL_PLUGINS").map_or(false, |v| v == "on") {
+        let loaded = kernel.enable_plugins(helix_kernel::plugins::Ceilings::default()).unwrap_or_else(|e| fail(&format!("plugin host: {e}")));
+        eprintln!("helix-kernel: wasm plugin host on ({loaded} plugin(s) loaded)");
+    }
+    let kernel = Arc::new(kernel);
 
     let listen: SocketAddr = env("HELIX_KERNEL_LISTEN").unwrap_or_else(|| "127.0.0.1:50051".into()).parse().unwrap_or_else(|_| fail("HELIX_KERNEL_LISTEN must be host:port"));
     let mut server = Server::builder();

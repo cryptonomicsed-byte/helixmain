@@ -112,6 +112,14 @@ CREATE TABLE IF NOT EXISTS executions (
     state TEXT NOT NULL, result TEXT, started_at TEXT NOT NULL, finished_at TEXT,
     UNIQUE (org, idempotency_key)
 );
+CREATE TABLE IF NOT EXISTS plugins (
+    org TEXT NOT NULL, id TEXT NOT NULL, version TEXT NOT NULL, manifest TEXT NOT NULL,
+    component BLOB NOT NULL, installed_at TEXT NOT NULL, PRIMARY KEY (org, id)
+);
+CREATE TABLE IF NOT EXISTS plugin_kv (
+    org TEXT NOT NULL, plugin TEXT NOT NULL, k TEXT NOT NULL, v TEXT NOT NULL,
+    PRIMARY KEY (org, plugin, k)
+);
 CREATE TABLE IF NOT EXISTS audit (
     seq INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, org TEXT NOT NULL,
     kind TEXT NOT NULL, subject TEXT NOT NULL, data TEXT NOT NULL,
@@ -161,6 +169,71 @@ impl Store {
     }
 
     /// Record an event that has no other state change.
+    // ── plugins ─────────────────────────────────────────────────────────────
+    pub fn put_plugin(&self, ts: &str, org: &str, id: &str, version: &str, manifest: &str, component: &[u8]) -> Result<(), StoreError> {
+        self.with(|c| {
+            c.execute(
+                "INSERT INTO plugins (org, id, version, manifest, component, installed_at) VALUES (?1,?2,?3,?4,?5,?6)
+                 ON CONFLICT(org, id) DO UPDATE SET version=?3, manifest=?4, component=?5, installed_at=?6",
+                params![org, id, version, manifest, component, ts],
+            )?;
+            Ok(())
+        })
+    }
+
+    pub fn delete_plugin(&self, org: &str, id: &str) -> Result<bool, StoreError> {
+        self.with(|c| {
+            let tx = c.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            let n = tx.execute("DELETE FROM plugins WHERE org=?1 AND id=?2", params![org, id])?;
+            tx.execute("DELETE FROM plugin_kv WHERE org=?1 AND plugin=?2", params![org, id])?;
+            tx.commit()?;
+            Ok(n > 0)
+        })
+    }
+
+    /// Every installed plugin: (org, id, manifest, component).
+    pub fn plugins(&self) -> Result<Vec<(String, String, String, Vec<u8>)>, StoreError> {
+        self.with(|c| {
+            let mut stmt = c.prepare("SELECT org, id, manifest, component FROM plugins ORDER BY org, id")?;
+            let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))?;
+            Ok(rows.collect::<Result<Vec<_>, _>>()?)
+        })
+    }
+
+    pub fn kv_get(&self, org: &str, plugin: &str, key: &str) -> Result<Option<String>, StoreError> {
+        self.with(|c| Ok(c.query_row("SELECT v FROM plugin_kv WHERE org=?1 AND plugin=?2 AND k=?3", params![org, plugin, key], |r| r.get(0)).optional()?))
+    }
+
+    pub fn kv_usage(&self, org: &str, plugin: &str) -> Result<usize, StoreError> {
+        self.with(|c| {
+            let n: i64 = c.query_row("SELECT COALESCE(SUM(LENGTH(CAST(k AS BLOB)) + LENGTH(CAST(v AS BLOB))), 0) FROM plugin_kv WHERE org=?1 AND plugin=?2", params![org, plugin], |r| r.get(0))?;
+            Ok(n as usize)
+        })
+    }
+
+    /// Apply writes atomically; refuse (and write nothing) if the total would exceed `max_bytes`.
+    pub fn kv_apply(&self, org: &str, plugin: &str, writes: &[(String, String)], max_bytes: usize) -> Result<(), StoreError> {
+        self.with(|c| {
+            let tx = c.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            for (k, v) in writes {
+                tx.execute(
+                    "INSERT INTO plugin_kv (org, plugin, k, v) VALUES (?1,?2,?3,?4) ON CONFLICT(org, plugin, k) DO UPDATE SET v=?4",
+                    params![org, plugin, k, v],
+                )?;
+            }
+            let total: i64 = tx.query_row(
+                "SELECT COALESCE(SUM(LENGTH(CAST(k AS BLOB)) + LENGTH(CAST(v AS BLOB))), 0) FROM plugin_kv WHERE org=?1 AND plugin=?2",
+                params![org, plugin],
+                |r| r.get(0),
+            )?;
+            if total as usize > max_bytes {
+                return Err(StoreError::Invalid("storage quota exceeded".into()));
+            }
+            tx.commit()?;
+            Ok(())
+        })
+    }
+
     pub fn audit(&self, ts: &str, org: &str, kind: &str, subject: &str, data: &Value) -> Result<String, StoreError> {
         self.with(|c| {
             let tx = c.transaction_with_behavior(TransactionBehavior::Immediate)?;

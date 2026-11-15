@@ -28,6 +28,8 @@ use crate::error::KernelError;
 use crate::grants::{self, GrantSigner, GrantVerifier};
 use crate::identity::{self, Verdict, VerifyOptions};
 use crate::pb;
+use crate::canonical::sha256_hex;
+use crate::plugins::{Ceilings, PluginError, PluginHost, Status as PluginStatus};
 use crate::policy::{self, PolicyAnswer, PolicyClient};
 use crate::store::{AgentRow, GrantRow, PendingRow, Permit, Store};
 
@@ -49,7 +51,8 @@ impl Default for KernelConfig {
 }
 
 pub struct Kernel {
-    store: Store,
+    store: Arc<Store>,
+    plugins: Option<Arc<PluginHost>>,
     signer: GrantSigner,
     verifier: GrantVerifier,
     trust: Value,
@@ -116,7 +119,7 @@ fn only_status_untrusted(v: &Verdict) -> bool {
 
 impl Kernel {
     pub fn new(
-        store: Store,
+        store: impl Into<Arc<Store>>,
         signer: GrantSigner,
         previous_verifying_keys_hex: &[String],
         trust: Value,
@@ -127,7 +130,7 @@ impl Kernel {
         let mut keys = vec![signer.public_hex()];
         keys.extend(previous_verifying_keys_hex.iter().cloned());
         let verifier = GrantVerifier::new(&keys)?;
-        Ok(Self { store, signer, verifier, trust, policy, clock, cfg })
+        Ok(Self { store: store.into(), plugins: None, signer, verifier, trust, policy, clock, cfg })
     }
 
     pub fn store(&self) -> &Store {
@@ -511,6 +514,151 @@ impl Kernel {
             pending_id: p.id, kind: p.kind, state,
             intent: Some(intent_from_json(&p.intent)),
             created_at: p.created_at, expires_at: p.expires_at, reason_codes,
+        })
+    }
+
+    // ── Wasm plugins ────────────────────────────────────────────────────────
+
+    /// Turn the plugin host on and reload the plugins installed before. A
+    /// plugin whose manifest has since expired, or no longer verifies, is NOT
+    /// loaded (and says so in the audit chain); its row stays so an operator
+    /// can replace it. Returns how many loaded.
+    pub fn enable_plugins(&mut self, ceilings: Ceilings) -> Result<usize, String> {
+        let host = PluginHost::new(self.store.clone(), self.trust.clone(), self.clock.clone(), ceilings)?;
+        let mut loaded = 0;
+        for (org, id, manifest, component) in self.store.plugins().map_err(|e| e.to_string())? {
+            match host.install(&org, &manifest, &component) {
+                Ok(_) => loaded += 1,
+                Err(e) => {
+                    let why = match e {
+                        PluginError::Refused(p) => p,
+                        other => vec![format!("{other:?}")],
+                    };
+                    let _ = self.store.audit(&self.now(), &org, "plugin.load_failed", &id, &json!({"why": why}));
+                }
+            }
+        }
+        self.plugins = Some(Arc::new(host));
+        Ok(loaded)
+    }
+
+    fn plugin_host(&self) -> Result<&Arc<PluginHost>, KernelError> {
+        self.plugins.as_ref().ok_or_else(|| KernelError::Precondition("the plugin host is not enabled on this kernel".into()))
+    }
+
+    fn plugin_info(s: &crate::plugins::InstalledSummary) -> pb::PluginInfo {
+        pb::PluginInfo {
+            id: s.id.clone(), version: s.version.clone(), component_sha256: s.component_sha256.clone(),
+            tools: s.tools.iter().map(|t| pb::PluginTool { name: t.name.clone(), description: t.description.clone() }).collect(),
+            permissions: s.permissions.clone(), expires_at: s.expires_at.clone(),
+        }
+    }
+
+    /// Only a SERVICE installs plugins; which service may is the gateway's business.
+    pub fn install_plugin(&self, req: &pb::InstallPluginRequest) -> Result<pb::InstallPluginResponse, KernelError> {
+        let ctx = self.ctx(&req.context)?;
+        if kind_of(ctx) != pb::PrincipalKind::Service {
+            return Err(KernelError::Forbidden("only a service may install a plugin".into()));
+        }
+        let host = self.plugin_host()?;
+        let org = &ctx.organization_id;
+        let now = self.now();
+        match host.install(org, &req.manifest_json, &req.component) {
+            Ok(summary) => {
+                // The manifest is stored exactly as it was signed; it is verified again on every restart.
+                self.store.put_plugin(&now, org, &summary.id, &summary.version, &req.manifest_json, &req.component)?;
+                self.store.audit(&now, org, "plugin.installed", &summary.id, &json!({
+                    "version": summary.version, "component_sha256": summary.component_sha256, "tools": summary.tools.iter().map(|t| &t.name).collect::<Vec<_>>(),
+                    "permissions": summary.permissions, "replaced": summary.replaced, "installed_by": ctx.principal,
+                }))?;
+                Ok(pb::InstallPluginResponse { installed: true, problems: vec![], replaced: summary.replaced, plugin: Some(Self::plugin_info(&summary)) })
+            }
+            Err(PluginError::Refused(problems)) => {
+                self.store.audit(&now, org, "plugin.install_refused", "plugin", &json!({"problems": problems, "installed_by": ctx.principal}))?;
+                Ok(pb::InstallPluginResponse { installed: false, problems, replaced: false, plugin: None })
+            }
+            Err(PluginError::Invalid(m)) => Err(KernelError::Invalid(m)),
+            Err(other) => Err(KernelError::Internal(format!("{other:?}"))),
+        }
+    }
+
+    pub fn remove_plugin(&self, req: &pb::RemovePluginRequest) -> Result<pb::RemovePluginResponse, KernelError> {
+        let ctx = self.ctx(&req.context)?;
+        if kind_of(ctx) != pb::PrincipalKind::Service {
+            return Err(KernelError::Forbidden("only a service may remove a plugin".into()));
+        }
+        clean(&req.plugin_id, "plugin_id", 64)?;
+        let host = self.plugin_host()?;
+        let org = &ctx.organization_id;
+        let removed = host.remove(org, &req.plugin_id);
+        let stored = self.store.delete_plugin(org, &req.plugin_id)?;
+        if removed || stored {
+            self.store.audit(&self.now(), org, "plugin.removed", &req.plugin_id, &json!({"removed_by": ctx.principal}))?;
+        }
+        Ok(pb::RemovePluginResponse { removed: removed || stored })
+    }
+
+    pub fn list_plugins(&self, req: &pb::ListPluginsRequest) -> Result<pb::ListPluginsResponse, KernelError> {
+        let ctx = self.ctx(&req.context)?;
+        let host = self.plugin_host()?;
+        Ok(pb::ListPluginsResponse { plugins: host.list(&ctx.organization_id).iter().map(Self::plugin_info).collect() })
+    }
+
+    /// Run a plugin tool for an agent. Like any use of a tool, it needs a live
+    /// agent that declared the capability `plugin.<id>.<tool>`; unlike an effect it
+    /// needs no grant, because a tool cannot act: its output is a result and, at
+    /// most, PROPOSED intents that must still pass AuthorizeAction.
+    pub fn invoke_plugin(&self, req: &pb::InvokePluginRequest) -> Result<pb::InvokePluginResponse, KernelError> {
+        let ctx = self.ctx(&req.context)?;
+        let host = self.plugin_host()?;
+        let org = &ctx.organization_id;
+        clean(&req.plugin_id, "plugin_id", 64)?;
+        clean(&req.tool, "tool", 64)?;
+        let agent = match kind_of(ctx) {
+            pb::PrincipalKind::Agent => {
+                if !req.agent_id.is_empty() && req.agent_id != ctx.principal {
+                    return Err(KernelError::Forbidden("an agent can only run tools as itself".into()));
+                }
+                ctx.principal.clone()
+            }
+            pb::PrincipalKind::Service => {
+                if !is_sid(&req.agent_id) {
+                    return Err(KernelError::Invalid("agent_id must be a sid_<slug>".into()));
+                }
+                req.agent_id.clone()
+            }
+            _ => return Err(KernelError::Forbidden("only an agent, or a service acting for one, may run a plugin tool".into())),
+        };
+        let now = self.now();
+        let capability = format!("plugin.{}.{}", req.plugin_id, req.tool);
+        if let Err(reasons) = self.agent_check(org, &agent, Some(&capability), &now) {
+            self.store.audit(&now, org, "plugin.refused", &req.plugin_id, &json!({"agent": agent, "tool": req.tool, "why": reasons, "principal": ctx.principal}))?;
+            return Err(KernelError::Forbidden(reasons.join("; ")));
+        }
+        let inv = host.invoke(org, &agent, &req.plugin_id, &req.tool, &req.input_json).map_err(|e| match e {
+            PluginError::NotFound => KernelError::NotFound,
+            PluginError::Invalid(m) => KernelError::Invalid(m),
+            PluginError::Busy => KernelError::Busy("too many plugin invocations are running".into()),
+            PluginError::Unavailable(m) => KernelError::Precondition(m),
+            PluginError::Refused(p) => KernelError::Internal(p.join("; ")),
+        })?;
+        let (status, limit) = match &inv.status {
+            PluginStatus::Ok => ("ok", String::new()),
+            PluginStatus::ToolError => ("tool_error", String::new()),
+            PluginStatus::LimitExceeded(l) => ("limit_exceeded", l.clone()),
+            PluginStatus::Trapped => ("trapped", String::new()),
+            PluginStatus::InvalidOutput => ("invalid_output", String::new()),
+        };
+        // What was asked and what came back are recorded as hashes, never as content.
+        self.store.audit(&now, org, "plugin.invoked", &req.plugin_id, &json!({
+            "agent": agent, "tool": req.tool, "principal": ctx.principal, "plugin_hash": inv.plugin_hash, "status": status, "limit": limit,
+            "input_sha256": sha256_hex(&req.input_json), "result_sha256": sha256_hex(&inv.result_json),
+            "proposed_intents": inv.proposed_intents.len(), "fuel_used": inv.fuel_used, "millis": inv.millis,
+        }))?;
+        Ok(pb::InvokePluginResponse {
+            status: status.into(), result_json: inv.result_json, limit,
+            proposed_intents_json: inv.proposed_intents.iter().map(|v| v.to_string()).collect(),
+            error: inv.error, fuel_used: inv.fuel_used, millis: inv.millis, plugin_hash: inv.plugin_hash, logs: inv.logs,
         })
     }
 

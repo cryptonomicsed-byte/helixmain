@@ -27,6 +27,7 @@ agent-os/
   products/
     customer-service/ # first commercial agent (scaffold next)
   kernel/             # Rust: sid verification, grants, authorize/execute split, audit chain (built, 55 tests + 6 against the real policy service)
+  plugins/            # WIT world + example/test plugins (Rust -> wasm32-wasip2 components); hosted by the kernel's Wasmtime sandbox (28 + 9 tests)
   policy/             # Clojure: the rules, as EDN, behind POST /v1/decide (built, 32 tests + Rust<->Clojure e2e)
   gateway/            # Go: REST front of the kernel, token auth, roles, owner-only confirmation (built, unit + 3-process e2e + mTLS interop)
   control-plane/      # Paperclip adapter (Phase 2)

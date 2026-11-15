@@ -1,0 +1,14 @@
+[package]
+name = "helix-plugin-conformance"
+version = "1.0.0"
+edition = "2021"
+description = "Test plugin for the HELIX plugin host: every tool is a way a plugin can misbehave"
+license = "MIT"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wit-bindgen = { workspace = true }
+serde_json = { workspace = true }

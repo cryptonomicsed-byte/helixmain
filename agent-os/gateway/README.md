@@ -36,6 +36,10 @@ All `/v1/*` need `Authorization: Bearer hxg_…`. Bodies are exactly one JSON do
 | `POST /v1/executions/{id}/result` `{state: succeeded\|failed, result}` | `executor` | record the provider's verified outcome |
 | `POST /v1/grants/{id}/revoke` `{reason}` | `grant_admin` | revoke |
 | `POST /v1/identities/verify` `{certificate, runtime?, register?}` | anyone to verify; `register: true` needs a service with `registrar` | sid/0.2 verification and registration |
+| `GET /v1/plugins` | anyone authenticated | the tenant's installed Wasm plugins and their tools |
+| `POST /v1/plugins` `{manifest, component_base64}` | a service with `plugin_admin` | install or upgrade a signed plugin; the kernel verifies everything; a refusal is a 200 with `installed: false` and the reasons; bodies up to 12 MiB |
+| `DELETE /v1/plugins/{id}` | `plugin_admin` | remove it and its storage |
+| `POST /v1/plugins/{id}/tools/{tool}/invoke` `{input, agent_id?}` | an agent (as itself) or a `proposer` service (for the named agent) | run a tool: `result` and `proposed_intents` (proposals, not decisions: each still goes through `/v1/actions/authorize`) |
 | `GET /v1/health` | anyone authenticated | kernel status, policy availability, audit head |
 | `GET /healthz`, `GET /readyz` | no auth | process up / can authenticate and reach the kernel (no details) |
 
@@ -65,7 +69,7 @@ The kernel only knows that an answer comes from a *user*. Which user is decided 
  "agents": [{"organization_id": "org_a", "sid": "sid_front-desk", "owners": ["user:alice"]}]}
 ```
 
-Roles by kind: user `reviewer`, `grant_admin`; service `proposer`, `executor`, `registrar`, `grant_admin`; agent none. One bad entry rejects the whole file.
+Roles by kind: user `reviewer`, `grant_admin`; service `proposer`, `executor`, `registrar`, `grant_admin`, `plugin_admin`; agent none. One bad entry rejects the whole file.
 
 ```bash
 helix-gateway mint-token --id tok_alice --org org_a --principal user:alice --kind user   # token to stderr once, entry to stdout

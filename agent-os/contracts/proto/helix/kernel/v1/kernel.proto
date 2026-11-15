@@ -247,6 +247,89 @@ message HealthResponse {
   string audit_head = 5;
 }
 
+// ── Wasm plugins ────────────────────────────────────────────────────────────
+// A plugin is a signed WebAssembly component (WIT world helix:plugin/plugin).
+// It computes and it proposes; it cannot act. See agent-os/plugins and
+// agent-os/kernel/src/plugins.rs.
+
+message PluginTool {
+  string name = 1;
+  string description = 2;
+}
+
+message PluginInfo {
+  string id = 1;
+  string version = 2;
+  string component_sha256 = 3;
+  repeated PluginTool tools = 4;
+  repeated string permissions = 5;
+  string expires_at = 6;
+}
+
+message InstallPluginRequest {
+  RequestContext context = 1;
+  // A helix-plugin/1 manifest signed by an issuer in the kernel's trust anchors.
+  string manifest_json = 2;
+  // The component named by the manifest's component.sha256.
+  bytes component = 3;
+}
+
+message InstallPluginResponse {
+  bool installed = 1;
+  // Why it was refused, when it was.
+  repeated string problems = 2;
+  PluginInfo plugin = 3;
+  // True when this replaced an older version.
+  bool replaced = 4;
+}
+
+message RemovePluginRequest {
+  RequestContext context = 1;
+  string plugin_id = 2;
+}
+
+message RemovePluginResponse {
+  bool removed = 1;
+}
+
+message ListPluginsRequest {
+  RequestContext context = 1;
+}
+
+message ListPluginsResponse {
+  repeated PluginInfo plugins = 1;
+}
+
+message InvokePluginRequest {
+  RequestContext context = 1;
+  string plugin_id = 2;
+  string tool = 3;
+  // A JSON document.
+  string input_json = 4;
+  // The agent the tool runs for. An agent principal names itself (or leaves
+  // this empty); a service names the agent it acts for. The agent must be live
+  // and must have declared the capability "plugin.<plugin_id>.<tool>".
+  string agent_id = 5;
+}
+
+message InvokePluginResponse {
+  // ok | tool_error | limit_exceeded | trapped | invalid_output
+  string status = 1;
+  string result_json = 2;
+  // Action intents the tool PROPOSES (ActionIntent JSON, organization and agent
+  // pinned by the kernel). Nothing has been authorized or run; send each through
+  // AuthorizeAction.
+  repeated string proposed_intents_json = 3;
+  // The tool's own error, or why the host stopped it.
+  string error = 4;
+  // fuel | time | memory | stack | output | storage, when status is limit_exceeded.
+  string limit = 5;
+  uint64 fuel_used = 6;
+  uint64 millis = 7;
+  string plugin_hash = 8;
+  repeated string logs = 9;
+}
+
 service Kernel {
   // Decide whether an intent may proceed. Never executes anything.
   rpc AuthorizeAction(AuthorizeActionRequest) returns (AuthorizeActionResponse);
@@ -261,6 +344,11 @@ service Kernel {
   // inside its own tenant.
   rpc GetPending(GetPendingRequest) returns (GetPendingResponse);
   rpc RevokeGrant(RevokeGrantRequest) returns (RevokeGrantResponse);
+  // Install, upgrade, list, remove and run signed Wasm plugins.
+  rpc InstallPlugin(InstallPluginRequest) returns (InstallPluginResponse);
+  rpc RemovePlugin(RemovePluginRequest) returns (RemovePluginResponse);
+  rpc ListPlugins(ListPluginsRequest) returns (ListPluginsResponse);
+  rpc InvokePlugin(InvokePluginRequest) returns (InvokePluginResponse);
   rpc VerifyIdentity(VerifyIdentityRequest) returns (VerifyIdentityResponse);
   rpc Health(HealthRequest) returns (HealthResponse);
 }

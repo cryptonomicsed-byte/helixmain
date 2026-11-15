@@ -1744,6 +1744,652 @@ func (x *HealthResponse) GetAuditHead() string {
 	return ""
 }
 
+type PluginTool struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Description   string                 `protobuf:"bytes,2,opt,name=description,proto3" json:"description,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PluginTool) Reset() {
+	*x = PluginTool{}
+	mi := &file_helix_kernel_v1_kernel_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PluginTool) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PluginTool) ProtoMessage() {}
+
+func (x *PluginTool) ProtoReflect() protoreflect.Message {
+	mi := &file_helix_kernel_v1_kernel_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PluginTool.ProtoReflect.Descriptor instead.
+func (*PluginTool) Descriptor() ([]byte, []int) {
+	return file_helix_kernel_v1_kernel_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *PluginTool) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *PluginTool) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+type PluginInfo struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Id              string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Version         string                 `protobuf:"bytes,2,opt,name=version,proto3" json:"version,omitempty"`
+	ComponentSha256 string                 `protobuf:"bytes,3,opt,name=component_sha256,json=componentSha256,proto3" json:"component_sha256,omitempty"`
+	Tools           []*PluginTool          `protobuf:"bytes,4,rep,name=tools,proto3" json:"tools,omitempty"`
+	Permissions     []string               `protobuf:"bytes,5,rep,name=permissions,proto3" json:"permissions,omitempty"`
+	ExpiresAt       string                 `protobuf:"bytes,6,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *PluginInfo) Reset() {
+	*x = PluginInfo{}
+	mi := &file_helix_kernel_v1_kernel_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PluginInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PluginInfo) ProtoMessage() {}
+
+func (x *PluginInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_helix_kernel_v1_kernel_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PluginInfo.ProtoReflect.Descriptor instead.
+func (*PluginInfo) Descriptor() ([]byte, []int) {
+	return file_helix_kernel_v1_kernel_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *PluginInfo) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *PluginInfo) GetVersion() string {
+	if x != nil {
+		return x.Version
+	}
+	return ""
+}
+
+func (x *PluginInfo) GetComponentSha256() string {
+	if x != nil {
+		return x.ComponentSha256
+	}
+	return ""
+}
+
+func (x *PluginInfo) GetTools() []*PluginTool {
+	if x != nil {
+		return x.Tools
+	}
+	return nil
+}
+
+func (x *PluginInfo) GetPermissions() []string {
+	if x != nil {
+		return x.Permissions
+	}
+	return nil
+}
+
+func (x *PluginInfo) GetExpiresAt() string {
+	if x != nil {
+		return x.ExpiresAt
+	}
+	return ""
+}
+
+type InstallPluginRequest struct {
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Context *RequestContext        `protobuf:"bytes,1,opt,name=context,proto3" json:"context,omitempty"`
+	// A helix-plugin/1 manifest signed by an issuer in the kernel's trust anchors.
+	ManifestJson string `protobuf:"bytes,2,opt,name=manifest_json,json=manifestJson,proto3" json:"manifest_json,omitempty"`
+	// The component named by the manifest's component.sha256.
+	Component     []byte `protobuf:"bytes,3,opt,name=component,proto3" json:"component,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InstallPluginRequest) Reset() {
+	*x = InstallPluginRequest{}
+	mi := &file_helix_kernel_v1_kernel_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InstallPluginRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InstallPluginRequest) ProtoMessage() {}
+
+func (x *InstallPluginRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_helix_kernel_v1_kernel_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InstallPluginRequest.ProtoReflect.Descriptor instead.
+func (*InstallPluginRequest) Descriptor() ([]byte, []int) {
+	return file_helix_kernel_v1_kernel_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *InstallPluginRequest) GetContext() *RequestContext {
+	if x != nil {
+		return x.Context
+	}
+	return nil
+}
+
+func (x *InstallPluginRequest) GetManifestJson() string {
+	if x != nil {
+		return x.ManifestJson
+	}
+	return ""
+}
+
+func (x *InstallPluginRequest) GetComponent() []byte {
+	if x != nil {
+		return x.Component
+	}
+	return nil
+}
+
+type InstallPluginResponse struct {
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	Installed bool                   `protobuf:"varint,1,opt,name=installed,proto3" json:"installed,omitempty"`
+	// Why it was refused, when it was.
+	Problems []string    `protobuf:"bytes,2,rep,name=problems,proto3" json:"problems,omitempty"`
+	Plugin   *PluginInfo `protobuf:"bytes,3,opt,name=plugin,proto3" json:"plugin,omitempty"`
+	// True when this replaced an older version.
+	Replaced      bool `protobuf:"varint,4,opt,name=replaced,proto3" json:"replaced,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InstallPluginResponse) Reset() {
+	*x = InstallPluginResponse{}
+	mi := &file_helix_kernel_v1_kernel_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InstallPluginResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InstallPluginResponse) ProtoMessage() {}
+
+func (x *InstallPluginResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_helix_kernel_v1_kernel_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InstallPluginResponse.ProtoReflect.Descriptor instead.
+func (*InstallPluginResponse) Descriptor() ([]byte, []int) {
+	return file_helix_kernel_v1_kernel_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *InstallPluginResponse) GetInstalled() bool {
+	if x != nil {
+		return x.Installed
+	}
+	return false
+}
+
+func (x *InstallPluginResponse) GetProblems() []string {
+	if x != nil {
+		return x.Problems
+	}
+	return nil
+}
+
+func (x *InstallPluginResponse) GetPlugin() *PluginInfo {
+	if x != nil {
+		return x.Plugin
+	}
+	return nil
+}
+
+func (x *InstallPluginResponse) GetReplaced() bool {
+	if x != nil {
+		return x.Replaced
+	}
+	return false
+}
+
+type RemovePluginRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Context       *RequestContext        `protobuf:"bytes,1,opt,name=context,proto3" json:"context,omitempty"`
+	PluginId      string                 `protobuf:"bytes,2,opt,name=plugin_id,json=pluginId,proto3" json:"plugin_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RemovePluginRequest) Reset() {
+	*x = RemovePluginRequest{}
+	mi := &file_helix_kernel_v1_kernel_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RemovePluginRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RemovePluginRequest) ProtoMessage() {}
+
+func (x *RemovePluginRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_helix_kernel_v1_kernel_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RemovePluginRequest.ProtoReflect.Descriptor instead.
+func (*RemovePluginRequest) Descriptor() ([]byte, []int) {
+	return file_helix_kernel_v1_kernel_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *RemovePluginRequest) GetContext() *RequestContext {
+	if x != nil {
+		return x.Context
+	}
+	return nil
+}
+
+func (x *RemovePluginRequest) GetPluginId() string {
+	if x != nil {
+		return x.PluginId
+	}
+	return ""
+}
+
+type RemovePluginResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Removed       bool                   `protobuf:"varint,1,opt,name=removed,proto3" json:"removed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RemovePluginResponse) Reset() {
+	*x = RemovePluginResponse{}
+	mi := &file_helix_kernel_v1_kernel_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RemovePluginResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RemovePluginResponse) ProtoMessage() {}
+
+func (x *RemovePluginResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_helix_kernel_v1_kernel_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RemovePluginResponse.ProtoReflect.Descriptor instead.
+func (*RemovePluginResponse) Descriptor() ([]byte, []int) {
+	return file_helix_kernel_v1_kernel_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *RemovePluginResponse) GetRemoved() bool {
+	if x != nil {
+		return x.Removed
+	}
+	return false
+}
+
+type ListPluginsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Context       *RequestContext        `protobuf:"bytes,1,opt,name=context,proto3" json:"context,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListPluginsRequest) Reset() {
+	*x = ListPluginsRequest{}
+	mi := &file_helix_kernel_v1_kernel_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListPluginsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListPluginsRequest) ProtoMessage() {}
+
+func (x *ListPluginsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_helix_kernel_v1_kernel_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListPluginsRequest.ProtoReflect.Descriptor instead.
+func (*ListPluginsRequest) Descriptor() ([]byte, []int) {
+	return file_helix_kernel_v1_kernel_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *ListPluginsRequest) GetContext() *RequestContext {
+	if x != nil {
+		return x.Context
+	}
+	return nil
+}
+
+type ListPluginsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Plugins       []*PluginInfo          `protobuf:"bytes,1,rep,name=plugins,proto3" json:"plugins,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListPluginsResponse) Reset() {
+	*x = ListPluginsResponse{}
+	mi := &file_helix_kernel_v1_kernel_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListPluginsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListPluginsResponse) ProtoMessage() {}
+
+func (x *ListPluginsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_helix_kernel_v1_kernel_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListPluginsResponse.ProtoReflect.Descriptor instead.
+func (*ListPluginsResponse) Descriptor() ([]byte, []int) {
+	return file_helix_kernel_v1_kernel_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *ListPluginsResponse) GetPlugins() []*PluginInfo {
+	if x != nil {
+		return x.Plugins
+	}
+	return nil
+}
+
+type InvokePluginRequest struct {
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Context  *RequestContext        `protobuf:"bytes,1,opt,name=context,proto3" json:"context,omitempty"`
+	PluginId string                 `protobuf:"bytes,2,opt,name=plugin_id,json=pluginId,proto3" json:"plugin_id,omitempty"`
+	Tool     string                 `protobuf:"bytes,3,opt,name=tool,proto3" json:"tool,omitempty"`
+	// A JSON document.
+	InputJson string `protobuf:"bytes,4,opt,name=input_json,json=inputJson,proto3" json:"input_json,omitempty"`
+	// The agent the tool runs for. An agent principal names itself (or leaves
+	// this empty); a service names the agent it acts for. The agent must be live
+	// and must have declared the capability "plugin.<plugin_id>.<tool>".
+	AgentId       string `protobuf:"bytes,5,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InvokePluginRequest) Reset() {
+	*x = InvokePluginRequest{}
+	mi := &file_helix_kernel_v1_kernel_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InvokePluginRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InvokePluginRequest) ProtoMessage() {}
+
+func (x *InvokePluginRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_helix_kernel_v1_kernel_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InvokePluginRequest.ProtoReflect.Descriptor instead.
+func (*InvokePluginRequest) Descriptor() ([]byte, []int) {
+	return file_helix_kernel_v1_kernel_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *InvokePluginRequest) GetContext() *RequestContext {
+	if x != nil {
+		return x.Context
+	}
+	return nil
+}
+
+func (x *InvokePluginRequest) GetPluginId() string {
+	if x != nil {
+		return x.PluginId
+	}
+	return ""
+}
+
+func (x *InvokePluginRequest) GetTool() string {
+	if x != nil {
+		return x.Tool
+	}
+	return ""
+}
+
+func (x *InvokePluginRequest) GetInputJson() string {
+	if x != nil {
+		return x.InputJson
+	}
+	return ""
+}
+
+func (x *InvokePluginRequest) GetAgentId() string {
+	if x != nil {
+		return x.AgentId
+	}
+	return ""
+}
+
+type InvokePluginResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// ok | tool_error | limit_exceeded | trapped | invalid_output
+	Status     string `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
+	ResultJson string `protobuf:"bytes,2,opt,name=result_json,json=resultJson,proto3" json:"result_json,omitempty"`
+	// Action intents the tool PROPOSES (ActionIntent JSON, organization and agent
+	// pinned by the kernel). Nothing has been authorized or run; send each through
+	// AuthorizeAction.
+	ProposedIntentsJson []string `protobuf:"bytes,3,rep,name=proposed_intents_json,json=proposedIntentsJson,proto3" json:"proposed_intents_json,omitempty"`
+	// The tool's own error, or why the host stopped it.
+	Error string `protobuf:"bytes,4,opt,name=error,proto3" json:"error,omitempty"`
+	// fuel | time | memory | stack | output | storage, when status is limit_exceeded.
+	Limit         string   `protobuf:"bytes,5,opt,name=limit,proto3" json:"limit,omitempty"`
+	FuelUsed      uint64   `protobuf:"varint,6,opt,name=fuel_used,json=fuelUsed,proto3" json:"fuel_used,omitempty"`
+	Millis        uint64   `protobuf:"varint,7,opt,name=millis,proto3" json:"millis,omitempty"`
+	PluginHash    string   `protobuf:"bytes,8,opt,name=plugin_hash,json=pluginHash,proto3" json:"plugin_hash,omitempty"`
+	Logs          []string `protobuf:"bytes,9,rep,name=logs,proto3" json:"logs,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InvokePluginResponse) Reset() {
+	*x = InvokePluginResponse{}
+	mi := &file_helix_kernel_v1_kernel_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InvokePluginResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InvokePluginResponse) ProtoMessage() {}
+
+func (x *InvokePluginResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_helix_kernel_v1_kernel_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InvokePluginResponse.ProtoReflect.Descriptor instead.
+func (*InvokePluginResponse) Descriptor() ([]byte, []int) {
+	return file_helix_kernel_v1_kernel_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *InvokePluginResponse) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *InvokePluginResponse) GetResultJson() string {
+	if x != nil {
+		return x.ResultJson
+	}
+	return ""
+}
+
+func (x *InvokePluginResponse) GetProposedIntentsJson() []string {
+	if x != nil {
+		return x.ProposedIntentsJson
+	}
+	return nil
+}
+
+func (x *InvokePluginResponse) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+func (x *InvokePluginResponse) GetLimit() string {
+	if x != nil {
+		return x.Limit
+	}
+	return ""
+}
+
+func (x *InvokePluginResponse) GetFuelUsed() uint64 {
+	if x != nil {
+		return x.FuelUsed
+	}
+	return 0
+}
+
+func (x *InvokePluginResponse) GetMillis() uint64 {
+	if x != nil {
+		return x.Millis
+	}
+	return 0
+}
+
+func (x *InvokePluginResponse) GetPluginHash() string {
+	if x != nil {
+		return x.PluginHash
+	}
+	return ""
+}
+
+func (x *InvokePluginResponse) GetLogs() []string {
+	if x != nil {
+		return x.Logs
+	}
+	return nil
+}
+
 var File_helix_kernel_v1_kernel_proto protoreflect.FileDescriptor
 
 const file_helix_kernel_v1_kernel_proto_rawDesc = "" +
@@ -1884,7 +2530,57 @@ const file_helix_kernel_v1_kernel_proto_rawDesc = "" +
 	"\x10policy_available\x18\x03 \x01(\bR\x0fpolicyAvailable\x12#\n" +
 	"\raudit_entries\x18\x04 \x01(\x03R\fauditEntries\x12\x1d\n" +
 	"\n" +
-	"audit_head\x18\x05 \x01(\tR\tauditHead*~\n" +
+	"audit_head\x18\x05 \x01(\tR\tauditHead\"B\n" +
+	"\n" +
+	"PluginTool\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12 \n" +
+	"\vdescription\x18\x02 \x01(\tR\vdescription\"\xd5\x01\n" +
+	"\n" +
+	"PluginInfo\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x18\n" +
+	"\aversion\x18\x02 \x01(\tR\aversion\x12)\n" +
+	"\x10component_sha256\x18\x03 \x01(\tR\x0fcomponentSha256\x121\n" +
+	"\x05tools\x18\x04 \x03(\v2\x1b.helix.kernel.v1.PluginToolR\x05tools\x12 \n" +
+	"\vpermissions\x18\x05 \x03(\tR\vpermissions\x12\x1d\n" +
+	"\n" +
+	"expires_at\x18\x06 \x01(\tR\texpiresAt\"\x94\x01\n" +
+	"\x14InstallPluginRequest\x129\n" +
+	"\acontext\x18\x01 \x01(\v2\x1f.helix.kernel.v1.RequestContextR\acontext\x12#\n" +
+	"\rmanifest_json\x18\x02 \x01(\tR\fmanifestJson\x12\x1c\n" +
+	"\tcomponent\x18\x03 \x01(\fR\tcomponent\"\xa2\x01\n" +
+	"\x15InstallPluginResponse\x12\x1c\n" +
+	"\tinstalled\x18\x01 \x01(\bR\tinstalled\x12\x1a\n" +
+	"\bproblems\x18\x02 \x03(\tR\bproblems\x123\n" +
+	"\x06plugin\x18\x03 \x01(\v2\x1b.helix.kernel.v1.PluginInfoR\x06plugin\x12\x1a\n" +
+	"\breplaced\x18\x04 \x01(\bR\breplaced\"m\n" +
+	"\x13RemovePluginRequest\x129\n" +
+	"\acontext\x18\x01 \x01(\v2\x1f.helix.kernel.v1.RequestContextR\acontext\x12\x1b\n" +
+	"\tplugin_id\x18\x02 \x01(\tR\bpluginId\"0\n" +
+	"\x14RemovePluginResponse\x12\x18\n" +
+	"\aremoved\x18\x01 \x01(\bR\aremoved\"O\n" +
+	"\x12ListPluginsRequest\x129\n" +
+	"\acontext\x18\x01 \x01(\v2\x1f.helix.kernel.v1.RequestContextR\acontext\"L\n" +
+	"\x13ListPluginsResponse\x125\n" +
+	"\aplugins\x18\x01 \x03(\v2\x1b.helix.kernel.v1.PluginInfoR\aplugins\"\xbb\x01\n" +
+	"\x13InvokePluginRequest\x129\n" +
+	"\acontext\x18\x01 \x01(\v2\x1f.helix.kernel.v1.RequestContextR\acontext\x12\x1b\n" +
+	"\tplugin_id\x18\x02 \x01(\tR\bpluginId\x12\x12\n" +
+	"\x04tool\x18\x03 \x01(\tR\x04tool\x12\x1d\n" +
+	"\n" +
+	"input_json\x18\x04 \x01(\tR\tinputJson\x12\x19\n" +
+	"\bagent_id\x18\x05 \x01(\tR\aagentId\"\x99\x02\n" +
+	"\x14InvokePluginResponse\x12\x16\n" +
+	"\x06status\x18\x01 \x01(\tR\x06status\x12\x1f\n" +
+	"\vresult_json\x18\x02 \x01(\tR\n" +
+	"resultJson\x122\n" +
+	"\x15proposed_intents_json\x18\x03 \x03(\tR\x13proposedIntentsJson\x12\x14\n" +
+	"\x05error\x18\x04 \x01(\tR\x05error\x12\x14\n" +
+	"\x05limit\x18\x05 \x01(\tR\x05limit\x12\x1b\n" +
+	"\tfuel_used\x18\x06 \x01(\x04R\bfuelUsed\x12\x16\n" +
+	"\x06millis\x18\a \x01(\x04R\x06millis\x12\x1f\n" +
+	"\vplugin_hash\x18\b \x01(\tR\n" +
+	"pluginHash\x12\x12\n" +
+	"\x04logs\x18\t \x03(\tR\x04logs*~\n" +
 	"\rPrincipalKind\x12\x1e\n" +
 	"\x1aPRINCIPAL_KIND_UNSPECIFIED\x10\x00\x12\x17\n" +
 	"\x13PRINCIPAL_KIND_USER\x10\x01\x12\x1a\n" +
@@ -1907,7 +2603,7 @@ const file_helix_kernel_v1_kernel_proto_rawDesc = "" +
 	"\x17EXECUTION_STATE_PENDING\x10\x02\x12\x1d\n" +
 	"\x19EXECUTION_STATE_SUCCEEDED\x10\x03\x12\x1a\n" +
 	"\x16EXECUTION_STATE_FAILED\x10\x04\x12\x1b\n" +
-	"\x17EXECUTION_STATE_REFUSED\x10\x052\xef\x05\n" +
+	"\x17EXECUTION_STATE_REFUSED\x10\x052\xe3\b\n" +
 	"\x06Kernel\x12d\n" +
 	"\x0fAuthorizeAction\x12'.helix.kernel.v1.AuthorizeActionRequest\x1a(.helix.kernel.v1.AuthorizeActionResponse\x12`\n" +
 	"\rConfirmAction\x12%.helix.kernel.v1.ConfirmActionRequest\x1a(.helix.kernel.v1.AuthorizeActionResponse\x12a\n" +
@@ -1915,7 +2611,11 @@ const file_helix_kernel_v1_kernel_proto_rawDesc = "" +
 	"\fRecordResult\x12$.helix.kernel.v1.RecordResultRequest\x1a%.helix.kernel.v1.RecordResultResponse\x12U\n" +
 	"\n" +
 	"GetPending\x12\".helix.kernel.v1.GetPendingRequest\x1a#.helix.kernel.v1.GetPendingResponse\x12X\n" +
-	"\vRevokeGrant\x12#.helix.kernel.v1.RevokeGrantRequest\x1a$.helix.kernel.v1.RevokeGrantResponse\x12a\n" +
+	"\vRevokeGrant\x12#.helix.kernel.v1.RevokeGrantRequest\x1a$.helix.kernel.v1.RevokeGrantResponse\x12^\n" +
+	"\rInstallPlugin\x12%.helix.kernel.v1.InstallPluginRequest\x1a&.helix.kernel.v1.InstallPluginResponse\x12[\n" +
+	"\fRemovePlugin\x12$.helix.kernel.v1.RemovePluginRequest\x1a%.helix.kernel.v1.RemovePluginResponse\x12X\n" +
+	"\vListPlugins\x12#.helix.kernel.v1.ListPluginsRequest\x1a$.helix.kernel.v1.ListPluginsResponse\x12[\n" +
+	"\fInvokePlugin\x12$.helix.kernel.v1.InvokePluginRequest\x1a%.helix.kernel.v1.InvokePluginResponse\x12a\n" +
 	"\x0eVerifyIdentity\x12&.helix.kernel.v1.VerifyIdentityRequest\x1a'.helix.kernel.v1.VerifyIdentityResponse\x12I\n" +
 	"\x06Health\x12\x1e.helix.kernel.v1.HealthRequest\x1a\x1f.helix.kernel.v1.HealthResponseBXZVgithub.com/cryptonomicsed-byte/helixmain/agent-os/gateway/gen/helix/kernel/v1;kernelv1b\x06proto3"
 
@@ -1932,7 +2632,7 @@ func file_helix_kernel_v1_kernel_proto_rawDescGZIP() []byte {
 }
 
 var file_helix_kernel_v1_kernel_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
-var file_helix_kernel_v1_kernel_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
+var file_helix_kernel_v1_kernel_proto_msgTypes = make([]protoimpl.MessageInfo, 29)
 var file_helix_kernel_v1_kernel_proto_goTypes = []any{
 	(PrincipalKind)(0),              // 0: helix.kernel.v1.PrincipalKind
 	(Risk)(0),                       // 1: helix.kernel.v1.Risk
@@ -1957,6 +2657,16 @@ var file_helix_kernel_v1_kernel_proto_goTypes = []any{
 	(*VerifyIdentityResponse)(nil),  // 20: helix.kernel.v1.VerifyIdentityResponse
 	(*HealthRequest)(nil),           // 21: helix.kernel.v1.HealthRequest
 	(*HealthResponse)(nil),          // 22: helix.kernel.v1.HealthResponse
+	(*PluginTool)(nil),              // 23: helix.kernel.v1.PluginTool
+	(*PluginInfo)(nil),              // 24: helix.kernel.v1.PluginInfo
+	(*InstallPluginRequest)(nil),    // 25: helix.kernel.v1.InstallPluginRequest
+	(*InstallPluginResponse)(nil),   // 26: helix.kernel.v1.InstallPluginResponse
+	(*RemovePluginRequest)(nil),     // 27: helix.kernel.v1.RemovePluginRequest
+	(*RemovePluginResponse)(nil),    // 28: helix.kernel.v1.RemovePluginResponse
+	(*ListPluginsRequest)(nil),      // 29: helix.kernel.v1.ListPluginsRequest
+	(*ListPluginsResponse)(nil),     // 30: helix.kernel.v1.ListPluginsResponse
+	(*InvokePluginRequest)(nil),     // 31: helix.kernel.v1.InvokePluginRequest
+	(*InvokePluginResponse)(nil),    // 32: helix.kernel.v1.InvokePluginResponse
 }
 var file_helix_kernel_v1_kernel_proto_depIdxs = []int32{
 	0,  // 0: helix.kernel.v1.RequestContext.principal_kind:type_name -> helix.kernel.v1.PrincipalKind
@@ -1979,27 +2689,42 @@ var file_helix_kernel_v1_kernel_proto_depIdxs = []int32{
 	3,  // 17: helix.kernel.v1.RecordResultResponse.state:type_name -> helix.kernel.v1.ExecutionState
 	4,  // 18: helix.kernel.v1.RevokeGrantRequest.context:type_name -> helix.kernel.v1.RequestContext
 	4,  // 19: helix.kernel.v1.VerifyIdentityRequest.context:type_name -> helix.kernel.v1.RequestContext
-	8,  // 20: helix.kernel.v1.Kernel.AuthorizeAction:input_type -> helix.kernel.v1.AuthorizeActionRequest
-	10, // 21: helix.kernel.v1.Kernel.ConfirmAction:input_type -> helix.kernel.v1.ConfirmActionRequest
-	13, // 22: helix.kernel.v1.Kernel.BeginExecution:input_type -> helix.kernel.v1.BeginExecutionRequest
-	15, // 23: helix.kernel.v1.Kernel.RecordResult:input_type -> helix.kernel.v1.RecordResultRequest
-	11, // 24: helix.kernel.v1.Kernel.GetPending:input_type -> helix.kernel.v1.GetPendingRequest
-	17, // 25: helix.kernel.v1.Kernel.RevokeGrant:input_type -> helix.kernel.v1.RevokeGrantRequest
-	19, // 26: helix.kernel.v1.Kernel.VerifyIdentity:input_type -> helix.kernel.v1.VerifyIdentityRequest
-	21, // 27: helix.kernel.v1.Kernel.Health:input_type -> helix.kernel.v1.HealthRequest
-	9,  // 28: helix.kernel.v1.Kernel.AuthorizeAction:output_type -> helix.kernel.v1.AuthorizeActionResponse
-	9,  // 29: helix.kernel.v1.Kernel.ConfirmAction:output_type -> helix.kernel.v1.AuthorizeActionResponse
-	14, // 30: helix.kernel.v1.Kernel.BeginExecution:output_type -> helix.kernel.v1.BeginExecutionResponse
-	16, // 31: helix.kernel.v1.Kernel.RecordResult:output_type -> helix.kernel.v1.RecordResultResponse
-	12, // 32: helix.kernel.v1.Kernel.GetPending:output_type -> helix.kernel.v1.GetPendingResponse
-	18, // 33: helix.kernel.v1.Kernel.RevokeGrant:output_type -> helix.kernel.v1.RevokeGrantResponse
-	20, // 34: helix.kernel.v1.Kernel.VerifyIdentity:output_type -> helix.kernel.v1.VerifyIdentityResponse
-	22, // 35: helix.kernel.v1.Kernel.Health:output_type -> helix.kernel.v1.HealthResponse
-	28, // [28:36] is the sub-list for method output_type
-	20, // [20:28] is the sub-list for method input_type
-	20, // [20:20] is the sub-list for extension type_name
-	20, // [20:20] is the sub-list for extension extendee
-	0,  // [0:20] is the sub-list for field type_name
+	23, // 20: helix.kernel.v1.PluginInfo.tools:type_name -> helix.kernel.v1.PluginTool
+	4,  // 21: helix.kernel.v1.InstallPluginRequest.context:type_name -> helix.kernel.v1.RequestContext
+	24, // 22: helix.kernel.v1.InstallPluginResponse.plugin:type_name -> helix.kernel.v1.PluginInfo
+	4,  // 23: helix.kernel.v1.RemovePluginRequest.context:type_name -> helix.kernel.v1.RequestContext
+	4,  // 24: helix.kernel.v1.ListPluginsRequest.context:type_name -> helix.kernel.v1.RequestContext
+	24, // 25: helix.kernel.v1.ListPluginsResponse.plugins:type_name -> helix.kernel.v1.PluginInfo
+	4,  // 26: helix.kernel.v1.InvokePluginRequest.context:type_name -> helix.kernel.v1.RequestContext
+	8,  // 27: helix.kernel.v1.Kernel.AuthorizeAction:input_type -> helix.kernel.v1.AuthorizeActionRequest
+	10, // 28: helix.kernel.v1.Kernel.ConfirmAction:input_type -> helix.kernel.v1.ConfirmActionRequest
+	13, // 29: helix.kernel.v1.Kernel.BeginExecution:input_type -> helix.kernel.v1.BeginExecutionRequest
+	15, // 30: helix.kernel.v1.Kernel.RecordResult:input_type -> helix.kernel.v1.RecordResultRequest
+	11, // 31: helix.kernel.v1.Kernel.GetPending:input_type -> helix.kernel.v1.GetPendingRequest
+	17, // 32: helix.kernel.v1.Kernel.RevokeGrant:input_type -> helix.kernel.v1.RevokeGrantRequest
+	25, // 33: helix.kernel.v1.Kernel.InstallPlugin:input_type -> helix.kernel.v1.InstallPluginRequest
+	27, // 34: helix.kernel.v1.Kernel.RemovePlugin:input_type -> helix.kernel.v1.RemovePluginRequest
+	29, // 35: helix.kernel.v1.Kernel.ListPlugins:input_type -> helix.kernel.v1.ListPluginsRequest
+	31, // 36: helix.kernel.v1.Kernel.InvokePlugin:input_type -> helix.kernel.v1.InvokePluginRequest
+	19, // 37: helix.kernel.v1.Kernel.VerifyIdentity:input_type -> helix.kernel.v1.VerifyIdentityRequest
+	21, // 38: helix.kernel.v1.Kernel.Health:input_type -> helix.kernel.v1.HealthRequest
+	9,  // 39: helix.kernel.v1.Kernel.AuthorizeAction:output_type -> helix.kernel.v1.AuthorizeActionResponse
+	9,  // 40: helix.kernel.v1.Kernel.ConfirmAction:output_type -> helix.kernel.v1.AuthorizeActionResponse
+	14, // 41: helix.kernel.v1.Kernel.BeginExecution:output_type -> helix.kernel.v1.BeginExecutionResponse
+	16, // 42: helix.kernel.v1.Kernel.RecordResult:output_type -> helix.kernel.v1.RecordResultResponse
+	12, // 43: helix.kernel.v1.Kernel.GetPending:output_type -> helix.kernel.v1.GetPendingResponse
+	18, // 44: helix.kernel.v1.Kernel.RevokeGrant:output_type -> helix.kernel.v1.RevokeGrantResponse
+	26, // 45: helix.kernel.v1.Kernel.InstallPlugin:output_type -> helix.kernel.v1.InstallPluginResponse
+	28, // 46: helix.kernel.v1.Kernel.RemovePlugin:output_type -> helix.kernel.v1.RemovePluginResponse
+	30, // 47: helix.kernel.v1.Kernel.ListPlugins:output_type -> helix.kernel.v1.ListPluginsResponse
+	32, // 48: helix.kernel.v1.Kernel.InvokePlugin:output_type -> helix.kernel.v1.InvokePluginResponse
+	20, // 49: helix.kernel.v1.Kernel.VerifyIdentity:output_type -> helix.kernel.v1.VerifyIdentityResponse
+	22, // 50: helix.kernel.v1.Kernel.Health:output_type -> helix.kernel.v1.HealthResponse
+	39, // [39:51] is the sub-list for method output_type
+	27, // [27:39] is the sub-list for method input_type
+	27, // [27:27] is the sub-list for extension type_name
+	27, // [27:27] is the sub-list for extension extendee
+	0,  // [0:27] is the sub-list for field type_name
 }
 
 func init() { file_helix_kernel_v1_kernel_proto_init() }
@@ -2013,7 +2738,7 @@ func file_helix_kernel_v1_kernel_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_helix_kernel_v1_kernel_proto_rawDesc), len(file_helix_kernel_v1_kernel_proto_rawDesc)),
 			NumEnums:      4,
-			NumMessages:   19,
+			NumMessages:   29,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
