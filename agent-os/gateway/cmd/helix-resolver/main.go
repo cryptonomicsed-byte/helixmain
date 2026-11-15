@@ -9,6 +9,7 @@
 //	HELIX_RESOLVER_PUBLISH_TOKEN_SHA256 SHA-256 (hex) of the bearer token allowed to publish; unset disables publishing
 //	HELIX_RESOLVER_LISTEN              default 127.0.0.1:8081 (off loopback it refuses to start without TLS)
 //	HELIX_RESOLVER_TLS_CERT / _KEY     serve HTTPS directly; or terminate TLS in front and stay on loopback
+//	HELIX_RESOLVER_METRICS_LISTEN      Prometheus metrics, loopback only (default 127.0.0.1:9102)
 package main
 
 import (
@@ -80,6 +81,19 @@ func main() {
 	if env("HELIX_RESOLVER_PUBLISH_TOKEN_SHA256", "") == "" {
 		log.Warn("publishing is disabled: HELIX_RESOLVER_PUBLISH_TOKEN_SHA256 is not set")
 	}
+
+	metricsListen := env("HELIX_RESOLVER_METRICS_LISTEN", "127.0.0.1:9102")
+	if mh, _, err := net.SplitHostPort(metricsListen); err != nil || !(mh == "localhost" || (net.ParseIP(mh) != nil && net.ParseIP(mh).IsLoopback())) {
+		fail("HELIX_RESOLVER_METRICS_LISTEN must be a loopback host:port: %q", metricsListen)
+	}
+	go func() {
+		mux := http.NewServeMux()
+		mux.Handle("GET /metrics", srv.Metrics().Handler())
+		ms := &http.Server{Addr: metricsListen, Handler: mux, ReadHeaderTimeout: 5 * time.Second, WriteTimeout: 10 * time.Second}
+		if err := ms.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Error("metrics listener", "error", err.Error())
+		}
+	}()
 
 	httpServer := &http.Server{
 		Addr: listen, Handler: srv.Handler(),

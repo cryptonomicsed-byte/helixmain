@@ -1,0 +1,34 @@
+[Unit]
+Description=HELIX QR contact resolver (Go): serves signed contact resolutions, holds no signing key
+Documentation=file:///opt/helix/gateway/README.md
+After=network.target
+PartOf=helix.target
+
+[Service]
+Type=simple
+User=helix
+Group=helix
+EnvironmentFile=/etc/helix/resolver.env
+ExecStart=/opt/helix/bin/helix-resolver
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ReadWritePaths=/var/lib/helix/resolver
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+MemoryMax=256M
+TasksMax=256
+
+[Install]
+WantedBy=helix.target

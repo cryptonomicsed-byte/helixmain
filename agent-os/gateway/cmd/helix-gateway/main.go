@@ -124,6 +124,20 @@ func serve() {
 		TLSConfig:      &tls.Config{MinVersion: tls.VersionTLS12},
 	}
 
+	// Metrics are on their OWN loopback listener: no tokens, nothing to log in to, never on the public port.
+	metricsListen := env("HELIX_GATEWAY_METRICS_LISTEN", "127.0.0.1:9101")
+	if mh, _, err := net.SplitHostPort(metricsListen); err != nil || !(mh == "localhost" || (net.ParseIP(mh) != nil && net.ParseIP(mh).IsLoopback())) {
+		fail("HELIX_GATEWAY_METRICS_LISTEN must be a loopback host:port (scrape it through your own proxy or tunnel): %q", metricsListen)
+	}
+	go func() {
+		mux := http.NewServeMux()
+		mux.Handle("GET /metrics", srv.Metrics().Handler())
+		ms := &http.Server{Addr: metricsListen, Handler: mux, ReadHeaderTimeout: 5 * time.Second, WriteTimeout: 10 * time.Second}
+		if err := ms.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Error("metrics listener", "error", err.Error())
+		}
+	}()
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	done := make(chan error, 1)

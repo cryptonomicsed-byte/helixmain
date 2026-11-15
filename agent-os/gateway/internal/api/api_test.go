@@ -890,3 +890,62 @@ func TestAPluginAnswerIsPassedOnAsProposalsNotDecisions(t *testing.T) {
 		t.Fatalf("%s", r.Raw)
 	}
 }
+
+// ── metrics ──────────────────────────────────────────────────────────────────
+
+func scrape(w *world) string {
+	var b bytes.Buffer
+	w.srv.Metrics().Write(&b)
+	return b.String()
+}
+
+func TestMetricsCountWhatHappenedAndNeverClientChosenLabels(t *testing.T) {
+	w := newWorld(t)
+	w.do("agent", "POST", "/v1/actions/authorize", intentBody("sid_front-desk", ""))
+	w.do("agent", "POST", "/v1/actions/authorize", intentBody("sid_rival", "")) // 403
+	w.do("", "GET", "/v1/health", "")                                           // 401, missing token
+	w.do("", "GET", "/v1/health", "", "Authorization", "Bearer nonsense")       // 401, invalid token
+	w.k.authorize = func(*kernelv1.AuthorizeActionRequest) (*kernelv1.AuthorizeActionResponse, error) {
+		return nil, status.Error(codes.Unavailable, "down")
+	}
+	w.do("agent", "POST", "/v1/actions/authorize", intentBody("sid_front-desk", "")) // 503
+	for i := 0; i < 20; i++ {
+		w.do("agent", "GET", "/v1/actions/pending-"+strings.Repeat("x", i), "") // many different paths, one route
+	}
+	out := scrape(w)
+	for _, want := range []string{
+		`helix_gateway_requests_total{route="POST /v1/actions/authorize",status="200"} 1`,
+		`helix_gateway_requests_total{route="POST /v1/actions/authorize",status="403"} 1`,
+		`helix_gateway_requests_total{route="POST /v1/actions/authorize",status="503"} 1`,
+		`helix_gateway_auth_failures_total{reason="missing_token"} 1`,
+		`helix_gateway_auth_failures_total{reason="invalid_token"} 1`,
+		`helix_gateway_upstream_errors_total{grpc_code="Unavailable"} 1`,
+		`helix_gateway_decisions_total{decision="allow",phase="authorize"} 1`,
+		"helix_gateway_request_seconds_bucket", "helix_gateway_in_flight 0",
+		"helix_kernel_up 1", "helix_kernel_policy_available 1", "helix_kernel_audit_entries 3", "helix_gateway_registry_ok 1",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q in:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "pending-x") {
+		t.Error("a client-chosen path must never become a label value")
+	}
+	if strings.Contains(out, w.tokens["agent"]) || strings.Contains(out, "sid_front-desk\"") && strings.Contains(out, "principal=") {
+		t.Error("tokens and principals do not belong in metrics")
+	}
+}
+
+func TestMetricsShowAnOutage(t *testing.T) {
+	w := newWorld(t)
+	w.k.err = status.Error(codes.Unavailable, "down")
+	if out := scrape(w); !strings.Contains(out, "helix_kernel_up 0") || strings.Contains(out, "helix_kernel_policy_available") {
+		t.Fatal(out)
+	}
+	if err := os.WriteFile(w.file, []byte(`{"tokens":[{"id":`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if out := scrape(w); !strings.Contains(out, "helix_gateway_registry_ok 0") {
+		t.Fatal(out)
+	}
+}

@@ -28,6 +28,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cryptonomicsed-byte/helixmain/agent-os/gateway/internal/metrics"
 	"github.com/cryptonomicsed-byte/helixmain/agent-os/gateway/internal/qr"
 	"github.com/cryptonomicsed-byte/helixmain/agent-os/gateway/internal/ratelimit"
 )
@@ -46,6 +47,8 @@ type Config struct {
 	Log                *slog.Logger
 	RatePerSec         float64
 	Burst              int
+	// Metrics receives the resolver's counters; nil means a private registry.
+	Metrics *metrics.Registry
 }
 
 type Server struct {
@@ -56,6 +59,7 @@ type Server struct {
 	now          func() time.Time
 	log          *slog.Logger
 	limiter      *ratelimit.Limiter
+	m            *metrics.Registry
 }
 
 func New(c Config) (*Server, error) {
@@ -68,7 +72,10 @@ func New(c Config) (*Server, error) {
 	if c.Store == nil {
 		return nil, errors.New("a store is required")
 	}
-	s := &Server{origin: c.Origin, host: strings.TrimPrefix(c.Origin, "https://"), trust: c.Trust, store: c.Store, now: c.Now, log: c.Log}
+	s := &Server{origin: c.Origin, host: strings.TrimPrefix(c.Origin, "https://"), trust: c.Trust, store: c.Store, now: c.Now, log: c.Log, m: c.Metrics}
+	if s.m == nil {
+		s.m = metrics.New()
+	}
 	if s.now == nil {
 		s.now = time.Now
 	}
@@ -92,6 +99,17 @@ func New(c Config) (*Server, error) {
 	s.limiter = ratelimit.New(rate, burst)
 	s.limiter.SetClock(s.now)
 	return s, nil
+}
+
+// Metrics is the registry this server writes to.
+func (s *Server) Metrics() *metrics.Registry { return s.m }
+
+func (s *Server) lookup(outcome string) {
+	s.m.Counter("helix_resolver_lookups_total", "Contact lookups by outcome.", 1, "outcome", outcome)
+}
+
+func (s *Server) published(outcome string) {
+	s.m.Counter("helix_resolver_publishes_total", "Resolution publishes by outcome.", 1, "outcome", outcome)
 }
 
 func (s *Server) Handler() http.Handler {
@@ -156,16 +174,19 @@ func clientIP(r *http.Request) string {
 func (s *Server) resolve(w http.ResponseWriter, r *http.Request) {
 	if ok, wait := s.limiter.Allow("ip:" + clientIP(r)); !ok {
 		w.Header().Set("Retry-After", strconv.Itoa(int(wait.Seconds())+1))
+		s.lookup("rate_limited")
 		writeError(w, 429, "rate_limited", "slow down")
 		return
 	}
 	// The request must have been addressed to this resolver. A reference that
 	// was re-hosted behind someone else's name, or a rebinding trick, stops here.
 	if !strings.EqualFold(r.Host, s.host) {
+		s.lookup("misdirected")
 		writeError(w, 421, "misdirected", "this resolver does not serve that host")
 		return
 	}
 	if r.URL.RawQuery != "" {
+		s.lookup("invalid_reference")
 		writeError(w, 400, "invalid_reference", "a QR reference takes no query string")
 		return
 	}
@@ -174,29 +195,35 @@ func (s *Server) resolve(w http.ResponseWriter, r *http.Request) {
 	ref, rv := qr.VerifyReference(wire, s.trust, now)
 	switch {
 	case !rv.OK:
+		s.lookup("invalid_reference")
 		writeError(w, 400, "invalid_reference", rv.Errors[0])
 		return
 	case has(rv.Untrusted, "has expired"):
+		s.lookup("expired")
 		writeError(w, 410, "expired", "this QR code has expired")
 		return
 	case !rv.Trusted:
 		// Unknown issuer, key out of its window, not yet valid: not something to serve a contact for.
 		s.log.Info("reference not trusted", "untrusted", rv.Untrusted)
+		s.lookup("untrusted_reference")
 		writeError(w, 404, "not_found", "no such contact")
 		return
 	}
 
 	raw, err := s.store.Get(ref.Hash)
 	if errors.Is(err, ErrNotFound) {
+		s.lookup("not_found")
 		writeError(w, 404, "not_found", "no such contact")
 		return
 	} else if err != nil {
 		s.log.Error("store", "error", err.Error())
+		s.lookup("store_error")
 		writeError(w, 503, "unavailable", "the contact store is unavailable")
 		return
 	}
 	res, status, fresh, ok := s.checkStored(raw, ref, now)
 	if !ok {
+		s.lookup("resolution_unavailable")
 		w.Header().Set("Retry-After", "30")
 		writeError(w, 503, "resolution_unavailable", "no current, verified resolution is available for this contact")
 		return
@@ -217,6 +244,11 @@ func (s *Server) resolve(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(code)
 	_, _ = w.Write(res)
+	if code == http.StatusOK {
+		s.lookup("served")
+	} else {
+		s.lookup("served_" + status)
+	}
 }
 
 // checkStored re-verifies a stored resolution before it is served. It returns
@@ -282,12 +314,14 @@ func Accept(stored, next map[string]any) error {
 
 func (s *Server) publish(w http.ResponseWriter, r *http.Request) {
 	if s.tokenHash == nil {
+		s.published("disabled")
 		writeError(w, 503, "publishing_disabled", "publishing is not configured")
 		return
 	}
 	scheme, token, _ := strings.Cut(r.Header.Get("Authorization"), " ")
 	sum := sha256.Sum256([]byte(strings.TrimSpace(token)))
 	if !strings.EqualFold(scheme, "Bearer") || subtle.ConstantTimeCompare(sum[:], s.tokenHash) != 1 {
+		s.published("unauthenticated")
 		w.Header().Set("WWW-Authenticate", `Bearer realm="helix-resolver"`)
 		writeError(w, 401, "unauthenticated", "a valid publish token is required")
 		return
@@ -316,10 +350,12 @@ func (s *Server) publish(w http.ResponseWriter, r *http.Request) {
 	now := nowString(s.now())
 	ref, rv := qr.VerifyReference(req.Reference, s.trust, now)
 	if !rv.Trusted {
+		s.published("invalid_reference")
 		writeError(w, 422, "invalid_reference", firstProblem(rv))
 		return
 	}
 	if ref.Resolver != s.origin {
+		s.published("wrong_resolver")
 		writeError(w, 422, "wrong_resolver", "the reference names another resolver")
 		return
 	}
@@ -331,6 +367,7 @@ func (s *Server) publish(w http.ResponseWriter, r *http.Request) {
 	}
 	ev := qr.CheckEnvelope(doc, ref, s.trust, now, s.origin)
 	if !ev.OK {
+		s.published("invalid_resolution")
 		writeError(w, 422, "invalid_resolution", ev.Errors[0])
 		return
 	}
@@ -351,6 +388,7 @@ func (s *Server) publish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := Accept(stored, doc); err != nil {
+		s.published("conflict")
 		writeError(w, 409, "conflict", err.Error())
 		return
 	}
@@ -359,6 +397,7 @@ func (s *Server) publish(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 503, "unavailable", "the contact store is unavailable")
 		return
 	}
+	s.published("stored")
 	s.log.Info("published", "ref", ref.Hash, "status", doc["status"])
 	writeJSON(w, 200, map[string]any{"stored": true, "reference_hash": ref.Hash, "status": doc["status"], "fresh_until": doc["fresh_until"]})
 }

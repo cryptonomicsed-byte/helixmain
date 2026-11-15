@@ -1,0 +1,6 @@
+[Unit]
+Description=HELIX Agent OS (policy, kernel, gateway, resolver)
+Wants=helix-policy.service helix-kernel.service helix-gateway.service helix-resolver.service
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,34 @@
+[Unit]
+Description=HELIX policy service (Clojure): the rules, as data
+Documentation=file:///opt/helix/policy/README.md
+After=network.target
+PartOf=helix.target
+
+[Service]
+Type=simple
+User=helix
+Group=helix
+EnvironmentFile=/etc/helix/policy.env
+WorkingDirectory=/opt/helix/policy
+ExecStart=/usr/bin/java -Xmx256m -Dfile.encoding=UTF-8 -cp "lib/*:src" clojure.main -m helix.policy.main
+Restart=always
+RestartSec=3
+# The policy service answers questions and changes nothing: it needs no network but its own port, and no writable path.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+MemoryMax=512M
+TasksMax=128
+
+[Install]
+WantedBy=helix.target

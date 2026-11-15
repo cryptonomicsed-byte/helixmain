@@ -133,6 +133,6 @@ unverified stored documents, and an unchecked publish token each fail the tests.
 - **No four-eyes rule**: a user who is both the owner and a reviewer can review their own agent's action.
 - **No "list the hold queue" endpoint.** The kernel has no list RPC yet; a reviewer needs the `pending_id`. The operator app needs `ListPending` (additive to the proto).
 - The rate limiter is in memory, per process.
-- No metrics endpoint yet (the operations workstream).
+- **Metrics are loopback only** (`HELIX_GATEWAY_METRICS_LISTEN`, `HELIX_RESOLVER_METRICS_LISTEN`; Prometheus text via `internal/metrics`, no client library). Counters are per process; there is no tracing. The alert rules in `../deploy/prometheus/helix-alerts.yml` are checked against the exported names by `deploy/check-alerts.py`.
 - **The resolver has no issuer tooling yet** (an operator CLI that signs references and resolutions and calls `PUT /v1/publish`; the Python and TypeScript `make_reference` / `make_resolution` do the signing), **no camera scanner** (HLX3-05-07) and no LAN/offline contact advertisement.
 - The HTTP side's own TLS is optional by design; production should terminate TLS at the ingress or set the cert and key.

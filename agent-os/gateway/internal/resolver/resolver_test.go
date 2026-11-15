@@ -490,3 +490,28 @@ func TestConfigurationIsValidated(t *testing.T) {
 		}
 	}
 }
+
+func TestMetricsCountLookupsAndPublishesByOutcome(t *testing.T) {
+	e := newEnv(t)
+	wire := subject("reference-valid-agent")
+	e.get(wire, "contact.example")                              // 404: nothing stored
+	e.publish("wrong", wire, res("envelope-valid"))             // unauthenticated
+	e.publish(e.token, wire, res("envelope-valid"))             // stored
+	e.get(wire, "contact.example")                              // served
+	e.get(wire, "evil.example")                                 // misdirected
+	e.get(subject("reference-tampered-sid"), "contact.example") // invalid reference
+	e.publish(e.token, wire, res("envelope-revoked"))           // stored
+	e.get(wire, "contact.example")                              // served_revoked
+	e.publish(e.token, wire, res("envelope-valid"))             // conflict: a revoked contact never comes back
+	m := e.s.Metrics()
+	for outcome, want := range map[string]float64{"not_found": 1, "served": 1, "misdirected": 1, "invalid_reference": 1, "served_revoked": 1} {
+		if got := m.Value("helix_resolver_lookups_total", "outcome", outcome); got != want {
+			t.Errorf("lookups %s = %v, want %v", outcome, got, want)
+		}
+	}
+	for outcome, want := range map[string]float64{"unauthenticated": 1, "stored": 2, "conflict": 1} {
+		if got := m.Value("helix_resolver_publishes_total", "outcome", outcome); got != want {
+			t.Errorf("publishes %s = %v, want %v", outcome, got, want)
+		}
+	}
+}

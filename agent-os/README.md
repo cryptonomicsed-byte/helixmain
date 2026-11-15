@@ -27,10 +27,12 @@ agent-os/
   products/
     customer-service/ # first commercial agent (scaffold next)
   kernel/             # Rust: sid verification, grants, authorize/execute split, audit chain (built, 55 tests + 6 against the real policy service)
-  orchestrator/       # Elixir/OTP: durable event-sourced workflows, fenced leases, agent actors + A2A (88 tests incl. 7 against the real stack)
+  orchestrator/       # Elixir/OTP: durable event-sourced workflows, fenced leases, agent actors + A2A (89 tests incl. 7 against the real stack)
   plugins/            # WIT world + example/test plugins (Rust -> wasm32-wasip2 components); hosted by the kernel's Wasmtime sandbox (29 + 9 tests)
   policy/             # Clojure: the rules, as EDN, behind POST /v1/decide (built, 32 tests + Rust<->Clojure e2e)
   gateway/            # Go: REST front of the kernel, token auth, roles, owner-only confirmation (built, unit + 3-process e2e + mTLS interop)
+  deploy/             # systemd units, idempotent bootstrap, smoke test, backup/restore, Prometheus alert rules; drilled end to end by selftest.sh
+  release/            # release gates (gates.py) that write evidence JSON; secret scanner; SKIPPED gates are reported, never counted as passes
   control-plane/      # Paperclip adapter (Phase 2)
   runtimes/hermes/    # RuntimeAdapter (Phase 3)
   workers/            # native_api now; grok-bot, muse, human later (Phase 4)

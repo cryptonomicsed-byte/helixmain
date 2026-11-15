@@ -145,6 +145,7 @@ func (s *Server) invokePlugin(w http.ResponseWriter, r *http.Request, c caller) 
 		s.upstream(w, r, err)
 		return
 	}
+	s.m.Counter("helix_gateway_plugin_invocations_total", "Plugin tool invocations by status.", 1, "status", resp.Status)
 	out := map[string]any{
 		"status": resp.Status, "error": resp.Error, "limit": resp.Limit, "fuel_used": resp.FuelUsed, "millis": resp.Millis,
 		"plugin_hash": resp.PluginHash, "logs": nonNil(resp.Logs),

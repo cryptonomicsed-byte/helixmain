@@ -65,9 +65,13 @@ Step kinds: `invoke_plugin` (a plugin tool; pure, may *propose* intents), `autho
 
 `./test.sh` (format check, warnings as errors, then the tests):
 
-- **81 unit tests** (async): JSON codec (strict parsing, depth/size, surrogates, deterministic output), event log (ordering, torn tail, corruption, deleted record, fencing), leases (races between 20 processes, expiry, fence increments, stale lock, unreadable file), gateway client (token hygiene, every error class and whether it retries, timeouts, bad JSON, redirects, URL rules), workflow validation and references, **28 durable-run tests** against a scriptable fake gateway (happy path, parking and approval, declines, timeouts, crash-and-recover, whole-node restart, lease contention and a zombie driver, retries and their bounds, parallel overlap, every executor outcome including the ambiguous ones), and 14 A2A tests.
+- **82 unit tests** (async): JSON codec (strict parsing, depth/size, surrogates, deterministic output), event log (ordering, torn tail, corruption, deleted record, fencing), leases (races between 20 processes, expiry, fence increments, stale lock, unreadable file), gateway client (token hygiene, every error class and whether it retries, timeouts, bad JSON, redirects, URL rules), workflow validation and references, **29 durable-run tests** against a scriptable fake gateway (happy path, parking and approval, declines, timeouts, crash-and-recover, whole-node restart, lease contention and a zombie driver, retries and their bounds, parallel overlap, every executor outcome including the ambiguous ones), 14 A2A tests, and the metrics counters (every appended log event counted by type, so the counters reconcile with the logs).
 - **7 end-to-end tests against the real stack**: this orchestrator driving the Go gateway, the Rust kernel with its Wasm plugin host, and the Clojure policy service, each a separate OS process (`mix test --include e2e`): a priced purchase held for the owner and released by them (another user cannot even see it), a crash while waiting that does not ask the person twice, a decline, a tool the agent never declared (403, no retry), a capability it never declared (denied), routine work that needs no person, and the policy service killed (denied, not allowed).
 - Breaking the code on purpose (recording an unsure provider as failed, ignoring fencing in the log, not replaying `awaiting`) fails tests in each case. The end-to-end test found a real bug: a plugin host that derived idempotency keys from content and time made two identical baskets bought in the same second share a key, so the second purchase was refused as a replay. Keys now come from the run and the step.
+
+## Metrics
+
+`Helix.Orchestrator.metrics/1` returns Prometheus text (`helix_orchestrator_events_total{type=...}`, runs active, agents alive). The orchestrator is a library, so the embedding service decides where to expose it; keep it on loopback like the gateway's.
 
 ## Not done / limits
 

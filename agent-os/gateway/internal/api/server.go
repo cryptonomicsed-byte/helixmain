@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/cryptonomicsed-byte/helixmain/agent-os/gateway/internal/auth"
+	"github.com/cryptonomicsed-byte/helixmain/agent-os/gateway/internal/metrics"
 	"github.com/cryptonomicsed-byte/helixmain/agent-os/gateway/internal/ratelimit"
 
 	kernelv1 "github.com/cryptonomicsed-byte/helixmain/agent-os/gateway/gen/helix/kernel/v1"
@@ -47,6 +48,8 @@ type Config struct {
 	RatePerSec  float64
 	Burst       int
 	MaxInFlight int
+	// Metrics receives the gateway's counters; nil means a private registry.
+	Metrics *metrics.Registry
 }
 
 type Server struct {
@@ -56,10 +59,14 @@ type Server struct {
 	now     func() time.Time
 	limiter *ratelimit.Limiter
 	live    chan struct{}
+	m       *metrics.Registry
 }
 
 func New(c Config) *Server {
-	s := &Server{kernel: c.Kernel, auth: c.Auth, log: c.Log, now: c.Now}
+	s := &Server{kernel: c.Kernel, auth: c.Auth, log: c.Log, now: c.Now, m: c.Metrics}
+	if s.m == nil {
+		s.m = metrics.New()
+	}
 	if s.log == nil {
 		s.log = slog.New(slog.NewJSONHandler(io.Discard, nil))
 	}
@@ -79,8 +86,12 @@ func New(c Config) *Server {
 	s.limiter = ratelimit.New(rate, burst)
 	s.limiter.SetClock(s.now)
 	s.live = make(chan struct{}, live)
+	s.registerScrape()
 	return s
 }
+
+// Metrics is the registry this server writes to.
+func (s *Server) Metrics() *metrics.Registry { return s.m }
 
 // Handler is the whole gateway.
 func (s *Server) Handler() http.Handler {
@@ -170,9 +181,11 @@ func (s *Server) limitInFlight(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		select {
 		case s.live <- struct{}{}:
-			defer func() { <-s.live }()
+			s.m.Add("helix_gateway_in_flight", "Requests being handled now.", 1)
+			defer func() { <-s.live; s.m.Add("helix_gateway_in_flight", "Requests being handled now.", -1) }()
 			next.ServeHTTP(w, r)
 		default:
+			s.m.Counter("helix_gateway_shed_total", "Requests refused because too many were in flight.", 1)
 			w.Header().Set("Retry-After", "1")
 			writeError(w, http.StatusServiceUnavailable, "overloaded", "too many requests in flight")
 		}
@@ -187,10 +200,18 @@ type caller struct {
 
 func (s *Server) authed(h func(http.ResponseWriter, *http.Request, caller)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		rw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
+		start := s.now()
+		route := r.Pattern // a registered pattern, never a client-chosen string
+		defer func() {
+			s.m.Counter("helix_gateway_requests_total", "Requests by route and status.", 1, "route", route, "status", strconv.Itoa(rw.status))
+			s.m.Observe("helix_gateway_request_seconds", "Request latency by route.", s.now().Sub(start).Seconds(), "route", route)
+		}()
 		reg, err := s.auth.Current()
 		if reg == nil {
+			s.m.Counter("helix_gateway_auth_failures_total", "Authentication failures by reason.", 1, "reason", "registry_unavailable")
 			s.log.Error("principal registry unavailable", "request_id", rid(r.Context()), "error", err)
-			writeError(w, http.StatusServiceUnavailable, "auth_unavailable", "authentication is unavailable")
+			writeError(rw, http.StatusServiceUnavailable, "auth_unavailable", "authentication is unavailable")
 			return
 		}
 		scheme, token, _ := strings.Cut(r.Header.Get("Authorization"), " ")
@@ -199,18 +220,22 @@ func (s *Server) authed(h func(http.ResponseWriter, *http.Request, caller)) http
 			p = reg.Authenticate(strings.TrimSpace(token), s.now())
 		}
 		if p == nil {
-			w.Header().Set("WWW-Authenticate", `Bearer realm="helix"`)
+			reason := "invalid_token"
+			if r.Header.Get("Authorization") == "" {
+				reason = "missing_token"
+			}
+			s.m.Counter("helix_gateway_auth_failures_total", "Authentication failures by reason.", 1, "reason", reason)
+			rw.Header().Set("WWW-Authenticate", `Bearer realm="helix"`)
 			s.log.Info("unauthenticated", "request_id", rid(r.Context()), "path", r.URL.Path)
-			writeError(w, http.StatusUnauthorized, "unauthenticated", "a valid bearer token is required")
+			writeError(rw, http.StatusUnauthorized, "unauthenticated", "a valid bearer token is required")
 			return
 		}
 		if ok, wait := s.limiter.Allow(p.Org + "/" + p.ID); !ok {
-			w.Header().Set("Retry-After", retryAfter(wait))
-			writeError(w, http.StatusTooManyRequests, "rate_limited", "slow down")
+			s.m.Counter("helix_gateway_rate_limited_total", "Requests refused by the per-principal rate limit.", 1)
+			rw.Header().Set("Retry-After", retryAfter(wait))
+			writeError(rw, http.StatusTooManyRequests, "rate_limited", "slow down")
 			return
 		}
-		rw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
-		start := s.now()
 		h(rw, r, caller{P: p, Reg: reg})
 		s.log.Info("request", "request_id", rid(r.Context()), "method", r.Method, "route", r.Pattern,
 			"org", p.Org, "principal", p.ID, "kind", string(p.Kind), "status", rw.status, "ms", s.now().Sub(start).Milliseconds())
@@ -336,6 +361,7 @@ func (s *Server) upstream(w http.ResponseWriter, r *http.Request, err error) {
 	default:
 		code, name, pass = http.StatusBadGateway, "upstream_error", false
 	}
+	s.m.Counter("helix_gateway_upstream_errors_total", "Kernel errors by gRPC code.", 1, "grpc_code", st.Code().String())
 	s.log.Info("kernel error", "request_id", rid(r.Context()), "grpc_code", st.Code().String(), "status", code)
 	msg := "the kernel could not complete the request"
 	if pass && st.Message() != "" {
@@ -346,4 +372,28 @@ func (s *Server) upstream(w http.ResponseWriter, r *http.Request, err error) {
 
 func forbid(w http.ResponseWriter, why string) {
 	writeError(w, http.StatusForbidden, "forbidden", why)
+}
+
+// registerScrape adds the gauges that are read at scrape time: whether the
+// registry is valid and what the kernel says about itself.
+func (s *Server) registerScrape() {
+	s.m.OnScrape(func(m *metrics.Registry) {
+		reg, _ := s.auth.Current()
+		m.Gauge("helix_gateway_registry_ok", "1 when the principal registry is valid and loaded.", b2f(reg != nil))
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		h, err := s.kernel.Health(ctx, &kernelv1.HealthRequest{})
+		m.Gauge("helix_kernel_up", "1 when the kernel answered a health probe.", b2f(err == nil))
+		if err == nil {
+			m.Gauge("helix_kernel_policy_available", "1 when the kernel can reach the policy service.", b2f(h.PolicyAvailable))
+			m.Gauge("helix_kernel_audit_entries", "Entries in the kernel's audit chain.", float64(h.AuditEntries))
+		}
+	})
+}
+
+func b2f(b bool) float64 {
+	if b {
+		return 1
+	}
+	return 0
 }

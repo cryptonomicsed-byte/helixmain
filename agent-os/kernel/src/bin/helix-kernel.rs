@@ -122,7 +122,18 @@ async fn main() {
         _ => fail("HELIX_KERNEL_TLS_CERT, _KEY and _CLIENT_CA must all be set together"),
     }
     eprintln!("helix-kernel: listening on {listen}");
-    let shutdown = async { let _ = tokio::signal::ctrl_c().await; };
+    // SIGINT (Ctrl-C) and SIGTERM (what systemd and `docker stop` send) both stop it gracefully.
+    let shutdown = async {
+        #[cfg(unix)]
+        {
+            let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()).expect("install the SIGTERM handler");
+            tokio::select! { _ = tokio::signal::ctrl_c() => {}, _ = term.recv() => {} }
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = tokio::signal::ctrl_c().await;
+        }
+    };
     server
         .add_service(KernelService::new(kernel).into_server())
         .serve_with_shutdown(listen, shutdown)

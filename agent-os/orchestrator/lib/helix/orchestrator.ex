@@ -56,6 +56,7 @@ defmodule Helix.Orchestrator do
 
     unless match?(%Helix.Gateway{}, config[:gateway]), do: raise(ArgumentError, "a :gateway (Helix.Gateway) is required")
     :persistent_term.put({__MODULE__, name}, config)
+    Helix.Metrics.init(name)
 
     children = [
       {Registry, keys: :unique, name: config.registry},
@@ -133,6 +134,9 @@ defmodule Helix.Orchestrator do
 
   def agent_profile(name, sid), do: Helix.Agent.profile(config(name).registry, sid)
   def agent_stats(name, sid), do: Helix.Agent.stats(config(name).registry, sid)
+
+  @doc "Prometheus text for this orchestrator (see `Helix.Metrics`)."
+  def metrics(name), do: Helix.Metrics.render(name)
 
   def status(name, run_id), do: Run.status(config(name), run_id)
   def cancel(name, run_id), do: Run.cancel(config(name), run_id)

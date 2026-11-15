@@ -456,9 +456,16 @@ defmodule Helix.Run do
   # ── log ─────────────────────────────────────────────────────────────────────
   defp append(st, type, data) do
     case EventLog.append(st.log, type, data, st.fence) do
-      {:ok, log, ev} -> {:ok, %{st | log: log}, ev}
-      {:error, :stale_fence} -> {:stop, {:shutdown, :lease_lost}}
-      {:error, e} -> {:stop, {:log_error, e}}
+      {:ok, log, ev} ->
+        Helix.Metrics.inc(st.config.name, type)
+        {:ok, %{st | log: log}, ev}
+
+      {:error, :stale_fence} ->
+        Helix.Metrics.inc(st.config.name, "lease_lost")
+        {:stop, {:shutdown, :lease_lost}}
+
+      {:error, e} ->
+        {:stop, {:log_error, e}}
     end
   end
 

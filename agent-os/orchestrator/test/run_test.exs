@@ -152,6 +152,25 @@ defmodule Helix.RunTest do
     assert c.vars["auth"]["intent"]["idempotency_key"] == "my-key"
   end
 
+  test "metrics count the events that reconcile with the logs", ctx do
+    k = kernel(authorize: {:hold, "require_user_confirmation"})
+    with_pricing(k)
+    orch = boot(ctx, k)
+    {:ok, _} = Orchestrator.start_run(orch, "m1", purchase(), %{"basket" => []})
+    wait_until(fn -> match?({:ok, %{status: "awaiting"}}, Orchestrator.status(orch, "m1")) end)
+    text = Orchestrator.metrics(orch)
+    assert text =~ ~s(helix_orchestrator_events_total{type="run_started"} 1)
+    assert text =~ ~s(helix_orchestrator_events_total{type="awaiting"} 1)
+    assert text =~ "helix_orchestrator_runs_active 1"
+    K.approve(k, "pending-1")
+    {:ok, _} = Orchestrator.await(orch, "m1")
+    text = Orchestrator.metrics(orch)
+    assert text =~ ~s(helix_orchestrator_events_total{type="run_completed"} 1)
+    assert text =~ ~s(helix_orchestrator_events_total{type="step_completed"} 3)
+    {:ok, evs, _} = EventLog.read(Path.join(ctx.tmp_dir, "m1.log"))
+    assert Enum.count(evs, &(&1["type"] == "step_completed")) == 3
+  end
+
   test "an invalid workflow never starts, and a bad run id is refused", ctx do
     orch = boot(ctx, kernel())
 

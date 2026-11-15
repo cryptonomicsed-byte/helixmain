@@ -90,7 +90,9 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request, c caller) {
 		s.upstream(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, authorizeResponseFromPB(resp))
+	out := authorizeResponseFromPB(resp)
+	s.m.Counter("helix_gateway_decisions_total", "Authorization decisions returned.", 1, "decision", out.Decision, "phase", "authorize")
+	writeJSON(w, http.StatusOK, out)
 }
 
 type pendingResponse struct {
@@ -205,7 +207,9 @@ func (s *Server) confirm(w http.ResponseWriter, r *http.Request, c caller) {
 		s.upstream(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, authorizeResponseFromPB(resp))
+	out := authorizeResponseFromPB(resp)
+	s.m.Counter("helix_gateway_decisions_total", "Authorization decisions returned.", 1, "decision", out.Decision, "phase", "confirm")
+	writeJSON(w, http.StatusOK, out)
 }
 
 // ── execution ────────────────────────────────────────────────────────────────
@@ -256,6 +260,7 @@ func (s *Server) beginExecution(w http.ResponseWriter, r *http.Request, c caller
 		return
 	}
 	out := beginResponse{State: stateName(resp.State), ExecutionID: resp.ExecutionId, Reasons: nonNil(resp.Reasons)}
+	s.m.Counter("helix_gateway_executions_total", "Execution permits by state.", 1, "state", out.State)
 	if resp.ResultJson != "" && json.Valid([]byte(resp.ResultJson)) {
 		out.Result = json.RawMessage(resp.ResultJson)
 	}
