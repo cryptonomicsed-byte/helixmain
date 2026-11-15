@@ -1,0 +1,35 @@
+[Unit]
+Description=HELIX gateway (Go): REST front of the kernel
+Documentation=file:///opt/helix/gateway/README.md
+After=network.target helix-kernel.service
+Wants=helix-kernel.service
+PartOf=helix.target
+
+[Service]
+Type=simple
+User=helix
+Group=helix
+EnvironmentFile=/etc/helix/gateway.env
+ExecStart=/opt/helix/bin/helix-gateway serve
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+MemoryMax=512M
+TasksMax=512
+LimitNOFILE=8192
+
+[Install]
+WantedBy=helix.target

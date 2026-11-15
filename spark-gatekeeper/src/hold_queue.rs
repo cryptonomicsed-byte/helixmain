@@ -389,7 +389,7 @@ mod tests {
         let queue = HoldQueue::in_memory().unwrap();
         let hold_id = queue.enqueue(&ctx, &result).unwrap();
 
-        let pending = queue.pending().unwrap();
+        let pending = queue.pending(None).unwrap();
         assert_eq!(pending.len(), 1);
         assert_eq!(pending[0].action_id, "act_refund_test");
 
@@ -398,7 +398,7 @@ mod tests {
         assert!(matches!(receipt.unwrap().final_verdict, Verdict::Allow));
 
         // After approval, no longer pending.
-        assert_eq!(queue.pending().unwrap().len(), 0);
+        assert_eq!(queue.pending(None).unwrap().len(), 0);
     }
 
     #[test]
@@ -499,6 +499,6 @@ mod tests {
         let queue = HoldQueue::in_memory().unwrap();
         let hold_id = queue.enqueue(&ctx, &result).unwrap();
         queue.deny(&hold_id).unwrap();
-        assert_eq!(queue.pending().unwrap().len(), 0);
+        assert_eq!(queue.pending(None).unwrap().len(), 0);
     }
 }

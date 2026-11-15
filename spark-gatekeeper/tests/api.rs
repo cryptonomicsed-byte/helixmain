@@ -205,7 +205,7 @@ async fn deny_removes_item_from_pending() {
     assert_eq!(json["denied"], true);
 
     // Confirm it's gone from pending.
-    assert!(gatekeeper.hold_queue.pending().unwrap().is_empty());
+    assert!(gatekeeper.hold_queue.pending(None).unwrap().is_empty());
 }
 
 #[tokio::test]

@@ -1,0 +1,35 @@
+[Unit]
+Description=HELIX kernel (Rust): the one place a privileged effect is authorized
+Documentation=file:///opt/helix/kernel/README.md
+After=network.target helix-policy.service
+Wants=helix-policy.service
+PartOf=helix.target
+
+[Service]
+Type=simple
+User=helix
+Group=helix
+EnvironmentFile=/etc/helix/kernel.env
+ExecStart=/opt/helix/bin/helix-kernel serve
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ReadWritePaths=/var/lib/helix/kernel
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+# The kernel runs untrusted Wasm plugins under its own limits; this is the outer wall.
+MemoryMax=2G
+TasksMax=256
+
+[Install]
+WantedBy=helix.target

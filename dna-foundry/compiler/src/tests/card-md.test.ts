@@ -398,3 +398,7 @@ test("anchor state: unknown identity_value version is a hard error", () => {
     /identity_value anchor version 99 is unknown/,
   );
 });
+
+test("canonical JSON escapes DEL (0x7f) exactly as Python's ensure_ascii does", () => {
+  assert.equal(canonicalJson({ s: "a\u007fb\u0001" }), '{"s":"a\\u007fb\\u0001"}');
+});

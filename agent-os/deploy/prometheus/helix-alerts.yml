@@ -1,0 +1,102 @@
+# Prometheus alerting rules for HELIX. Every metric used here is exported by the services;
+# deploy/check-alerts.py fails if a rule names one that no source file defines.
+groups:
+  - name: helix-availability
+    rules:
+      - alert: HelixKernelDown
+        expr: helix_kernel_up == 0
+        for: 1m
+        labels: {severity: page}
+        annotations:
+          summary: "The kernel is not answering the gateway"
+          description: "Every privileged action is being refused. Check helix-kernel.service and its database."
+      - alert: HelixPolicyUnavailable
+        expr: helix_kernel_policy_available == 0
+        for: 1m
+        labels: {severity: page}
+        annotations:
+          summary: "The kernel cannot reach the policy service"
+          description: "Authorizations are being DENIED (fail closed). Check helix-policy.service and /etc/helix/policy.edn: an invalid policy file denies everything."
+      - alert: HelixPrincipalRegistryInvalid
+        expr: helix_gateway_registry_ok == 0
+        for: 1m
+        labels: {severity: page}
+        annotations:
+          summary: "The gateway's principal registry is invalid"
+          description: "Nobody can authenticate. The last edit to /etc/helix/principals.json is wrong; fix or restore it."
+      - alert: HelixGatewayScrapeMissing
+        expr: absent(helix_gateway_registry_ok)
+        for: 5m
+        labels: {severity: page}
+        annotations:
+          summary: "No metrics from the gateway"
+          description: "The gateway is down or its metrics listener is not being scraped."
+  - name: helix-traffic
+    rules:
+      - alert: HelixServerErrors
+        expr: sum(rate(helix_gateway_requests_total{status=~"5.."}[5m])) / sum(rate(helix_gateway_requests_total[5m])) > 0.05
+        for: 10m
+        labels: {severity: ticket}
+        annotations:
+          summary: "More than 5% of gateway requests are failing with 5xx"
+      - alert: HelixAuthFailureSpike
+        expr: sum(rate(helix_gateway_auth_failures_total[5m])) > 1
+        for: 10m
+        labels: {severity: ticket}
+        annotations:
+          summary: "Sustained authentication failures"
+          description: "Someone is presenting bad tokens, or a client has an expired or revoked one."
+      - alert: HelixRateLimiting
+        expr: sum(rate(helix_gateway_rate_limited_total[5m])) > 0.5
+        for: 10m
+        labels: {severity: ticket}
+        annotations:
+          summary: "Callers are being rate limited"
+          description: "A runaway agent loop or retry storm, or limits set too low."
+      - alert: HelixLoadShedding
+        expr: sum(rate(helix_gateway_shed_total[5m])) > 0
+        for: 5m
+        labels: {severity: page}
+        annotations:
+          summary: "The gateway is shedding load"
+          description: "More than the in-flight cap is arriving at once."
+      - alert: HelixKernelErrors
+        expr: sum(rate(helix_gateway_upstream_errors_total{grpc_code=~"Unavailable|DeadlineExceeded|Internal|Unknown"}[5m])) > 0.1
+        for: 5m
+        labels: {severity: page}
+        annotations:
+          summary: "The gateway is failing to get answers from the kernel"
+      - alert: HelixGatewayLatency
+        expr: histogram_quantile(0.99, sum by (le) (rate(helix_gateway_request_seconds_bucket[5m]))) > 2
+        for: 10m
+        labels: {severity: ticket}
+        annotations:
+          summary: "p99 gateway latency above 2 s"
+  - name: helix-resolver
+    rules:
+      - alert: HelixResolverNotServing
+        expr: sum(rate(helix_resolver_lookups_total{outcome=~"resolution_unavailable|store_error"}[5m])) > 0
+        for: 10m
+        labels: {severity: ticket}
+        annotations:
+          summary: "The QR resolver cannot serve current, verified resolutions"
+          description: "Stale or unverifiable stored resolutions, or a store failure. The issuer must republish; clients reject stale data anyway."
+      - alert: HelixResolverPublishRejected
+        expr: sum(rate(helix_resolver_publishes_total{outcome=~"invalid_reference|invalid_resolution|wrong_resolver"}[15m])) > 0
+        for: 15m
+        labels: {severity: ticket}
+        annotations:
+          summary: "Publishes to the QR resolver are being rejected"
+  - name: helix-orchestrator
+    rules:
+      - alert: HelixRunsFailing
+        expr: increase(helix_orchestrator_events_total{type="run_failed"}[1h]) > 0
+        labels: {severity: ticket}
+        annotations:
+          summary: "Workflow runs are failing"
+      - alert: HelixLeaseLost
+        expr: increase(helix_orchestrator_events_total{type="lease_lost"}[15m]) > 0
+        labels: {severity: ticket}
+        annotations:
+          summary: "A run driver lost its lease"
+          description: "Two orchestrators fighting over a run, or one that was paused too long. The fence kept the log safe."

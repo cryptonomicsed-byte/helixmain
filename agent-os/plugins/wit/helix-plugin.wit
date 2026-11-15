@@ -1,0 +1,45 @@
+package helix:plugin@0.1.0;
+
+/// What the host offers a plugin. A plugin is a pure function of its input, its
+/// own stored state and a frozen clock: it has no network, no filesystem, no
+/// environment, no real clock and no real randomness. The only way it can
+/// affect the world is to PROPOSE an action intent in its output; the host
+/// never runs one, and the caller still has to send each through the kernel's
+/// authorize / confirm / execute path.
+interface host {
+    /// A log line. Bounded and rate-limited by the host.
+    log: func(level: string, message: string);
+
+    /// Read a value from this plugin's storage in this tenant.
+    /// Needs the `storage` permission in the signed manifest.
+    kv-get: func(key: string) -> option<string>;
+
+    /// Write a value. Writes take effect only if the invocation succeeds.
+    /// Needs the `storage` permission; refused beyond the quota.
+    kv-set: func(key: string, value: string) -> result<_, string>;
+}
+
+interface tool {
+    record tool-info {
+        name: string,
+        description: string,
+    }
+
+    record output {
+        /// The tool's result: a JSON document.
+        result-json: string,
+        /// Action intents the tool PROPOSES, each an ActionIntent as JSON.
+        proposed-intents: list<string>,
+    }
+
+    /// The tools this plugin implements. Must match the signed manifest.
+    list-tools: func() -> list<tool-info>;
+
+    /// Run one tool. `input-json` is a JSON document.
+    invoke: func(tool: string, input-json: string) -> result<output, string>;
+}
+
+world plugin {
+    import host;
+    export tool;
+}

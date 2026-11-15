@@ -4,9 +4,15 @@
 A company can answer a call only when four things exist on the VPS:
 
     <slug>/identity                sk / pk / npub   (the /call page reads the npub)
-    <slug>/env                     the agent's runtime env (LLM key, relay, card, seckey)
+    <slug>/env                     the agent's runtime env (LLM key, relay, card, seckey,
+                                   per-card memory, local chat bridge port)
     agent-voice-<slug>.service     the systemd unit
     the unit                      enabled and started
+
+When helix-agent is installed (/opt/helix-agent/agent.py) the company also gets
+its text-DM agent, helix-agent-<slug>.service. It uses the SAME identity and
+sends chat to the voice agent's local bridge, so text and voice are one
+card-grounded agent, not two.
 
 helix-onboard.sh create writes all four inline. The self-serve API path
 (dna-foundry/api/src/services/signup.ts::provisionCompany) writes only
@@ -39,6 +45,8 @@ STATE_ROOT = os.environ.get("HELIX_STATE_ROOT", "/var/lib/helix")
 SYSTEMD_DIR = "/etc/systemd/system"
 VENV_PY = "/opt/agent-voice-venv/bin/python"
 AGENT_DIR = "/opt/agent-voice"
+TEXT_AGENT_DIR = os.environ.get("HELIX_TEXT_AGENT_DIR", "/opt/helix-agent")
+HTTP_PORT_RANGE = range(8401, 9000)      # loopback chat bridge, one port per company
 
 
 def die(msg: str, code: int = 1) -> NoReturn:
@@ -160,28 +168,153 @@ def write_identity(slug: str, sk: str, pk: str, npub: str) -> str:
     return "identity: written (sk/pk/npub)"
 
 
-def write_env(slug: str, force: bool) -> str:
+def http_port(slug: str) -> int:
+    """The company's loopback chat-bridge port: allocated once, then stable."""
+    p = os.path.join(company_dir(slug), "http_port")
+    if os.path.isfile(p):
+        try:
+            return int(open(p).read().strip())
+        except ValueError:
+            pass
+    taken = set()
+    for other in os.listdir(COMPANIES):
+        q = os.path.join(COMPANIES, other, "http_port")
+        if os.path.isfile(q):
+            try:
+                taken.add(int(open(q).read().strip()))
+            except ValueError:
+                pass
+    port = next((n for n in HTTP_PORT_RANGE if n not in taken), None)
+    if port is None:
+        die("no free chat-bridge port left in the configured range")
+    with open(p, "w") as fh:
+        fh.write(f"{port}\n")
+    return port
+
+
+def env_settings(slug: str) -> dict[str, str]:
+    """Every setting the voice agent's env file must carry."""
     d = company_dir(slug)
-    p = os.path.join(d, "env")
-    if os.path.isfile(p) and not force:
-        return "env: present (kept)"
     sk = load_seckey(slug)
     key = llm_key()
-    body = (
-        f"LLM_API_KEY={key}\n"
-        f"LLM_BASE_URL=https://api.deepseek.com/v1\n"
-        f"LLM_MODEL=deepseek-chat\n"
-        f"AGENT_VOICE_RELAYS={RELAY}\n"
-        f"AGENT_VOICE_STATE={STATE_ROOT}/{slug}\n"
-        f"AGENT_VOICE_CARD={d}/card.json\n"
-        f"AGENT_VOICE_SECKEY={sk}\n"
-        f"DEEPSEEK_API_KEY={key}\n"
-    )
-    with open(p, "w") as fh:
-        fh.write(body)
-    os.chmod(p, 0o600)
+    return {
+        "LLM_API_KEY": key,
+        "LLM_BASE_URL": "https://api.deepseek.com/v1",
+        "LLM_MODEL": "deepseek-chat",
+        "AGENT_VOICE_RELAYS": RELAY,
+        "AGENT_VOICE_STATE": f"{STATE_ROOT}/{slug}",
+        "AGENT_VOICE_CARD": f"{d}/card.json",
+        "AGENT_VOICE_SECKEY": sk,
+        "DEEPSEEK_API_KEY": key,
+        # Per-card memory (mem/card/<id>/*). The memory key is the company's own
+        # key, so no two businesses ever share one; without these the agent
+        # silently runs with memory off.
+        "NIPAE_NSEC": sk,
+        "NIPAE_RELAYS": RELAY,
+        # Loopback chat bridge: the dashboard and the text agent reach the same
+        # card-grounded agent that answers calls.
+        "AGENT_VOICE_HTTP_PORT": str(http_port(slug)),
+    }
+
+
+def _write_env_file(path: str, wanted: dict[str, str], force: bool) -> str:
+    """Write an env file, or add only the settings an existing one is missing.
+
+    An existing file is never rewritten without --force: an operator may have
+    changed a model or relay by hand. Settings added since it was written are
+    appended so older companies pick them up.
+    """
+    if os.path.isfile(path) and not force:
+        have = {line.split("=", 1)[0] for line in open(path) if "=" in line}
+        missing = {k: v for k, v in wanted.items() if k not in have}
+        if not missing:
+            return "present (kept)"
+        with open(path, "a") as fh:
+            fh.write("".join(f"{k}={v}\n" for k, v in missing.items()))
+        os.chmod(path, 0o600)
+        return f"present; added {', '.join(sorted(missing))}"
+    with open(path, "w") as fh:
+        fh.write("".join(f"{k}={v}\n" for k, v in wanted.items()))
+    os.chmod(path, 0o600)
+    return "written"
+
+
+def write_env(slug: str, force: bool) -> str:
+    result = _write_env_file(os.path.join(company_dir(slug), "env"), env_settings(slug), force)
     os.makedirs(f"{STATE_ROOT}/{slug}", exist_ok=True)
-    return "env: written"
+    return f"env: {result}"
+
+
+# ── text agent (helix-agent): same identity, same brain ──────────────────────
+
+def text_agent_installed() -> bool:
+    return os.path.isfile(os.path.join(TEXT_AGENT_DIR, "agent.py"))
+
+
+def card_id(slug: str) -> str:
+    try:
+        card = json.load(open(os.path.join(company_dir(slug), "card.json")))
+        return str(card.get("id") or "")
+    except Exception:
+        return ""
+
+
+def text_env_settings(slug: str) -> dict[str, str]:
+    from urllib.parse import urlparse
+    relay = urlparse(RELAY)
+    state = f"{STATE_ROOT}/{slug}/text"
+    settings = {
+        "HELIX_NSEC_HEX": load_seckey(slug),
+        "HELIX_RELAY_WS": RELAY,
+        "HELIX_RELAY_AUTH_TAG": f"{relay.scheme}://{relay.netloc}",   # NIP-42: no path
+        # One brain: chat goes to this company's voice agent, never a second prompt.
+        "HELIX_BRAIN_URL": f"http://127.0.0.1:{http_port(slug)}",
+        "HELIX_STATE_DIR": state,
+        "HELIX_LOG_PATH": f"{state}/helix-agent.log",
+    }
+    cid = card_id(slug)
+    if cid:
+        settings["HELIX_CARD_ID"] = cid       # refuse to start against another business's brain
+    return settings
+
+
+def write_text_env(slug: str, force: bool) -> str:
+    result = _write_env_file(os.path.join(company_dir(slug), "text-env"),
+                             text_env_settings(slug), force)
+    os.makedirs(f"{STATE_ROOT}/{slug}/text", exist_ok=True)
+    return f"text-env: {result}"
+
+
+def write_text_unit(slug: str, force: bool) -> str:
+    d = company_dir(slug)
+    name = f"helix-agent-{slug}"
+    p = os.path.join(SYSTEMD_DIR, f"{name}.service")
+    if os.path.isfile(p) and not force:
+        return f"unit: {name}.service present (kept)"
+    unit = f"""[Unit]
+Description=Helix text agent — {slug}
+After=network-online.target agent-voice-{slug}.service
+Wants=network-online.target agent-voice-{slug}.service
+
+[Service]
+Type=simple
+EnvironmentFile={d}/text-env
+ExecStart={VENV_PY} {TEXT_AGENT_DIR}/agent.py
+WorkingDirectory={TEXT_AGENT_DIR}
+Restart=on-failure
+RestartSec=10
+# exit 2 = relay refused the identity, exit 3 = brain serves another business:
+# neither is fixed by restarting.
+RestartPreventExitStatus=2 3
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+"""
+    with open(p, "w") as fh:
+        fh.write(unit)
+    return f"unit: {name}.service written"
 
 
 def write_unit(slug: str, force: bool) -> str:
@@ -219,8 +352,8 @@ WantedBy=multi-user.target
     return f"unit: {name}.service written"
 
 
-def activate(slug: str) -> str:
-    name = f"agent-voice-{slug}"
+def activate(slug: str, name: str | None = None) -> str:
+    name = name or f"agent-voice-{slug}"
     subprocess.run(["systemctl", "daemon-reload"], check=False)
     subprocess.run(["systemctl", "enable", "--now", name], check=False)
     r = subprocess.run(["systemctl", "is-active", name], capture_output=True, text=True, check=False)
@@ -234,9 +367,15 @@ def cmd_check(slug: str) -> None:
     ident = os.path.isfile(os.path.join(d, "identity"))
     sec = os.path.isfile(os.path.join(d, "seckey"))
     unit = os.path.isfile(os.path.join(SYSTEMD_DIR, f"agent-voice-{slug}.service"))
+    text_unit = os.path.isfile(os.path.join(SYSTEMD_DIR, f"helix-agent-{slug}.service"))
     npub = existing_npub(slug)
+    env_path = os.path.join(d, "env")
+    have = {line.split("=", 1)[0] for line in open(env_path) if "=" in line} if os.path.isfile(env_path) else set()
     print(f"{slug}: identity={'Y' if ident else 'N'} seckey={'Y' if sec else 'N'} "
-          f"unit={'Y' if unit else 'N'} card={'Y' if has_card(slug) else 'N'} npub={npub[:20] or '-'}")
+          f"unit={'Y' if unit else 'N'} card={'Y' if has_card(slug) else 'N'} "
+          f"memory={'Y' if 'NIPAE_NSEC' in have else 'N'} "
+          f"bridge={'Y' if 'AGENT_VOICE_HTTP_PORT' in have else 'N'} "
+          f"text-agent={'Y' if text_unit else 'N'} npub={npub[:20] or '-'}")
 
 
 def cmd_provision(slug: str, force: bool) -> None:
@@ -257,6 +396,12 @@ def cmd_provision(slug: str, force: bool) -> None:
     print(f"  {write_env(slug, force)}")
     print(f"  {write_unit(slug, force)}")
     print(f"  {activate(slug)}")
+    if text_agent_installed():
+        print(f"  {write_text_env(slug, force)}")
+        print(f"  {write_text_unit(slug, force)}")
+        print(f"  {activate(slug, f'helix-agent-{slug}')}")
+    else:
+        print(f"  text agent: skipped (no {TEXT_AGENT_DIR}/agent.py)")
     if not has_card(slug):
         print("  note: no card yet — the agent will answer generically until one exists")
 
