@@ -1,0 +1,64 @@
+;; HELIX default policy.
+;;
+;; This file is the only place rules come from. It is read by the policy
+;; service, validated strictly, and hashed: the hash is the policy_version in
+;; every decision, so any change to this file is visible in the audit trail.
+;;
+;; How decisions combine: every rule whose :when holds is a match, and the
+;; strictest matching decision wins:
+;;     deny > require_human_review > require_user_confirmation > allow
+;; If nothing matches the answer is deny. The kernel then applies its own
+;; invariants on top (money and high-risk actions always need a person), and
+;; this service applies its own (the agent must be live and must have
+;; declared the capability; only a person confirms).
+;;
+;; Paths read the request: [:intent :risk], [:agent :capabilities],
+;; [:intent :arguments :recipient] ... Operators: :and :or :not :always := :not=
+;; :in :contains :> :>= :< :<= :present :starts-with :glob :one-of-glob.
+;;
+;; The amounts below are in minor units (cents). They are defaults to be tuned
+;; per business, not facts about any currency.
+
+{:id "helix-default"
+ :description "Conservative defaults: low-risk work without money is automatic; money, high risk and administration need a person."
+ :rules
+ [;; ── Things that are never automatic ───────────────────────────────────────
+  {:id "administration-needs-review"
+   :decision :require_human_review
+   :reason-code "administrative_capability"
+   :reason "Changing identities, keys, grants, policy or agents is reviewed by a person at the business."
+   :when [:one-of-glob [:intent :capability] ["policy.*" "identity.*" "key.*" "grant.*" "agent.*" "sid.*"]]}
+
+  {:id "large-amount-needs-review"
+   :decision :require_human_review
+   :reason-code "large_amount"
+   :reason "Amounts above 10,000.00 (1,000,000 minor units) go to the hold queue."
+   :when [:> [:intent :amount_minor] 1000000]}
+
+  ;; ── Money ─────────────────────────────────────────────────────────────────
+  {:id "money-needs-confirmation"
+   :decision :require_user_confirmation
+   :reason-code "money_requires_confirmation"
+   :reason "The user this agent acts for must confirm any action that moves money."
+   :when [:> [:intent :amount_minor] 0]}
+
+  {:id "commerce-needs-confirmation"
+   :decision :require_user_confirmation
+   :reason-code "commerce_requires_confirmation"
+   :reason "Commerce actions (orders, refunds, payments) are confirmed by the user even when no amount is attached."
+   :when [:one-of-glob [:intent :capability] ["commerce.*" "payment.*" "payments.*" "merchant.*"]]}
+
+  ;; ── Risk ──────────────────────────────────────────────────────────────────
+  {:id "high-risk-needs-confirmation"
+   :decision :require_user_confirmation
+   :reason-code "high_risk"
+   :reason "High-risk actions are confirmed by the user."
+   :when [:= [:intent :risk] "high"]}
+
+  ;; ── What may run on its own ───────────────────────────────────────────────
+  {:id "routine-work-allowed"
+   :decision :allow
+   :reason-code "routine_low_risk"
+   :reason "Low- and medium-risk work that moves no money is allowed."
+   :when [:and [:in [:intent :risk] ["low" "medium"]]
+               [:= [:intent :amount_minor] 0]]}]}

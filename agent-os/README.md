@@ -26,7 +26,8 @@ agent-os/
     sacred-core-inventory.md     # what becomes kernel vs stays dead
   products/
     customer-service/ # first commercial agent (scaffold next)
-  kernel/             # identity, tenancy, policy, receipts, events, costs (Phase 1)
+  kernel/             # Rust: sid verification, grants, authorize/execute split, audit chain (built, 53 tests)
+  policy/             # Clojure: the rules, as EDN, behind POST /v1/decide (built, 32 tests + Rust<->Clojure e2e)
   control-plane/      # Paperclip adapter (Phase 2)
   runtimes/hermes/    # RuntimeAdapter (Phase 3)
   workers/            # native_api now; grok-bot, muse, human later (Phase 4)

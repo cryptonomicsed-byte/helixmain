@@ -66,8 +66,10 @@ helix-kernel serve
   lie about it. Mapping each certificate to the principals it may assert is not
   done yet.
 - **Users are not mapped to roles.** The kernel enforces *kind* (only a
-  `USER` confirms) but not which user may confirm which request. That belongs in
-  the gateway until the policy service owns it.
+  `USER` confirms) but not which user may confirm which request, nor that a
+  reviewer is not the requester. The policy service (`agent-os/policy`) cannot
+  decide it either until the request carries roles and the original requester,
+  so the gateway enforces it for now.
 - **Signing keys are in a file**, not a KMS or HSM. File permissions are
   checked; nothing more.
 - **Arguments cannot contain floating-point numbers** (the languages disagree on
@@ -78,3 +80,12 @@ helix-kernel serve
 - SQLite is a single-node store. Running several kernels needs a different store.
 - The sid reference signers used by tests are not constant-time; production
   issuer keys must sign in hardened code.
+
+## Against the real policy service
+
+`cargo test --test policy_clojure -- --ignored --test-threads=1` starts the Clojure
+service (`agent-os/policy`, needs a JVM; `fetch-deps.sh` fetches and hash-checks its
+jars) and drives this kernel against it over real HTTP: routine allow, money held
+and released by a person, review, large amounts, injected text in arguments, the
+service killed, and its policy file broken and fixed. It is `#[ignore]`d so a plain
+`cargo test` needs no JVM; the release gate runs it.
