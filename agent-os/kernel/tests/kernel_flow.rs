@@ -628,3 +628,49 @@ fn state_survives_a_restart_and_a_used_grant_stays_used() {
     assert_eq!(state(&begin(&e2, ORG, &g, &i)), ES::Pending, "the restart must not hand out a second permit");
     assert!(e2.kernel.store().verify_audit().is_ok());
 }
+
+// ── GetPending ───────────────────────────────────────────────────────────────
+
+#[test]
+fn a_held_decision_can_be_read_by_its_tenant_but_not_by_agents_or_other_tenants() {
+    let e = env();
+    registered_agent(&e, ORG);
+    e.policy.set(Decision::RequireUserConfirmation);
+    let i = order(ORG);
+    let held = authorize(&e, ORG, &i);
+    assert_eq!(decision(&held), Decision::RequireUserConfirmation);
+
+    let get = |ctx: Option<pb::RequestContext>, id: &str| e.kernel.get_pending(&pb::GetPendingRequest { context: ctx, pending_id: id.to_string() });
+
+    let p = get(user(ORG), &held.pending_id).unwrap();
+    assert_eq!(p.kind, "user_confirmation");
+    assert_eq!(p.state, "pending");
+    assert_eq!(p.intent.as_ref().unwrap().agent_id, AGENT);
+    assert_eq!(p.intent.as_ref().unwrap().amount_minor, 1200);
+    assert_eq!(p.reason_codes, vec!["test".to_string()]);
+    assert!(get(svc(ORG), &held.pending_id).is_ok());
+
+    // an agent cannot read what is held about it (or anyone)
+    assert!(matches!(get(agent(ORG, AGENT), &held.pending_id), Err(helix_kernel::error::KernelError::Forbidden(_))));
+    // another tenant cannot tell it exists
+    assert!(matches!(get(user(OTHER_ORG), &held.pending_id), Err(helix_kernel::error::KernelError::NotFound)));
+    assert!(matches!(get(user(ORG), "pending-nope"), Err(helix_kernel::error::KernelError::NotFound)));
+
+    // the state follows the decision's life
+    e.clock.advance(7200);
+    assert_eq!(get(user(ORG), &held.pending_id).unwrap().state, "expired");
+}
+
+#[test]
+fn an_answered_decision_reads_as_answered() {
+    let e = env();
+    registered_agent(&e, ORG);
+    e.policy.set(Decision::RequireHumanReview);
+    let held = authorize(&e, ORG, &order(ORG));
+    assert_eq!(decision(&held), Decision::RequireHumanReview);
+    let get = || e.kernel.get_pending(&pb::GetPendingRequest { context: user(ORG), pending_id: held.pending_id.clone() }).unwrap();
+    assert_eq!(get().kind, "human_review");
+    e.policy.set(Decision::Allow);
+    e.kernel.confirm_action(&pb::ConfirmActionRequest { context: user(ORG), pending_id: held.pending_id.clone(), approve: true }).unwrap();
+    assert_eq!(get().state, "approved");
+}

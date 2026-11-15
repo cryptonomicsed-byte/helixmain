@@ -495,6 +495,25 @@ impl Kernel {
         Ok(pb::RecordResultResponse { state: req.state, receipt_hash })
     }
 
+    // ── GetPending ──────────────────────────────────────────────────────────
+    pub fn get_pending(&self, req: &pb::GetPendingRequest) -> Result<pb::GetPendingResponse, KernelError> {
+        let ctx = self.ctx(&req.context)?;
+        if kind_of(ctx) == pb::PrincipalKind::Agent {
+            return Err(KernelError::Forbidden("an agent cannot read held decisions".into()));
+        }
+        clean(&req.pending_id, "pending_id", 128)?;
+        let p = self.store.pending(&ctx.organization_id, &req.pending_id)?.ok_or(KernelError::NotFound)?;
+        let now = self.now();
+        let state = if p.state == "pending" && p.expires_at.as_str() <= now.as_str() { "expired".to_string() } else { p.state.clone() };
+        let reason_codes = p.policy.get("reason_codes").and_then(Value::as_array)
+            .map(|a| a.iter().filter_map(Value::as_str).map(String::from).collect()).unwrap_or_default();
+        Ok(pb::GetPendingResponse {
+            pending_id: p.id, kind: p.kind, state,
+            intent: Some(intent_from_json(&p.intent)),
+            created_at: p.created_at, expires_at: p.expires_at, reason_codes,
+        })
+    }
+
     // ── RevokeGrant ─────────────────────────────────────────────────────────
     pub fn revoke_grant(&self, req: &pb::RevokeGrantRequest) -> Result<pb::RevokeGrantResponse, KernelError> {
         let ctx = self.ctx(&req.context)?;

@@ -48,6 +48,9 @@ impl KernelApi for KernelService {
     async fn record_result(&self, request: Request<pb::RecordResultRequest>) -> Result<Response<pb::RecordResultResponse>, Status> {
         blocking!(self, request, record_result)
     }
+    async fn get_pending(&self, request: Request<pb::GetPendingRequest>) -> Result<Response<pb::GetPendingResponse>, Status> {
+        blocking!(self, request, get_pending)
+    }
     async fn revoke_grant(&self, request: Request<pb::RevokeGrantRequest>) -> Result<Response<pb::RevokeGrantResponse>, Status> {
         blocking!(self, request, revoke_grant)
     }

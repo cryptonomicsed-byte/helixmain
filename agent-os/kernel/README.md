@@ -27,6 +27,7 @@ audited in a hash chain; see *Audit*.
 | A **client-supplied tenant never overrides the authenticated one**; an agent principal can act only as itself; an id from another tenant does not exist. | `kernel_flow.rs` |
 | **Policy is asked, then the kernel applies its own invariants**, which can only make a decision stricter: money above `auto_allow_max_amount_minor` (default 0) and high-risk actions always need a person, whatever policy says. | `kernel_flow.rs` |
 | **Fail closed:** policy unreachable, slow, erroring, non-JSON, or answering with an unknown decision ⇒ DENY. | `policy_and_grpc.rs` |
+| **A held decision can be read** (`GetPending`) by users and services of its own tenant, never by agents; another tenant cannot tell it exists. The gateway uses it to decide *which* user may answer. | `kernel_flow.rs` |
 | **Only a person confirms.** An agent, worker or service can never confirm its own action. A yes is re-checked against the agent and policy, expires, and cannot be answered twice. | `kernel_flow.rs` |
 | A **grant** is signed, scoped to one agent, executor, operation, target, amount and time, **bound by hash to the exact intent** (amount, quote, items, target...), and single-use. Changing anything after authorization is refused. | `kernel_flow.rs` |
 | **At most one permit per idempotency key**, under 16 concurrent callers, across restarts. Retries get the recorded state. A lost response is safe (the retry sees `PENDING`), never a double execution. | `kernel_flow.rs` |

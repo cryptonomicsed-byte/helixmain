@@ -143,6 +143,26 @@ message ConfirmActionRequest {
   bool approve = 3;
 }
 
+// What is waiting for a person, and for whom. The gateway uses it to decide
+// which authenticated user may answer: the owners of the agent for a user
+// confirmation, a reviewer for a human review.
+message GetPendingRequest {
+  RequestContext context = 1;
+  string pending_id = 2;
+}
+
+message GetPendingResponse {
+  string pending_id = 1;
+  // "user_confirmation" or "human_review".
+  string kind = 2;
+  // "pending", "approved", "denied", "withdrawn", or "expired" (pending but past its deadline).
+  string state = 3;
+  ActionIntent intent = 4;
+  string created_at = 5;
+  string expires_at = 6;
+  repeated string reason_codes = 7;
+}
+
 message BeginExecutionRequest {
   RequestContext context = 1;
   Grant grant = 2;
@@ -237,6 +257,9 @@ service Kernel {
   rpc BeginExecution(BeginExecutionRequest) returns (BeginExecutionResponse);
   // Called by the executor with the provider's verified outcome.
   rpc RecordResult(RecordResultRequest) returns (RecordResultResponse);
+  // Read one held decision. Only a USER or SERVICE principal may ask, and only
+  // inside its own tenant.
+  rpc GetPending(GetPendingRequest) returns (GetPendingResponse);
   rpc RevokeGrant(RevokeGrantRequest) returns (RevokeGrantResponse);
   rpc VerifyIdentity(VerifyIdentityRequest) returns (VerifyIdentityResponse);
   rpc Health(HealthRequest) returns (HealthResponse);
