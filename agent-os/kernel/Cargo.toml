@@ -1,0 +1,35 @@
+[package]
+name = "helix-kernel"
+version = "0.1.0"
+edition = "2021"
+description = "Helix kernel: agent identity verification (sid/0.2), capability grants, and the authorize/execute boundary"
+license = "MIT"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+hex = "0.4"
+ed25519-dalek = "2"
+k256 = { version = "0.13", default-features = false, features = ["schnorr", "std"] }
+rusqlite = { version = "0.31", features = ["bundled"] }
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+rand = "0.8"
+thiserror = "1"
+regex = "1"
+tonic = "0.12"
+prost = "0.13"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal", "time"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+
+[build-dependencies]
+protox = "0.7"
+tonic-build = "0.12"
+
+[dev-dependencies]
+tokio-stream = { version = "0.1", features = ["net"] }
+axum = { version = "0.7", features = ["json"] }
+
+[[bin]]
+name = "helix-kernel"
+path = "src/bin/helix-kernel.rs"

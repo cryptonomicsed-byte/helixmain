@@ -1,0 +1,235 @@
+// Helix kernel contract, v1.
+//
+// The kernel is the one place a privileged effect is authorized. Models,
+// workers, merchants and plugins propose; the kernel decides, and what it
+// decides is recorded. This file is the contract every language builds from:
+// Rust serves it (agent-os/kernel), Go calls it (agent-os/gateway).
+//
+// It extends the frozen JSON contracts in this directory rather than replacing
+// them: ActionIntent carries the ActionProposal nouns (action-proposal.json),
+// PolicyDecision the policy-decision.json nouns with two finer verdicts where
+// that file has `approval_required`.
+//
+// Rules for changing it: additive only within v1 (new fields, new enum values,
+// new RPCs). Anything else is a v2 package and a migration test.
+syntax = "proto3";
+
+package helix.kernel.v1;
+
+option go_package = "github.com/cryptonomicsed-byte/helixmain/agent-os/gateway/gen/helix/kernel/v1;kernelv1";
+
+// Who is asking. Filled by the gateway from the AUTHENTICATED session, never
+// copied from anything the client sent. The kernel treats a request whose
+// context is missing as unauthenticated.
+message RequestContext {
+  string correlation_id = 1;
+  // The tenant the caller is authenticated for.
+  string organization_id = 2;
+  // The authenticated user, service or agent.
+  string principal = 3;
+  PrincipalKind principal_kind = 4;
+}
+
+enum PrincipalKind {
+  PRINCIPAL_KIND_UNSPECIFIED = 0;
+  PRINCIPAL_KIND_USER = 1;
+  PRINCIPAL_KIND_SERVICE = 2;
+  PRINCIPAL_KIND_AGENT = 3;
+}
+
+enum Risk {
+  RISK_UNSPECIFIED = 0;
+  RISK_LOW = 1;
+  RISK_MEDIUM = 2;
+  RISK_HIGH = 3;
+}
+
+// Something an agent wants to do. Proposing is free; nothing here executes.
+message ActionIntent {
+  string id = 1;
+  string organization_id = 2;
+  // The acting agent's SID id (sid_<slug>).
+  string agent_id = 3;
+  string task_id = 4;
+  string capability = 5;
+  // Tool identifier, e.g. "merchant.checkout" or "mcp:zendesk:create_ticket".
+  string tool = 6;
+  // System or resource the action touches, e.g. "merchant:m_123".
+  string target = 7;
+  // What is done there, e.g. "order.create".
+  string operation = 8;
+  Risk risk = 9;
+  // Tool arguments as a JSON object. Secrets by reference only, never inline.
+  string arguments_json = 10;
+  // Money moved by this action, in minor units. 0 when no money moves.
+  int64 amount_minor = 11;
+  string currency = 12;
+  // Chosen by the requester; the same key never executes twice.
+  string idempotency_key = 13;
+  // The executor expected to honour a grant for this intent.
+  string audience = 14;
+}
+
+enum Decision {
+  DECISION_UNSPECIFIED = 0;
+  DECISION_ALLOW = 1;
+  DECISION_DENY = 2;
+  // The user this agent acts for must confirm this exact intent.
+  DECISION_REQUIRE_USER_CONFIRMATION = 3;
+  // A person at the business must review it (the hold queue).
+  DECISION_REQUIRE_HUMAN_REVIEW = 4;
+}
+
+message PolicyDecision {
+  string id = 1;
+  string organization_id = 2;
+  string action_id = 3;
+  Decision decision = 4;
+  string matched_rule = 5;
+  repeated string reason_codes = 6;
+  string reason = 7;
+  // The policy revision that produced this decision.
+  string policy_version = 8;
+  string decided_at = 9;
+}
+
+// A signed, scoped, expiring permission for one kind of effect.
+//
+// Canonical form for signing: the canonical JSON (sorted keys, compact,
+// empties pruned, ASCII-escaped — the sid/card canonicalization) of every
+// field except `signature`, hashed with SHA-256; the kernel signs
+// "helix-grant/1\nissue\n<hash>" with Ed25519.
+message Grant {
+  string format = 1; // "helix-grant/1"
+  string id = 2;
+  string issuer_kid = 3;
+  string organization_id = 4;
+  // The agent (SID id) the grant is for. Not transferable.
+  string subject = 5;
+  string audience = 6;
+  string operation = 7;
+  string target = 8;
+  int64 max_amount_minor = 9;
+  string currency = 10;
+  // When set, the grant is good only for the intent with this canonical hash.
+  string intent_hash = 11;
+  string not_before = 12;
+  string expires_at = 13;
+  bool single_use = 14;
+  // Set on a delegated grant: the grant it was narrowed from.
+  string parent_id = 15;
+  string signature = 16;
+}
+
+message AuthorizeActionRequest {
+  RequestContext context = 1;
+  ActionIntent intent = 2;
+}
+
+message AuthorizeActionResponse {
+  Decision decision = 1;
+  PolicyDecision policy = 2;
+  // Present only when decision is ALLOW.
+  Grant grant = 3;
+  // Present when a confirmation or review is pending; pass it to ConfirmAction.
+  string pending_id = 4;
+  repeated string reasons = 5;
+}
+
+message ConfirmActionRequest {
+  RequestContext context = 1;
+  string pending_id = 2;
+  // false withdraws the request.
+  bool approve = 3;
+}
+
+message BeginExecutionRequest {
+  RequestContext context = 1;
+  Grant grant = 2;
+  ActionIntent intent = 3;
+}
+
+enum ExecutionState {
+  EXECUTION_STATE_UNSPECIFIED = 0;
+  // Go ahead: this is the first and only permit for this idempotency key.
+  EXECUTION_STATE_PERMITTED = 1;
+  // Already started; the outcome is not known yet. Do not execute again.
+  EXECUTION_STATE_PENDING = 2;
+  EXECUTION_STATE_SUCCEEDED = 3;
+  EXECUTION_STATE_FAILED = 4;
+  EXECUTION_STATE_REFUSED = 5;
+}
+
+message BeginExecutionResponse {
+  ExecutionState state = 1;
+  string execution_id = 2;
+  // The recorded outcome, when the key was already used.
+  string result_json = 3;
+  repeated string reasons = 4;
+}
+
+message RecordResultRequest {
+  RequestContext context = 1;
+  string execution_id = 2;
+  // SUCCEEDED or FAILED. An ambiguous provider answer is not recorded; the
+  // execution stays PENDING until it is reconciled.
+  ExecutionState state = 3;
+  // What the provider returned (confirmation id, error), as JSON.
+  string result_json = 4;
+}
+
+message RecordResultResponse {
+  ExecutionState state = 1;
+  string receipt_hash = 2;
+}
+
+message RevokeGrantRequest {
+  RequestContext context = 1;
+  string grant_id = 2;
+  string reason = 3;
+}
+
+message RevokeGrantResponse {
+  bool revoked = 1;
+}
+
+message VerifyIdentityRequest {
+  RequestContext context = 1;
+  // A sid/0.2 certificate and, optionally, a sid-runtime/0.2 statement, as JSON.
+  string certificate_json = 2;
+  string runtime_json = 3;
+}
+
+message VerifyIdentityResponse {
+  bool ok = 1;
+  bool trusted = 2;
+  repeated string errors = 3;
+  repeated string untrusted = 4;
+  string sid = 5;
+  string acting_hash = 6;
+}
+
+message HealthRequest {}
+
+message HealthResponse {
+  string status = 1;
+  string version = 2;
+  // false when the policy service cannot be reached: privileged actions are
+  // then denied.
+  bool policy_available = 3;
+}
+
+service Kernel {
+  // Decide whether an intent may proceed. Never executes anything.
+  rpc AuthorizeAction(AuthorizeActionRequest) returns (AuthorizeActionResponse);
+  // Record the user's or reviewer's answer to a pending decision.
+  rpc ConfirmAction(ConfirmActionRequest) returns (AuthorizeActionResponse);
+  // Called by an executor immediately before the effect. At most one permit
+  // is ever given per idempotency key.
+  rpc BeginExecution(BeginExecutionRequest) returns (BeginExecutionResponse);
+  // Called by the executor with the provider's verified outcome.
+  rpc RecordResult(RecordResultRequest) returns (RecordResultResponse);
+  rpc RevokeGrant(RevokeGrantRequest) returns (RevokeGrantResponse);
+  rpc VerifyIdentity(VerifyIdentityRequest) returns (VerifyIdentityResponse);
+  rpc Health(HealthRequest) returns (HealthResponse);
+}
